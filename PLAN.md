@@ -154,3 +154,31 @@ Rationale for the order: M1 first because everything depends on the library and 
 | Generator produces weird plans | It's a starting point by design (8.3); locking + manual edit always available; bounds (§6.3) cap absurdity |
 | Later need for multi-device sync | Pure domain core + repository pattern keeps a future API/sync layer additive, not a rewrite |
 | Scope creep in UI polish | Milestones each end in something usable; ship M4 to real trip-planning before investing in M6 |
+
+---
+
+## 9. Backlog
+
+Remaining work after M0–M6, in priority order. One PR each.
+
+1. **JSON backup/restore** — full-database export to a JSON file and restore
+   from one, with a confirmation step before overwriting existing data.
+   Highest priority: IndexedDB is the only copy of user data.
+2. **Per-item quantity bounds for generation** — optional `minGrams`/`maxGrams`
+   on items so generation can cap things like butter, supplementing the global
+   0.5–1.5× scale clamp (§6.3).
+3. **Playwright e2e smoke test** — the §7 happy path (create trip → add person
+   → import items CSV → compose a meal → generate a day → check totals), wired
+   into CI.
+4. **Deploy to static hosting** — GitHub Pages via Actions.
+5. **Add items by photo** — snap 1–2 photos of a product (front of pack and/or
+   nutrition label) and have the item land in the library: extract name, net
+   weight, calories per package, and vegetarian/vegan markings, then prefill
+   the Add Item form (`per_package` basis) for the user to review and save —
+   extraction is a draft, never a silent write. Capture via
+   `<input type="file" accept="image/*" capture="environment">` so the phone
+   camera works directly. Open question to resolve when picked up: extraction
+   engine — on-device OCR (e.g. Tesseract.js: keeps the app fully local but
+   weak on dense/angled label text) vs. a vision LLM API with a user-supplied
+   key (accurate, but photos leave the device and it's the app's first
+   networked feature).
