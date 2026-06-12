@@ -13,7 +13,22 @@ export interface MealRollup {
   vegetarian: boolean
 }
 
-export function rollUpMeal(meal: Meal, itemsById: ReadonlyMap<string, Item>): MealRollup {
+/** A component's grams under a quantity scale, respecting the item's
+ *  optional min/max bounds (§6.3). Bounds clamp the *scaling*, never the
+ *  authored quantity: an item already outside its bounds stays at the
+ *  authored grams rather than being pushed past them, so scale 1 is always
+ *  the identity. */
+export function scaledGrams(grams: number, item: Item, scale: number): number {
+  const lo = item.minGrams !== undefined ? Math.min(item.minGrams, grams) : 0
+  const hi = item.maxGrams !== undefined ? Math.max(item.maxGrams, grams) : Infinity
+  return Math.min(Math.max(grams * scale, lo), hi)
+}
+
+export function rollUpMeal(
+  meal: Meal,
+  itemsById: ReadonlyMap<string, Item>,
+  scale = 1,
+): MealRollup {
   const missing = meal.components
     .map((c) => c.itemId)
     .filter((id) => !itemsById.has(id))
@@ -26,8 +41,9 @@ export function rollUpMeal(meal: Meal, itemsById: ReadonlyMap<string, Item>): Me
   let vegetarian = true
   for (const { itemId, grams } of meal.components) {
     const item = itemsById.get(itemId)!
-    weightG += grams
-    calories += grams * item.caloriesPerGram
+    const g = scale === 1 ? grams : scaledGrams(grams, item, scale)
+    weightG += g
+    calories += g * item.caloriesPerGram
     vegetarian &&= item.vegetarian
   }
   return {

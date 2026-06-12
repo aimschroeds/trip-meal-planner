@@ -87,7 +87,55 @@ describe('items CSV round-trip', () => {
       weightG: 100,
       calories: 720,
       vegetarian: true,
+      minGrams: undefined,
+      maxGrams: undefined,
     })
+  })
+
+  it('round-trips generation bounds when set (§6.3)', () => {
+    const bounded: Item = { ...butter, minGrams: 5, maxGrams: 30 }
+    const { rows, issues } = parseItemsCsv(itemsToCsv([bounded]))
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.minGrams).toBe(5)
+    expect(rows[0].fields.maxGrams).toBe(30)
+  })
+})
+
+describe('items CSV bound columns', () => {
+  it('accepts files without the optional bound columns (older exports)', () => {
+    const { rows, issues } = parseItemsCsv(
+      'name,weight_g,calories,vegetarian\nOatmeal,100,380,true',
+    )
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.minGrams).toBeUndefined()
+    expect(rows[0].fields.maxGrams).toBeUndefined()
+  })
+
+  it('treats blank bound cells as unbounded', () => {
+    const { rows, issues } = parseItemsCsv(
+      'name,weight_g,calories,vegetarian,min_grams,max_grams\nOatmeal,100,380,true,,',
+    )
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.minGrams).toBeUndefined()
+    expect(rows[0].fields.maxGrams).toBeUndefined()
+  })
+
+  it('reports bad or inverted bounds with line numbers', () => {
+    const csv = [
+      'name,weight_g,calories,vegetarian,min_grams,max_grams',
+      'Bad min,100,380,true,lots,30',
+      'Negative max,100,380,true,,-5',
+      'Inverted,100,380,true,50,30',
+      'Fine,100,380,true,5,30',
+    ].join('\n')
+    const { rows, issues } = parseItemsCsv(csv)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].fields.name).toBe('Fine')
+    expect(issues).toEqual([
+      { line: 2, reason: 'min_grams must be a non-negative number, got "lots"' },
+      { line: 3, reason: 'max_grams must be a non-negative number, got "-5"' },
+      { line: 4, reason: 'min_grams (50) exceeds max_grams (30)' },
+    ])
   })
 })
 

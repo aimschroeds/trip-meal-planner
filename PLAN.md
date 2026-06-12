@@ -161,12 +161,12 @@ Rationale for the order: M1 first because everything depends on the library and 
 
 Remaining work after M0–M6, in priority order. One PR each.
 
-1. **JSON backup/restore** — full-database export to a JSON file and restore
-   from one, with a confirmation step before overwriting existing data.
-   Highest priority: IndexedDB is the only copy of user data.
-2. **Per-item quantity bounds for generation** — optional `minGrams`/`maxGrams`
-   on items so generation can cap things like butter, supplementing the global
-   0.5–1.5× scale clamp (§6.3).
+1. **JSON backup/restore** *(shipped)* — full-database export to a JSON file
+   and restore from one, with a confirmation step before overwriting existing
+   data. Highest priority: IndexedDB is the only copy of user data.
+2. **Per-item quantity bounds for generation** *(shipped)* — optional
+   `minGrams`/`maxGrams` on items so generation can cap things like butter,
+   supplementing the global 0.5–1.5× scale clamp (§6.3).
 3. **Playwright e2e smoke test** — the §7 happy path (create trip → add person
    → import items CSV → compose a meal → generate a day → check totals), wired
    into CI.

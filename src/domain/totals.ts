@@ -35,9 +35,10 @@ export function entryTotals(
   }
   const meal = mealsById.get(entry.mealId ?? '')
   if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${entry.mealId}`)
-  const rollup = rollUpMeal(meal, itemsById)
-  const scale = entry.quantityScale ?? 1
-  return { weightG: rollup.weightG * scale, calories: rollup.calories * scale, unestimated: false }
+  // Per-item bounds apply during scaling, so totals reflect the clamped
+  // quantities generation actually produces.
+  const rollup = rollUpMeal(meal, itemsById, entry.quantityScale ?? 1)
+  return { weightG: rollup.weightG, calories: rollup.calories, unestimated: false }
 }
 
 export type DayStatus = 'ok' | 'under' | 'over' | 'partial'
