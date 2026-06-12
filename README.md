@@ -4,6 +4,10 @@ A local-first web app for planning food on multi-day hiking trips: people with
 calorie targets, day-effort scaling, resupplies and carries, a food/meal
 library with calorie-density math, and auto-generated meal plans.
 
+**Live app:** https://aimschroeds.github.io/trip-meal-planner/ — deployed from
+`main` by GitHub Actions. All data stays in your browser (IndexedDB); use the
+Backup tab to export it.
+
 See [PLAN.md](./PLAN.md) for the full build plan, data model, and milestones.
 
 ## Stack

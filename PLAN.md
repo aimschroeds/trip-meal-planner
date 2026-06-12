@@ -170,7 +170,8 @@ Remaining work after M0–M6, in priority order. One PR each.
 3. **Playwright e2e smoke test** *(shipped)* — the §7 happy path (create trip
    → add person → import items CSV → compose a meal → generate a day → check
    totals), wired into CI.
-4. **Deploy to static hosting** — GitHub Pages via Actions.
+4. **Deploy to static hosting** *(shipped)* — GitHub Pages via Actions:
+   https://aimschroeds.github.io/trip-meal-planner/
 5. **Add items by photo** — snap 1–2 photos of a product (front of pack and/or
    nutrition label) and have the item land in the library: extract name, net
    weight, calories per package, and vegetarian/vegan markings, then prefill
