@@ -41,7 +41,7 @@ The architecture below keeps this door open: the **domain core is a pure TypeScr
 Three strictly separated layers inside one Vite project (npm workspaces are overkill at this size; use folders with lint-enforced import boundaries):
 
 ```
-hiking-meal-planner/
+trip-meal-planner/
 ├── src/
 │   ├── domain/        # PURE: types, calculations, carry derivation, generator, CSV codecs
 │   │   ├── types.ts

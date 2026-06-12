@@ -5,8 +5,6 @@ the full design, data model, and milestone history (M0–M6, all shipped).
 
 ## Commands
 
-All run from `hiking-meal-planner/`:
-
 ```bash
 npm run dev        # dev server
 npm test           # Vitest unit tests
@@ -32,7 +30,5 @@ npm run build      # production build
 - **Commit intermittently**: small, focused commits as work progresses
   (e.g. domain logic, store layer, UI, tests separately) — not one big
   commit per feature.
-- Branch per change → PR to `main` → merge when the path-filtered CI
-  (`.github/workflows/hiking-meal-planner.yml`) is green.
-- Run the npm commands above from the subdirectory; running `npx` from the
-  repo root litters a stray `node_modules/`.
+- Branch per change → PR to `main` → merge when CI
+  (`.github/workflows/ci.yml`) is green.
