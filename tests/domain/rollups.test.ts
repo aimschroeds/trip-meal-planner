@@ -82,3 +82,41 @@ describe('rollUpMeal', () => {
     expect(() => rollUpMeal(meal([{ itemId: 'ghost', grams: 10 }]), itemsById)).toThrow(/ghost/)
   })
 })
+
+describe('scaled roll-ups with per-item bounds (§6.3)', () => {
+  const boundedButter = item({ id: 'butter', caloriesPerGram: 7.2, maxGrams: 30 })
+  const boundedOats = item({ id: 'oatmeal', caloriesPerGram: 3.8, minGrams: 60 })
+  const bounded = new Map([boundedOats, chia, boundedButter].map((i) => [i.id, i]))
+  const brekkie = meal([
+    { itemId: 'oatmeal', grams: 80 },
+    { itemId: 'chia', grams: 15 },
+    { itemId: 'butter', grams: 20 },
+  ])
+
+  it('scales unbounded components linearly', () => {
+    const rollup = rollUpMeal(brekkie, itemsById, 1.5)
+    expect(rollup.weightG).toBeCloseTo(115 * 1.5)
+    expect(rollup.calories).toBeCloseTo(521.5 * 1.5)
+  })
+
+  it('caps a component at maxGrams when scaling up', () => {
+    const rollup = rollUpMeal(brekkie, bounded, 1.5)
+    // butter: 20 × 1.5 = 30 = cap; oats/chia scale freely
+    expect(rollup.weightG).toBeCloseTo(80 * 1.5 + 15 * 1.5 + 30)
+  })
+
+  it('floors a component at minGrams when scaling down', () => {
+    const rollup = rollUpMeal(brekkie, bounded, 0.5)
+    // oats: 80 × 0.5 = 40 → floored at 60
+    expect(rollup.weightG).toBeCloseTo(60 + 15 * 0.5 + 20 * 0.5)
+  })
+
+  it('never clamps the authored quantity: scale 1 is the identity even outside bounds', () => {
+    const tinyMax = new Map(bounded)
+    tinyMax.set('butter', item({ id: 'butter', caloriesPerGram: 7.2, maxGrams: 10 }))
+    expect(rollUpMeal(brekkie, tinyMax, 1).weightG).toBe(115)
+    // Scaling up holds an already-over-max component at its authored grams.
+    const up = rollUpMeal(brekkie, tinyMax, 1.5)
+    expect(up.weightG).toBeCloseTo(80 * 1.5 + 15 * 1.5 + 20)
+  })
+})
