@@ -11,9 +11,11 @@ import {
   type DuplicateResolution,
   type ParsedItemRow,
 } from '../domain/csv/items'
+import type { ExtractedItem } from '../domain/extract'
 import type { InputBasis, Item } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtDensity } from './format'
+import { PhotoExtract } from './PhotoExtract'
 import { VegBadge } from './VegBadge'
 
 const BASES: { value: InputBasis; label: string }[] = [
@@ -121,6 +123,22 @@ export function ItemsPage() {
       vegetarian: item.vegetarian,
       minGrams: item.minGrams !== undefined ? String(item.minGrams) : '',
       maxGrams: item.maxGrams !== undefined ? String(item.maxGrams) : '',
+    })
+    setError(null)
+  }
+
+  /** Photo extraction drafts into the add form for review — never saves. */
+  function prefillFromPhotos(extracted: ExtractedItem) {
+    setEditingId(null)
+    setDraft({
+      name: extracted.name,
+      basis: 'per_package',
+      weightG: extracted.weightG !== null ? String(extracted.weightG) : '',
+      calories: extracted.calories !== null ? String(extracted.calories) : '',
+      // Unknown diet defaults to non-vegetarian, like CSV stubs (story 4.9).
+      vegetarian: extracted.vegetarian ?? false,
+      minGrams: '',
+      maxGrams: '',
     })
     setError(null)
   }
@@ -276,6 +294,8 @@ export function ItemsPage() {
           vegetarian only
         </label>
       </div>
+
+      <PhotoExtract onExtract={prefillFromPhotos} />
 
       <ItemsImportExport items={items} />
 

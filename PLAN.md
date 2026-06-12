@@ -172,14 +172,17 @@ Remaining work after M0–M6, in priority order. One PR each.
    totals), wired into CI.
 4. **Deploy to static hosting** *(shipped)* — GitHub Pages via Actions:
    https://aimschroeds.github.io/trip-meal-planner/
-5. **Add items by photo** — snap 1–2 photos of a product (front of pack and/or
-   nutrition label) and have the item land in the library: extract name, net
-   weight, calories per package, and vegetarian/vegan markings, then prefill
-   the Add Item form (`per_package` basis) for the user to review and save —
-   extraction is a draft, never a silent write. Capture via
+5. **Add items by photo** *(shipped)* — snap 1–2 photos of a product (front of
+   pack and/or nutrition label) and have the item land in the library: extract
+   name, net weight, calories per package, and vegetarian/vegan markings, then
+   prefill the Add Item form (`per_package` basis) for the user to review and
+   save — extraction is a draft, never a silent write. Capture via
    `<input type="file" accept="image/*" capture="environment">` so the phone
-   camera works directly. Open question to resolve when picked up: extraction
-   engine — on-device OCR (e.g. Tesseract.js: keeps the app fully local but
-   weak on dense/angled label text) vs. a vision LLM API with a user-supplied
-   key (accurate, but photos leave the device and it's the app's first
-   networked feature).
+   camera works directly. Resolved decision: extraction uses a **vision LLM
+   with a user-supplied Anthropic API key** (on-device OCR loses badly on
+   curved/rotated label text) — the app's only networked feature, opt-in, and
+   absent until a key is configured. The key lives in localStorage (never in
+   Dexie, so backups can't leak it); photos go browser → Anthropic directly,
+   downscaled client-side; the model's answer is validated by a pure codec in
+   `src/domain/extract.ts`, and the SDK loads as a lazy chunk so the main
+   bundle is unaffected.
