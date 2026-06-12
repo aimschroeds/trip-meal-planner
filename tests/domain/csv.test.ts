@@ -99,6 +99,29 @@ describe('items CSV round-trip', () => {
     expect(rows[0].fields.minGrams).toBe(5)
     expect(rows[0].fields.maxGrams).toBe(30)
   })
+
+  it('round-trips unit weight and name when set (§9.6)', () => {
+    const tortillas: Item = { ...butter, name: 'Tortillas', unitWeightG: 64, unitName: 'tortilla' }
+    const { rows, issues } = parseItemsCsv(itemsToCsv([tortillas]))
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.unitWeightG).toBe(64)
+    expect(rows[0].fields.unitName).toBe('tortilla')
+  })
+
+  it('treats blank unit cells as none and rejects bad unit weights', () => {
+    const csv = [
+      'name,weight_g,calories,vegetarian,unit_weight_g,unit_name',
+      'Plain,100,380,true,,',
+      'Bad,100,380,true,zero,piece',
+    ].join('\n')
+    const { rows, issues } = parseItemsCsv(csv)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].fields.unitWeightG).toBeUndefined()
+    expect(rows[0].fields.unitName).toBeUndefined()
+    expect(issues).toEqual([
+      { line: 3, reason: 'unit_weight_g must be a positive number, got "zero"' },
+    ])
+  })
 })
 
 describe('items CSV bound columns', () => {
