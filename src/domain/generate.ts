@@ -21,6 +21,25 @@ const VARIETY = 3
 
 export type GeneratedEntry = Omit<PlanEntry, 'id'>
 
+/** Smallest scale in [bounds] whose clamped calorie total reaches the
+ *  target, to 2 decimals; the bound when the target is out of reach. */
+function solveScale(
+  caloriesAt: (s: number) => number,
+  target: number,
+  bounds: { min: number; max: number },
+): number {
+  if (caloriesAt(bounds.min) >= target) return bounds.min
+  if (caloriesAt(bounds.max) <= target) return bounds.max
+  let lo = bounds.min
+  let hi = bounds.max
+  while (hi - lo > 0.005) {
+    const mid = (lo + hi) / 2
+    if (caloriesAt(mid) < target) lo = mid
+    else hi = mid
+  }
+  return Math.round(hi * 100) / 100
+}
+
 export function generateDayPlan(args: {
   trip: Trip
   day: Day
@@ -100,10 +119,12 @@ export function generateDayPlan(args: {
     gap -= c.rollup.calories
   }
 
-  // Fine-tune: one uniform quantity scale on the generated entries.
-  const generatedCalories = chosen.reduce((n, c) => n + c.calories, 0)
-  const rawScale = generatedCalories > 0 ? remaining / generatedCalories : 1
-  const scale = Math.round(Math.min(bounds.max, Math.max(bounds.min, rawScale)) * 100) / 100
+  // Fine-tune: one uniform quantity scale on the generated entries. Per-item
+  // min/max bounds (§6.3) make calories-at-scale piecewise linear, so solve
+  // by bisection instead of a closed form; it stays monotone in the scale.
+  const caloriesAt = (s: number) =>
+    chosen.reduce((n, c) => n + rollUpMeal(c.meal, itemsById, s).calories, 0)
+  const scale = solveScale(caloriesAt, remaining, bounds)
 
   return chosen.map(({ ks, meal }) => ({
     tripId: trip.id,

@@ -29,6 +29,9 @@ interface Draft {
   weightG: string
   calories: string
   vegetarian: boolean
+  /** Optional generation bounds; blank = unbounded. */
+  minGrams: string
+  maxGrams: string
 }
 
 const emptyDraft: Draft = {
@@ -37,6 +40,31 @@ const emptyDraft: Draft = {
   weightG: '100',
   calories: '',
   vegetarian: true,
+  minGrams: '',
+  maxGrams: '',
+}
+
+/** Blank → undefined; otherwise a non-negative number or null when invalid. */
+function draftBound(raw: string): number | undefined | null {
+  if (raw.trim() === '') return undefined
+  const n = Number(raw)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+function draftBounds(draft: Draft): { minGrams?: number; maxGrams?: number } | null {
+  const minGrams = draftBound(draft.minGrams)
+  const maxGrams = draftBound(draft.maxGrams)
+  if (minGrams === null || maxGrams === null) return null
+  if (minGrams !== undefined && maxGrams !== undefined && minGrams > maxGrams) return null
+  return { minGrams, maxGrams }
+}
+
+function fmtBounds(item: Item): string {
+  if (item.minGrams !== undefined && item.maxGrams !== undefined)
+    return `${item.minGrams}–${item.maxGrams} g`
+  if (item.maxGrams !== undefined) return `≤ ${item.maxGrams} g`
+  if (item.minGrams !== undefined) return `≥ ${item.minGrams} g`
+  return '—'
 }
 
 function draftDensity(draft: Draft): number | null {
@@ -61,10 +89,11 @@ export function ItemsPage() {
   const [vegOnly, setVegOnly] = useState(false)
 
   const density = draftDensity(draft)
-  const canSave = draft.name.trim() !== '' && density !== null
+  const bounds = draftBounds(draft)
+  const canSave = draft.name.trim() !== '' && density !== null && bounds !== null
 
   async function save() {
-    if (density === null) return
+    if (density === null || bounds === null) return
     const item: Item = {
       id: editingId ?? crypto.randomUUID(),
       name: draft.name.trim(),
@@ -73,6 +102,8 @@ export function ItemsPage() {
       inputBasis: draft.basis,
       inputWeightG: Number(draft.weightG),
       inputCalories: Number(draft.calories),
+      minGrams: bounds.minGrams,
+      maxGrams: bounds.maxGrams,
     }
     await db.items.put(item)
     setDraft(emptyDraft)
@@ -88,6 +119,8 @@ export function ItemsPage() {
       weightG: String(item.inputWeightG),
       calories: String(item.inputCalories),
       vegetarian: item.vegetarian,
+      minGrams: item.minGrams !== undefined ? String(item.minGrams) : '',
+      maxGrams: item.maxGrams !== undefined ? String(item.maxGrams) : '',
     })
     setError(null)
   }
@@ -171,6 +204,26 @@ export function ItemsPage() {
             />
             <span className="text-sm text-gray-600">vegetarian</span>
           </label>
+          <label className="block" title="Generation never scales this item below this many grams per meal">
+            <span className="block text-sm text-gray-600">Gen min (g)</span>
+            <input
+              className="mt-1 w-20 rounded border border-gray-300 px-2 py-1"
+              inputMode="decimal"
+              placeholder="—"
+              value={draft.minGrams}
+              onChange={(e) => setDraft({ ...draft, minGrams: e.target.value })}
+            />
+          </label>
+          <label className="block" title="Generation never scales this item above this many grams per meal (e.g. cap butter at 30)">
+            <span className="block text-sm text-gray-600">Gen max (g)</span>
+            <input
+              className="mt-1 w-20 rounded border border-gray-300 px-2 py-1"
+              inputMode="decimal"
+              placeholder="—"
+              value={draft.maxGrams}
+              onChange={(e) => setDraft({ ...draft, maxGrams: e.target.value })}
+            />
+          </label>
           <span className="pb-1.5 text-sm text-gray-500">
             {density !== null ? `= ${fmtDensity(density)}` : '—'}
           </span>
@@ -235,6 +288,7 @@ export function ItemsPage() {
               <th className="py-1 pr-2">Name</th>
               <th className="py-1 pr-2">Entered as</th>
               <th className="py-1 pr-2 text-right">Density</th>
+              <th className="py-1 pr-2 text-right">Gen bounds</th>
               <th className="py-1 pr-2">Diet</th>
               <th className="py-1" />
             </tr>
@@ -248,6 +302,9 @@ export function ItemsPage() {
                 </td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">
                   {fmtDensity(item.caloriesPerGram)}
+                </td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-500">
+                  {fmtBounds(item)}
                 </td>
                 <td className="py-1.5 pr-2">
                   <VegBadge vegetarian={item.vegetarian} />
@@ -306,7 +363,7 @@ function ItemsImportExport({ items }: { items: Item[] }) {
         </div>
         <p className="text-xs text-gray-500">
           Columns: name, weight_g, calories, vegetarian — weight/calories on any consistent
-          basis.
+          basis. Optional: min_grams, max_grams (generation bounds).
         </p>
         {parsed && plan && (
           <div className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">

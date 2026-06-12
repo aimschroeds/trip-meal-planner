@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generateDayPlan } from '../../src/domain/generate'
+import { rollUpMeal, scaledGrams } from '../../src/domain/rollups'
 import { makeTrip } from '../../src/domain/trip'
 import type { Item, Meal, Person, PlanEntry } from '../../src/domain/types'
 
@@ -157,5 +158,65 @@ describe('generateDayPlan', () => {
     const a = generateDayPlan(baseArgs({ rng: () => 0 }))
     const b = generateDayPlan(baseArgs({ rng: () => 0.99 }))
     expect(a.map((e) => e.mealId).join()).not.toEqual(b.map((e) => e.mealId).join())
+  })
+})
+
+describe('per-item quantity bounds (§6.3, backlog item 2)', () => {
+  const cappedButter: Item = { ...item('butter', 7.2), maxGrams: 30 }
+  const boundedItems = new Map([...items, cappedButter].map((i) => [i.id, i]))
+  const butteryPasta: Meal = {
+    id: 'buttery-pasta',
+    name: 'buttery-pasta',
+    type: 'dinner',
+    components: [
+      { itemId: 'pasta', grams: 150 }, // 600 cal
+      { itemId: 'butter', grams: 25 }, // 180 cal
+    ],
+  }
+  const boundedLibrary = [...library.filter((m) => m.type !== 'dinner'), butteryPasta]
+  const lookup = new Map(boundedLibrary.map((m) => [m.id, m]))
+
+  const clampedTotal = (entries: ReturnType<typeof generateDayPlan>) =>
+    entries.reduce(
+      (sum, e) =>
+        sum + rollUpMeal(lookup.get(e.mealId!)!, boundedItems, e.quantityScale ?? 1).calories,
+      0,
+    )
+
+  it('caps bounded items when scaling up, compensating with the rest of the plan', () => {
+    const hungry: Person = { id: 'p3', name: 'H', baselineCalories: 3000, vegetarian: false }
+    const entries = generateDayPlan(
+      baseArgs({ person: hungry, meals: boundedLibrary, itemsById: boundedItems }),
+    )
+    const dinner = entries.find((e) => e.mealId === 'buttery-pasta')
+    expect(dinner).toBeDefined()
+    const scale = dinner!.quantityScale ?? 1
+
+    // Butter rides its cap instead of scaling to 25 × scale ≈ 32 g.
+    expect(scale).toBeGreaterThan(1.2)
+    expect(scaledGrams(25, cappedButter, scale)).toBe(30)
+
+    // The capped calories are made up elsewhere: a plain linear solve would
+    // give 3000/2380 ≈ 1.26; the clamped solve must push slightly higher
+    // and still land within tolerance.
+    expect(scale).toBeGreaterThanOrEqual(1.26)
+    const total = clampedTotal(entries)
+    expect(Math.abs(total - 3000) / 3000).toBeLessThanOrEqual(0.05)
+  })
+
+  it('floors bounded items when scaling down', () => {
+    const flooredOats: Item = { ...item('oats', 4), minGrams: 70 }
+    const flooredItems = new Map(boundedItems)
+    flooredItems.set('oats', flooredOats)
+    const light: Person = { id: 'p4', name: 'L', baselineCalories: 1200, vegetarian: false }
+    const entries = generateDayPlan(
+      baseArgs({ person: light, meals: boundedLibrary, itemsById: flooredItems }),
+    )
+    const brekkie = entries.find((e) => e.mealId === 'porridge')
+    expect(brekkie).toBeDefined()
+    const scale = brekkie!.quantityScale ?? 1
+    expect(scale).toBeLessThan(0.7)
+    // 100 g oats × scale would drop below 70 g; the floor holds it there.
+    expect(scaledGrams(100, flooredOats, scale)).toBe(70)
   })
 })

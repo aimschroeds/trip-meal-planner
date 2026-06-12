@@ -94,6 +94,8 @@ function itemFromFields(fields: ItemFields, existing?: Item): Item {
     inputBasis: existing?.inputBasis ?? 'per_serving',
     inputWeightG: fields.weightG,
     inputCalories: fields.calories,
+    minGrams: fields.minGrams,
+    maxGrams: fields.maxGrams,
   }
 }
 

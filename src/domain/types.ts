@@ -67,6 +67,11 @@ export interface Item {
   /** Raw entry as typed, kept for display/editing. */
   inputWeightG: number
   inputCalories: number
+  /** Optional bounds on this item's grams per meal portion when generation
+   *  scales quantities (PLAN.md §6.3, §9.2) — caps things like butter.
+   *  Authored meal quantities are never clamped; only scaling is. */
+  minGrams?: number
+  maxGrams?: number
 }
 
 export interface MealComponent {
