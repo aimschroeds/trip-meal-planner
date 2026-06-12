@@ -60,6 +60,9 @@ export interface Resupply {
   tripId: string
   dayIndex: number
   timing: ResupplyTiming
+  /** Where the resupply happens — hikers refer to resupplies by place
+   *  ("Vizzavona"), so carries are labelled with these. Optional. */
+  location?: string
 }
 
 export interface Item {

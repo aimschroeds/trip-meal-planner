@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carryEnd, carryStart, deriveCarries } from '../../src/domain/carries'
+import { carryEnd, carryEndpoints, carryStart, deriveCarries } from '../../src/domain/carries'
 import { makeTrip, toggleMainSlot, withSnackCount } from '../../src/domain/trip'
 import type { Resupply, ResupplyTiming } from '../../src/domain/types'
 
@@ -171,6 +171,47 @@ describe('resupply timing cut points', () => {
       'snack:afternoon',
       'dinner:evening',
       'snack:evening',
+    ])
+  })
+})
+
+describe('resupply locations on carries', () => {
+  const trip = makeTrip('t1', 'GR20', 6)
+  const vizzavona: Resupply = {
+    id: 'r-viz',
+    tripId: 't1',
+    dayIndex: 3,
+    timing: 'before_breakfast',
+    location: 'Vizzavona',
+  }
+  const corte: Resupply = {
+    id: 'r-corte',
+    tripId: 't1',
+    dayIndex: 5,
+    timing: 'after_lunch',
+    location: 'Corte',
+  }
+
+  it('records which resupply starts each carry', () => {
+    const carries = deriveCarries(trip, [vizzavona, corte])
+    expect(carries.map((c) => c.startResupplyId)).toEqual([undefined, 'r-viz', 'r-corte'])
+  })
+
+  it('labels carry endpoints with resupply locations', () => {
+    const carries = deriveCarries(trip, [vizzavona, corte])
+    expect(carryEndpoints(carries, [vizzavona, corte])).toEqual([
+      { from: undefined, to: 'Vizzavona' },
+      { from: 'Vizzavona', to: 'Corte' },
+      { from: 'Corte', to: undefined },
+    ])
+  })
+
+  it('treats a missing or blank location as unnamed', () => {
+    const unnamed: Resupply = { ...vizzavona, location: '' }
+    const carries = deriveCarries(trip, [unnamed])
+    expect(carryEndpoints(carries, [unnamed])).toEqual([
+      { from: undefined, to: undefined },
+      { from: undefined, to: undefined },
     ])
   })
 })
