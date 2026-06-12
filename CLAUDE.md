@@ -11,6 +11,7 @@ npm test           # Vitest unit tests
 npm run typecheck  # tsc (covers src/ and tests/)
 npm run lint       # eslint
 npm run build      # production build
+npm run e2e        # Playwright smoke test (needs `npx playwright install chromium`)
 ```
 
 ## Architecture rules

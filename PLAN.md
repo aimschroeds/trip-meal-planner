@@ -167,9 +167,9 @@ Remaining work after M0–M6, in priority order. One PR each.
 2. **Per-item quantity bounds for generation** *(shipped)* — optional
    `minGrams`/`maxGrams` on items so generation can cap things like butter,
    supplementing the global 0.5–1.5× scale clamp (§6.3).
-3. **Playwright e2e smoke test** — the §7 happy path (create trip → add person
-   → import items CSV → compose a meal → generate a day → check totals), wired
-   into CI.
+3. **Playwright e2e smoke test** *(shipped)* — the §7 happy path (create trip
+   → add person → import items CSV → compose a meal → generate a day → check
+   totals), wired into CI.
 4. **Deploy to static hosting** — GitHub Pages via Actions.
 5. **Add items by photo** — snap 1–2 photos of a product (front of pack and/or
    nutrition label) and have the item land in the library: extract name, net
