@@ -5,8 +5,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { EXTRACT_PROMPT, EXTRACT_SCHEMA, parseExtractedItem, type ExtractedItem } from '../domain/extract'
-
-export const EXTRACT_MODEL = 'claude-opus-4-8'
+import { EXTRACT_MODEL } from './config'
 
 export async function extractItemFromPhotos(
   apiKey: string,
