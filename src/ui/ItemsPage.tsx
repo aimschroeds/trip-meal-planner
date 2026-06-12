@@ -34,6 +34,9 @@ interface Draft {
   /** Optional generation bounds; blank = unbounded. */
   minGrams: string
   maxGrams: string
+  /** Optional piece weight + label; blank = item has no natural unit. */
+  unitWeightG: string
+  unitName: string
 }
 
 const emptyDraft: Draft = {
@@ -44,6 +47,8 @@ const emptyDraft: Draft = {
   vegetarian: true,
   minGrams: '',
   maxGrams: '',
+  unitWeightG: '',
+  unitName: '',
 }
 
 /** Blank → undefined; otherwise a non-negative number or null when invalid. */
@@ -59,6 +64,14 @@ function draftBounds(draft: Draft): { minGrams?: number; maxGrams?: number } | n
   if (minGrams === null || maxGrams === null) return null
   if (minGrams !== undefined && maxGrams !== undefined && minGrams > maxGrams) return null
   return { minGrams, maxGrams }
+}
+
+/** Blank → no unit; otherwise the weight must be a positive number. */
+function draftUnit(draft: Draft): { unitWeightG?: number; unitName?: string } | null {
+  if (draft.unitWeightG.trim() === '') return {}
+  const n = Number(draft.unitWeightG)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return { unitWeightG: n, unitName: draft.unitName.trim() || undefined }
 }
 
 function fmtBounds(item: Item): string {
@@ -92,10 +105,11 @@ export function ItemsPage() {
 
   const density = draftDensity(draft)
   const bounds = draftBounds(draft)
-  const canSave = draft.name.trim() !== '' && density !== null && bounds !== null
+  const unit = draftUnit(draft)
+  const canSave = draft.name.trim() !== '' && density !== null && bounds !== null && unit !== null
 
   async function save() {
-    if (density === null || bounds === null) return
+    if (density === null || bounds === null || unit === null) return
     const item: Item = {
       id: editingId ?? crypto.randomUUID(),
       name: draft.name.trim(),
@@ -106,6 +120,8 @@ export function ItemsPage() {
       inputCalories: Number(draft.calories),
       minGrams: bounds.minGrams,
       maxGrams: bounds.maxGrams,
+      unitWeightG: unit.unitWeightG,
+      unitName: unit.unitName,
     }
     await db.items.put(item)
     setDraft(emptyDraft)
@@ -123,6 +139,8 @@ export function ItemsPage() {
       vegetarian: item.vegetarian,
       minGrams: item.minGrams !== undefined ? String(item.minGrams) : '',
       maxGrams: item.maxGrams !== undefined ? String(item.maxGrams) : '',
+      unitWeightG: item.unitWeightG !== undefined ? String(item.unitWeightG) : '',
+      unitName: item.unitName ?? '',
     })
     setError(null)
   }
@@ -139,6 +157,8 @@ export function ItemsPage() {
       vegetarian: extracted.vegetarian ?? false,
       minGrams: '',
       maxGrams: '',
+      unitWeightG: '',
+      unitName: '',
     })
     setError(null)
   }
@@ -240,6 +260,25 @@ export function ItemsPage() {
               placeholder="—"
               value={draft.maxGrams}
               onChange={(e) => setDraft({ ...draft, maxGrams: e.target.value })}
+            />
+          </label>
+          <label className="block" title="Weight of one piece, so meals can be composed in pieces (e.g. one tortilla = 64 g)">
+            <span className="block text-sm text-gray-600">Piece (g)</span>
+            <input
+              className="mt-1 w-20 rounded border border-gray-300 px-2 py-1"
+              inputMode="decimal"
+              placeholder="—"
+              value={draft.unitWeightG}
+              onChange={(e) => setDraft({ ...draft, unitWeightG: e.target.value })}
+            />
+          </label>
+          <label className="block" title='What one piece is called, e.g. "tortilla" or "bar"'>
+            <span className="block text-sm text-gray-600">Piece name</span>
+            <input
+              className="mt-1 w-24 rounded border border-gray-300 px-2 py-1"
+              placeholder="tortilla"
+              value={draft.unitName}
+              onChange={(e) => setDraft({ ...draft, unitName: e.target.value })}
             />
           </label>
           <span className="pb-1.5 text-sm text-gray-500">
