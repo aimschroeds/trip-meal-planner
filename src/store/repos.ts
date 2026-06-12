@@ -96,6 +96,8 @@ function itemFromFields(fields: ItemFields, existing?: Item): Item {
     inputCalories: fields.calories,
     minGrams: fields.minGrams,
     maxGrams: fields.maxGrams,
+    unitWeightG: fields.unitWeightG,
+    unitName: fields.unitName,
   }
 }
 

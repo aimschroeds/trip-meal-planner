@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitMealImport, deleteMeal, MealInUseError } from '../store/repos'
 import { rollUpMeal } from '../domain/rollups'
+import { gramsForUnits, unitsForGrams } from '../domain/units'
 import { itemsToCsv, type CsvIssue, type DuplicateResolution } from '../domain/csv/items'
 import {
   mealsToCsv,
@@ -162,6 +163,8 @@ export function MealsPage() {
                 onChange={(e) => updateComponent(index, { grams: e.target.value })}
               />
               <span className="text-sm text-gray-500">g</span>
+              <UnitHint item={itemsById.get(c.itemId)} grams={c.grams} onGrams={(g) => updateComponent(index, { grams: g })} />
+
               <button
                 type="button"
                 className="text-sm text-red-700 underline"
@@ -449,5 +452,41 @@ function MealsImportExport({ items, meals }: { items: Item[]; meals: Meal[] }) {
         )}
       </div>
     </details>
+  )
+}
+
+/** Piece-aware quantity entry (PLAN.md §9.6): when the item has a unit
+ *  weight, show a second input in pieces that writes back grams — grams
+ *  stay the canonical stored value. */
+function UnitHint({
+  item,
+  grams,
+  onGrams,
+}: {
+  item: Item | undefined
+  grams: string
+  onGrams: (grams: string) => void
+}) {
+  if (!item || item.unitWeightG === undefined) return null
+  const g = Number(grams)
+  const units = grams !== '' && Number.isFinite(g) ? unitsForGrams(item, g) : null
+  const label = item.unitName || 'piece'
+  return (
+    <label className="flex items-center gap-1 text-sm text-gray-500">
+      =
+      <input
+        className="w-16 rounded border border-gray-300 px-2 py-1"
+        inputMode="decimal"
+        placeholder="—"
+        value={units !== null ? String(Math.round(units * 100) / 100) : ''}
+        onChange={(e) => {
+          const u = Number(e.target.value)
+          const converted = e.target.value === '' ? null : gramsForUnits(item, u)
+          if (converted !== null) onGrams(String(Math.round(converted * 10) / 10))
+        }}
+      />
+      {label}
+      {units !== null && units !== 1 ? 's' : ''}
+    </label>
   )
 }

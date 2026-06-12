@@ -186,3 +186,10 @@ Remaining work after M0–M6, in priority order. One PR each.
    downscaled client-side; the model's answer is validated by a pure codec in
    `src/domain/extract.ts`, and the SDK loads as a lazy chunk so the main
    bundle is unaffected.
+6. **Unit-aware items & shopping lists** *(shipped)* — optional piece weight
+   and piece name on items (one tortilla = 64 g) so meals can be composed in
+   pieces while grams stay the canonical stored quantity; a per-carry shopping
+   list totals each item's grams across all people (clamped scaling included)
+   and shows piece counts plus whole packages to buy for items entered per
+   package. Round-trips through the items CSV as optional `unit_weight_g` /
+   `unit_name` columns.

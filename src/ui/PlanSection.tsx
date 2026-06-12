@@ -13,6 +13,7 @@ import {
   planKey,
   type DayStatus,
 } from '../domain/totals'
+import { carryShoppingList } from '../domain/units'
 import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
 import type { Day, Item, Meal, Person, PlanEntry, Resupply, Trip } from '../domain/types'
@@ -215,6 +216,57 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
             </tr>
           </tbody>
         </table>
+
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700">
+            Shopping list per carry
+          </summary>
+          <div className="mt-2 space-y-3">
+            {carries.map((carry) => {
+              const lines = carryShoppingList({
+                carry,
+                personIds,
+                entriesByKey,
+                mealsById,
+                itemsById,
+              })
+              return (
+                <div key={carry.index} className="text-sm">
+                  <span className="font-medium">Carry {carry.index}</span>
+                  {lines.length === 0 ? (
+                    <span className="text-gray-500"> — nothing planned yet</span>
+                  ) : (
+                    <ul className="mt-1 space-y-0.5">
+                      {lines.map((l) => (
+                        <li key={l.item.id} className="text-gray-700">
+                          {l.item.name} — {fmtGrams(l.grams)}
+                          {l.units !== null && (
+                            <span className="text-gray-500">
+                              {' '}
+                              · ≈ {Math.round(l.units * 10) / 10}{' '}
+                              {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
+                            </span>
+                          )}
+                          {l.packages !== null && (
+                            <span className="text-gray-500">
+                              {' '}
+                              · {l.packages} package{l.packages === 1 ? '' : 's'} of{' '}
+                              {fmtGrams(l.item.inputWeightG)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Whole-group totals, scaling included. Package counts appear for items entered per
+            package; piece counts for items with a piece weight.
+          </p>
+        </details>
       </section>
     </div>
   )

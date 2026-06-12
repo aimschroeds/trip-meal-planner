@@ -8,9 +8,14 @@ import type { Item } from '../types'
 
 export const ITEM_CSV_COLUMNS = ['name', 'weight_g', 'calories', 'vegetarian'] as const
 
-/** Generation-bound columns are optional on import (older exports lack
- *  them) but always emitted on export so round-trips stay lossless. */
-export const ITEM_CSV_OPTIONAL_COLUMNS = ['min_grams', 'max_grams'] as const
+/** Generation-bound and unit columns are optional on import (older exports
+ *  lack them) but always emitted on export so round-trips stay lossless. */
+export const ITEM_CSV_OPTIONAL_COLUMNS = [
+  'min_grams',
+  'max_grams',
+  'unit_weight_g',
+  'unit_name',
+] as const
 
 export interface CsvIssue {
   line: number
@@ -24,6 +29,8 @@ export interface ItemFields {
   vegetarian: boolean
   minGrams?: number
   maxGrams?: number
+  unitWeightG?: number
+  unitName?: string
 }
 
 export interface ParsedItemRow {
@@ -88,7 +95,22 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
     if (minGrams !== undefined && maxGrams !== undefined && minGrams > maxGrams) {
       return issues.push({ line, reason: `min_grams (${minGrams}) exceeds max_grams (${maxGrams})` })
     }
-    rows.push({ line, fields: { name, weightG, calories, vegetarian, minGrams, maxGrams } })
+
+    const unitCell = raw.unit_weight_g?.trim()
+    let unitWeightG: number | undefined
+    if (unitCell !== undefined && unitCell !== '') {
+      const n = Number(unitCell)
+      if (!Number.isFinite(n) || n <= 0) {
+        return issues.push({ line, reason: `unit_weight_g must be a positive number, got "${raw.unit_weight_g}"` })
+      }
+      unitWeightG = n
+    }
+    const unitName = raw.unit_name?.trim() || undefined
+
+    rows.push({
+      line,
+      fields: { name, weightG, calories, vegetarian, minGrams, maxGrams, unitWeightG, unitName },
+    })
   })
 
   return { rows, issues }
@@ -165,6 +187,8 @@ export function itemsToCsv(items: Item[]): string {
       vegetarian: i.vegetarian,
       min_grams: i.minGrams ?? '',
       max_grams: i.maxGrams ?? '',
+      unit_weight_g: i.unitWeightG ?? '',
+      unit_name: i.unitName ?? '',
     })),
     { columns: [...ITEM_CSV_COLUMNS, ...ITEM_CSV_OPTIONAL_COLUMNS] },
   )
