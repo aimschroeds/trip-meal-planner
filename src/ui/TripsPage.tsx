@@ -22,8 +22,10 @@ const MAINS: MainMealType[] = ['brekkie', 'lunch', 'dinner']
 
 const RESUPPLY_TIMINGS: { value: ResupplyTiming; label: string }[] = [
   { value: 'before_breakfast', label: 'before brekkie' },
+  { value: 'after_breakfast', label: 'after brekkie' },
+  { value: 'before_lunch', label: 'before lunch' },
   { value: 'after_lunch', label: 'after lunch' },
-  { value: 'late_afternoon', label: 'late afternoon' },
+  { value: 'late_afternoon', label: 'late afternoon (before dinner)' },
   { value: 'after_dinner', label: 'after dinner' },
 ]
 

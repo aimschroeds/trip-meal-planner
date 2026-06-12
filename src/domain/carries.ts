@@ -61,6 +61,8 @@ export function keyedSlots(day: Day): KeyedSlot[] {
 /** Position within the day at which the new carry starts. */
 const CUT_POSITIONS: Record<ResupplyTiming, number> = {
   before_breakfast: 0,
+  after_breakfast: TIMING_ORDER.morning * 10 + 1, // morning snacks onward
+  before_lunch: TIMING_ORDER.midday * 10, // lunch onward
   after_lunch: TIMING_ORDER.midday * 10 + 1, // afternoon snacks onward
   late_afternoon: TIMING_ORDER.evening * 10, // dinner onward
   after_dinner: TIMING_ORDER.evening * 10 + 1, // evening snacks onward

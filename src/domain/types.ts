@@ -10,8 +10,13 @@ export type MealType = 'brekkie' | 'snack' | 'lunch' | 'dinner'
  *  snacks around mid-day resupplies (PLAN.md §6.1). */
 export type SlotTiming = 'morning' | 'midday' | 'afternoon' | 'evening'
 
+/** Every boundary between consecutive slot groups in a day — brekkie,
+ *  morning snacks, lunch, afternoon snacks, dinner, evening snacks.
+ *  ("After evening snacks" is the next day's before_breakfast.) */
 export type ResupplyTiming =
   | 'before_breakfast'
+  | 'after_breakfast'
+  | 'before_lunch'
   | 'after_lunch'
   | 'late_afternoon'
   | 'after_dinner'
