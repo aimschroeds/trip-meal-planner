@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { BackupPage } from './ui/BackupPage'
 import { ItemsPage } from './ui/ItemsPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
 
-const TABS = ['Trips', 'Items', 'Meals'] as const
+const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
 type Tab = (typeof TABS)[number]
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
         {tab === 'Trips' && <TripsPage />}
         {tab === 'Items' && <ItemsPage />}
         {tab === 'Meals' && <MealsPage />}
+        {tab === 'Backup' && <BackupPage />}
       </main>
     </div>
   )
