@@ -72,6 +72,12 @@ export interface Item {
    *  Authored meal quantities are never clamped; only scaling is. */
   minGrams?: number
   maxGrams?: number
+  /** Optional piece weight (PLAN.md §9.6): lets meals be composed in units
+   *  ("2 tortillas") and shopping lists show piece counts. Quantities stay
+   *  canonical in grams; units are entry/display convenience only. */
+  unitWeightG?: number
+  /** Singular label for the unit, e.g. "tortilla", "bar". Cosmetic. */
+  unitName?: string
 }
 
 export interface MealComponent {
