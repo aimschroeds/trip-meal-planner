@@ -8,6 +8,10 @@ import type { Item } from '../types'
 
 export const ITEM_CSV_COLUMNS = ['name', 'weight_g', 'calories', 'vegetarian'] as const
 
+/** Generation-bound columns are optional on import (older exports lack
+ *  them) but always emitted on export so round-trips stay lossless. */
+export const ITEM_CSV_OPTIONAL_COLUMNS = ['min_grams', 'max_grams'] as const
+
 export interface CsvIssue {
   line: number
   reason: string
@@ -18,6 +22,8 @@ export interface ItemFields {
   weightG: number
   calories: number
   vegetarian: boolean
+  minGrams?: number
+  maxGrams?: number
 }
 
 export interface ParsedItemRow {
@@ -64,7 +70,25 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
     if (vegetarian === null) {
       return issues.push({ line, reason: `vegetarian must be true/false, got "${raw.vegetarian}"` })
     }
-    rows.push({ line, fields: { name, weightG, calories, vegetarian } })
+
+    const bound = (column: 'min_grams' | 'max_grams'): number | null | undefined => {
+      const cell = raw[column]?.trim()
+      if (cell === undefined || cell === '') return undefined
+      const n = Number(cell)
+      return Number.isFinite(n) && n >= 0 ? n : null // null = bad value
+    }
+    const minGrams = bound('min_grams')
+    const maxGrams = bound('max_grams')
+    if (minGrams === null) {
+      return issues.push({ line, reason: `min_grams must be a non-negative number, got "${raw.min_grams}"` })
+    }
+    if (maxGrams === null) {
+      return issues.push({ line, reason: `max_grams must be a non-negative number, got "${raw.max_grams}"` })
+    }
+    if (minGrams !== undefined && maxGrams !== undefined && minGrams > maxGrams) {
+      return issues.push({ line, reason: `min_grams (${minGrams}) exceeds max_grams (${maxGrams})` })
+    }
+    rows.push({ line, fields: { name, weightG, calories, vegetarian, minGrams, maxGrams } })
   })
 
   return { rows, issues }
@@ -139,7 +163,9 @@ export function itemsToCsv(items: Item[]): string {
       weight_g: i.inputWeightG,
       calories: i.inputCalories,
       vegetarian: i.vegetarian,
+      min_grams: i.minGrams ?? '',
+      max_grams: i.maxGrams ?? '',
     })),
-    { columns: [...ITEM_CSV_COLUMNS] },
+    { columns: [...ITEM_CSV_COLUMNS, ...ITEM_CSV_OPTIONAL_COLUMNS] },
   )
 }
