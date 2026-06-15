@@ -1,6 +1,8 @@
 # Hiking Trip Meal Planner — Build Plan
 
 A plan for implementing the web app described in the user stories (Epics 1–8).
+See [STORIES.md](./STORIES.md) for the source PRD that this plan and the
+acceptance-criteria tests map to.
 
 ---
 
