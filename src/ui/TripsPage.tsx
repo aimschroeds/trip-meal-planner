@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { addPersonToTrip, createTrip, deleteTrip, removePersonFromTrip } from '../store/repos'
-import { carryEnd, carryStart, deriveCarries, type SlotRef } from '../domain/carries'
+import { carryEnd, carryEndpoints, carryStart, deriveCarries, type SlotRef } from '../domain/carries'
 import { scaledDailyTarget } from '../domain/density'
 import {
   hasMainSlot,
@@ -22,8 +22,10 @@ const MAINS: MainMealType[] = ['brekkie', 'lunch', 'dinner']
 
 const RESUPPLY_TIMINGS: { value: ResupplyTiming; label: string }[] = [
   { value: 'before_breakfast', label: 'before brekkie' },
+  { value: 'after_breakfast', label: 'after brekkie' },
+  { value: 'before_lunch', label: 'before lunch' },
   { value: 'after_lunch', label: 'after lunch' },
-  { value: 'late_afternoon', label: 'late afternoon' },
+  { value: 'late_afternoon', label: 'late afternoon (before dinner)' },
   { value: 'after_dinner', label: 'after dinner' },
 ]
 
@@ -340,6 +342,7 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
   )
   const [dayIndex, setDayIndex] = useState('1')
   const [timing, setTiming] = useState<ResupplyTiming>('before_breakfast')
+  const [location, setLocation] = useState('')
 
   const day = Number(dayIndex)
   const canAdd = Number.isInteger(day) && day >= 1 && day <= trip.days.length
@@ -355,6 +358,7 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
           {resupplies.map((r) => (
             <li key={r.id} className="flex items-center gap-3 text-sm">
               <span>
+                {r.location && <span className="font-medium">{r.location} — </span>}
                 Day {r.dayIndex}, {timingLabel(r.timing)}
               </span>
               <button
@@ -376,7 +380,9 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
             tripId: trip.id,
             dayIndex: day,
             timing,
+            location: location.trim() || undefined,
           })
+          setLocation('')
         }}
       >
         <label className="block">
@@ -401,6 +407,15 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="block">
+          <span className="block text-sm text-gray-600">Location</span>
+          <input
+            className="mt-1 rounded border border-gray-300 px-2 py-1"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Vizzavona"
+          />
         </label>
         <button
           type="submit"
@@ -428,6 +443,7 @@ function CarriesSection({ trip }: { trip: Trip }) {
     [] as Resupply[],
   )
   const carries = deriveCarries(trip, resupplies)
+  const endpoints = carryEndpoints(carries, resupplies)
 
   const fmtRef = (ref: SlotRef) => `day ${ref.dayIndex} ${fmtSlot(ref.slot)}`
 
@@ -439,14 +455,18 @@ function CarriesSection({ trip }: { trip: Trip }) {
         boundaries before packing.
       </p>
       <ul className="space-y-3">
-        {carries.map((carry) => {
+        {carries.map((carry, i) => {
+          const { from, to } = endpoints[i]
           const byDay = new Map<number, string[]>()
           for (const { dayIndex, slot } of carry.slots) {
             byDay.set(dayIndex, [...(byDay.get(dayIndex) ?? []), SLOT_ABBREV[slot.type]])
           }
           return (
             <li key={carry.index} className="text-sm">
-              <span className="font-medium">Carry {carry.index}:</span>{' '}
+              <span className="font-medium">
+                Carry {carry.index}
+                {(from || to) && ` (${from ?? 'start'} → ${to ?? 'finish'})`}:
+              </span>{' '}
               {fmtRef(carryStart(carry))} → {fmtRef(carryEnd(carry))}
               <span className="text-gray-500"> · {carry.slots.length} slots</span>
               <div className="mt-1 flex flex-wrap gap-1">

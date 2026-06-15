@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { clearPlanEntry, setPlanEntry } from '../store/repos'
-import { carryEnd, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
+import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { generateDayPlan } from '../domain/generate'
 import { rollUpMeal } from '../domain/rollups'
 import {
@@ -62,6 +62,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
     allEntries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),
   )
   const carries = deriveCarries(trip, resupplies)
+  const endpoints = carryEndpoints(carries, resupplies)
   const personIds = people.map((p) => p.id)
 
   const perCarry = carries.map((carry) =>
@@ -184,6 +185,12 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
                 <tr key={carry.index} className="border-b border-gray-100">
                   <td className="py-1.5 pr-2 font-medium">{carry.index}</td>
                   <td className="py-1.5 pr-2 text-gray-600">
+                    {(endpoints[i].from || endpoints[i].to) && (
+                      <span className="font-medium text-gray-800">
+                        {endpoints[i].from ?? 'start'} → {endpoints[i].to ?? 'finish'}
+                        <br />
+                      </span>
+                    )}
                     d{carryStart(carry).dayIndex} {fmtSlot(carryStart(carry).slot)} → d
                     {carryEnd(carry).dayIndex} {fmtSlot(carryEnd(carry).slot)}
                   </td>
@@ -222,7 +229,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
             Shopping list per carry
           </summary>
           <div className="mt-2 space-y-3">
-            {carries.map((carry) => {
+            {carries.map((carry, i) => {
               const lines = carryShoppingList({
                 carry,
                 personIds,
@@ -230,9 +237,13 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
                 mealsById,
                 itemsById,
               })
+              const { from, to } = endpoints[i]
               return (
                 <div key={carry.index} className="text-sm">
-                  <span className="font-medium">Carry {carry.index}</span>
+                  <span className="font-medium">
+                    Carry {carry.index}
+                    {(from || to) && ` (${from ?? 'start'} → ${to ?? 'finish'})`}
+                  </span>
                   {lines.length === 0 ? (
                     <span className="text-gray-500"> — nothing planned yet</span>
                   ) : (

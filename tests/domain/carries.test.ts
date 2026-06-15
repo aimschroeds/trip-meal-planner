@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { carryEnd, carryStart, deriveCarries } from '../../src/domain/carries'
-import { makeTrip, toggleMainSlot } from '../../src/domain/trip'
+import { carryEnd, carryEndpoints, carryStart, deriveCarries } from '../../src/domain/carries'
+import { makeTrip, toggleMainSlot, withSnackCount } from '../../src/domain/trip'
 import type { Resupply, ResupplyTiming } from '../../src/domain/types'
 
 function resupply(dayIndex: number, timing: ResupplyTiming): Resupply {
@@ -117,5 +117,101 @@ describe('deriveCarries', () => {
     ])
     expect(carries).toHaveLength(2)
     expect(carries.map((c) => c.index)).toEqual([1, 2])
+  })
+})
+
+describe('resupply timing cut points', () => {
+  // Slot order within a day: brekkie, morning snack, lunch, afternoon
+  // snack, dinner, evening snack — six boundaries, six timings. Three
+  // snacks per day so the evening snack slot exists.
+  const base = makeTrip('t1', 'Test', 2)
+  const trip = { ...base, days: base.days.map((d) => withSnackCount(d, 3)) }
+
+  function startOfSecondCarry(timing: ResupplyTiming) {
+    const carries = deriveCarries(trip, [resupply(2, timing)])
+    expect(carries).toHaveLength(2)
+    return carryStart(carries[1])
+  }
+
+  it('after_breakfast starts the new carry at morning snacks', () => {
+    expect(startOfSecondCarry('after_breakfast')).toMatchObject({
+      dayIndex: 2,
+      slot: { type: 'snack', timing: 'morning' },
+    })
+  })
+
+  it('before_lunch keeps morning snacks in the old carry', () => {
+    const carries = deriveCarries(trip, [resupply(2, 'before_lunch')])
+    expect(carryEnd(carries[0])).toMatchObject({
+      dayIndex: 2,
+      slot: { type: 'snack', timing: 'morning' },
+    })
+    expect(carryStart(carries[1])).toMatchObject({
+      dayIndex: 2,
+      slot: { type: 'lunch', timing: 'midday' },
+    })
+  })
+
+  it('covers every boundary in the day with a distinct cut', () => {
+    const timings: ResupplyTiming[] = [
+      'before_breakfast',
+      'after_breakfast',
+      'before_lunch',
+      'after_lunch',
+      'late_afternoon',
+      'after_dinner',
+    ]
+    const starts = timings.map(
+      (t) => `${startOfSecondCarry(t).slot.type}:${startOfSecondCarry(t).slot.timing}`,
+    )
+    expect(starts).toEqual([
+      'brekkie:morning',
+      'snack:morning',
+      'lunch:midday',
+      'snack:afternoon',
+      'dinner:evening',
+      'snack:evening',
+    ])
+  })
+})
+
+describe('resupply locations on carries', () => {
+  const trip = makeTrip('t1', 'GR20', 6)
+  const vizzavona: Resupply = {
+    id: 'r-viz',
+    tripId: 't1',
+    dayIndex: 3,
+    timing: 'before_breakfast',
+    location: 'Vizzavona',
+  }
+  const corte: Resupply = {
+    id: 'r-corte',
+    tripId: 't1',
+    dayIndex: 5,
+    timing: 'after_lunch',
+    location: 'Corte',
+  }
+
+  it('records which resupply starts each carry', () => {
+    const carries = deriveCarries(trip, [vizzavona, corte])
+    expect(carries.map((c) => c.startResupplyId)).toEqual([undefined, 'r-viz', 'r-corte'])
+  })
+
+  it('labels carry endpoints with resupply locations', () => {
+    const carries = deriveCarries(trip, [vizzavona, corte])
+    expect(carryEndpoints(carries, [vizzavona, corte])).toEqual([
+      { from: undefined, to: 'Vizzavona' },
+      { from: 'Vizzavona', to: 'Corte' },
+      { from: 'Corte', to: undefined },
+    ])
+  })
+
+  it('treats a missing or blank location as unnamed', () => {
+    const unnamed: Resupply = { ...vizzavona, location: '' }
+    const carries = deriveCarries(trip, [unnamed])
+    expect(carryEndpoints(carries, [unnamed])).toEqual([
+      { from: undefined, to: undefined },
+      { from: undefined, to: undefined },
+    ])
   })
 })

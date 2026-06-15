@@ -22,6 +22,8 @@ export interface Carry {
   index: number
   /** Chronologically ordered slots in this carry. */
   slots: SlotRef[]
+  /** The resupply this carry starts at; undefined for the first carry. */
+  startResupplyId?: string
 }
 
 const TIMING_ORDER: Record<SlotTiming, number> = {
@@ -61,6 +63,8 @@ export function keyedSlots(day: Day): KeyedSlot[] {
 /** Position within the day at which the new carry starts. */
 const CUT_POSITIONS: Record<ResupplyTiming, number> = {
   before_breakfast: 0,
+  after_breakfast: TIMING_ORDER.morning * 10 + 1, // morning snacks onward
+  before_lunch: TIMING_ORDER.midday * 10, // lunch onward
   after_lunch: TIMING_ORDER.midday * 10 + 1, // afternoon snacks onward
   late_afternoon: TIMING_ORDER.evening * 10, // dinner onward
   after_dinner: TIMING_ORDER.evening * 10 + 1, // evening snacks onward
@@ -68,7 +72,7 @@ const CUT_POSITIONS: Record<ResupplyTiming, number> = {
 
 export function deriveCarries(trip: Trip, resupplies: Resupply[]): Carry[] {
   const cuts = resupplies
-    .map((r) => ({ dayIndex: r.dayIndex, position: CUT_POSITIONS[r.timing] }))
+    .map((r) => ({ id: r.id, dayIndex: r.dayIndex, position: CUT_POSITIONS[r.timing] }))
     .sort((a, b) => a.dayIndex - b.dayIndex || a.position - b.position)
 
   const buckets: SlotRef[][] = Array.from({ length: cuts.length + 1 }, () => [])
@@ -85,8 +89,26 @@ export function deriveCarries(trip: Trip, resupplies: Resupply[]): Carry[] {
   }
 
   return buckets
-    .filter((slots) => slots.length > 0)
-    .map((slots, i) => ({ index: i + 1, slots }))
+    .map((slots, i) => ({ slots, startResupplyId: i > 0 ? cuts[i - 1].id : undefined }))
+    .filter(({ slots }) => slots.length > 0)
+    .map(({ slots, startResupplyId }, i) => ({ index: i + 1, slots, startResupplyId }))
+}
+
+/** Where each carry begins and ends, by resupply location: a carry starts
+ *  at its own resupply and ends at the next carry's. Undefined when the
+ *  endpoint is the trip start/finish or the resupply has no location. */
+export function carryEndpoints(
+  carries: Carry[],
+  resupplies: Resupply[],
+): { from?: string; to?: string }[] {
+  const locationById = new Map(resupplies.map((r) => [r.id, r.location]))
+  const locationOf = (resupplyId: string | undefined) =>
+    resupplyId !== undefined ? locationById.get(resupplyId) || undefined : undefined
+
+  return carries.map((carry, i) => ({
+    from: locationOf(carry.startResupplyId),
+    to: locationOf(carries[i + 1]?.startResupplyId),
+  }))
 }
 
 export function carryStart(carry: Carry): SlotRef {
