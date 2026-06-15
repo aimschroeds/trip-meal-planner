@@ -1,10 +1,10 @@
 # Hiking Trip Meal Planner — User Stories
 
-> **Source PRD.** This is the original product spec the app was built against;
-> PLAN.md cites its story numbers (e.g. "story 3.2", "4.1") and every
-> acceptance criterion maps to a unit test in `tests/`. Build status and how the
-> open items below were resolved live in PLAN.md (§5 milestones, §6 resolutions,
-> §9 backlog) — see the status note at the end.
+> **Living spec.** Epics 1–8 are the original PRD the app was built against;
+> PLAN.md cites their story numbers (e.g. "story 3.2", "4.1") and every
+> acceptance criterion maps to a unit test in `tests/`. **Epics 9–12** capture
+> capabilities added since, written as built. PLAN.md (§5 milestones, §6
+> resolutions, §9 backlog) tracks the engineering behind it all.
 
 **Persona:** The *Trip Planner* — a hiker organizing food for themselves and others on a multi-day trip. (All stories assume this persona unless noted.)
 
@@ -154,38 +154,113 @@
 
 -----
 
+# Post-PRD Epics (as built)
+
+Epics 1–8 above are the original spec. Epics 9–12 capture capabilities added
+after it, written as built and shipped. PLAN.md §9 tracks the engineering
+backlog behind them.
+
+-----
+
+## Epic 9: Resupply Timing & Location
+
+Extends Epic 3.
+
+**9.1** As a trip planner, I want to place a resupply at any meal boundary in the day — before brekkie, after brekkie, before lunch, after lunch, late afternoon (before dinner), or after dinner — so that a resupply lands exactly where it really happens.
+
+*Acceptance criteria:*
+
+- The six timings correspond to the six boundaries between a day’s slot groups (brekkie → morning snacks → lunch → afternoon snacks → dinner → evening snacks)
+- A resupply’s timing is the cut point: slots before it stay in the old carry, slots at/after it start the new carry, including splitting that day’s snacks
+
+**9.2** As a trip planner, I want to name each resupply by location (e.g., “Vizzavona”), so that carries are labelled by place — how hikers actually refer to them.
+
+*Acceptance criteria:*
+
+- Each carry shows where it begins and ends by resupply location; the open ends read as trip “start” / “finish”
+- A carry ends at the *next* carry’s resupply location
+- Location is optional; when blank, the carry falls back to its day/slot boundary label
+
+-----
+
+## Epic 10: Data Backup & Restore
+
+Complements the CSV portability of 4.8–4.10 with a full-database safety net — local-first means the browser profile *is* the database.
+
+**10.1** As a trip planner, I want to export my entire database (trips, people, items, meals, resupplies, plans) to a single JSON file, so that I have a complete backup independent of the browser.
+
+*Acceptance criteria:* One file captures every table in a versioned envelope; it is not the same as the per-library CSV export (4.10), which covers only items and meals.
+
+**10.2** As a trip planner, I want to restore from a backup file — replacing current data, with a confirmation step first — so that I can move between devices or browsers without losing or silently clobbering data.
+
+*Acceptance criteria:*
+
+- Restore previews the file’s contents and what it will overwrite, and requires explicit confirmation before replacing anything
+- Invalid or foreign files are rejected with a reason; a partial/failed restore leaves existing data untouched
+- A backup never contains the photo-extraction API key (Epic 11) — the key lives outside the database
+
+-----
+
+## Epic 11: Add Items by Photo
+
+**11.1** As a trip planner, I want to add a library item by photographing a product’s packaging (front of pack and/or the nutrition label), so that I can capture items without typing.
+
+*Acceptance criteria:*
+
+- 1–2 photos, with direct phone-camera capture
+- Extracts name, net weight, calories per package, and vegetarian/vegan markings, and prefills the Add Item form on a per-package basis for review
+- Extraction is a draft — it never saves an item silently; the planner edits and confirms
+
+**11.2** As a trip planner, I want photo extraction to use my own AI provider key that stays on my device, so that the app remains local-first and private.
+
+*Acceptance criteria:*
+
+- Opt-in; the feature is absent until a key is configured
+- The key is stored locally and is never included in a backup (Epic 10)
+- Photos are sent only to the AI provider, directly from the browser; there is no app server in the path
+
+-----
+
+## Epic 12: Units, Pieces & Shopping Lists
+
+**12.1** As a trip planner, I want to give an item a piece weight and name (e.g., one tortilla = 64 g), so that I can think and compose in pieces while the app keeps grams as the source of truth.
+
+*Acceptance criteria:*
+
+- Meal components can be entered in pieces or grams interchangeably; grams remain the canonical, stored quantity
+- Piece weight/name round-trip through the items CSV (4.8/4.10) as optional columns
+
+**12.2** As a trip planner, I want a per-carry shopping list, so that I know how much of each item to buy for each leg of the trip.
+
+*Acceptance criteria:*
+
+- Totals each item’s grams across all people on the carry, including any generation quantity-scaling
+- Shows piece counts for items with a piece weight, and whole packages to buy for items entered per package
+
+-----
+
 ## Resolved Decisions
+
+From the original PRD:
 
 1. **Fully individual plans per person** — no shared/communal meals (5.3).
 1. **Partial first/last days are modeled by selecting which meal slots apply** — no fractional multiplier (2.3).
 1. **Off-trail meals have zero weight with an optional calorie estimate** (6.2).
 
-## Remaining Open Items
+The PRD’s three open items, since resolved (PLAN.md §6):
 
-1. **Snack timing on resupply days** — snacks pool within a day, so a rule is needed to split them across carries when a resupply lands mid-day (e.g., split by resupply timing: morning snacks before an after-lunch resupply belong to the old carry).
-1. **Deleting an item or meal that’s in use** (4.6) — block deletion vs. cascade-remove from meals/plans.
-1. **Quantity-scaling bounds for generation** (8.1) — sensible min/max per item so generation doesn’t produce a 200g butter breakfast.
+4. **Snack timing on resupply days** — each slot carries a coarse timing and a resupply’s timing is a cut position within the day (§6.1; `src/domain/carries.ts`).
+4. **Deleting an in-use item or meal** — **blocked** with the list of dependents reported, not cascaded (§6.2; `src/store/repos.ts`).
+4. **Quantity-scaling bounds for generation** — optional per-item `minGrams`/`maxGrams` clamp generation scaling on top of the global 0.5–1.5× bound (§6.3; `src/domain/generate.ts`, `rollups.ts`).
+
+## Open Items
+
+None at this time.
 
 -----
 
-## Status note (as built)
+## Engineering notes (not user stories)
 
-The PRD above is preserved as written. All three "Remaining Open Items" have
-since been resolved and shipped — see PLAN.md for the rationale:
-
-1. **Snack timing on resupply days** — resolved (PLAN.md §6.1): each slot has a
-   coarse timing and a resupply's timing defines a cut position within the day.
-   Implemented in `src/domain/carries.ts` (`deriveCarries`); see
-   `tests/domain/carries.test.ts`.
-2. **Deleting an in-use item or meal** — resolved (PLAN.md §6.2): deletion is
-   **blocked** with the list of dependents reported, rather than cascading.
-   Implemented in `src/store/repos.ts` (`ItemInUseError` / `MealInUseError`).
-3. **Quantity-scaling bounds for generation** — resolved (PLAN.md §6.3):
-   optional per-item `minGrams`/`maxGrams` clamp generation scaling on top of
-   the global 0.5–1.5× bound. Implemented in `src/domain/generate.ts` and
-   `rollups.ts`.
-
-Beyond the original PRD, the app has also shipped JSON backup/restore, a
-Playwright e2e smoke test, GitHub Pages deployment, add-items-by-photo (vision
-API), unit-aware items with per-carry shopping lists, and a complete set of
-resupply timings with named locations. PLAN.md §9 tracks this backlog.
+Shipped infrastructure that doesn’t map to a planner-facing story: a Playwright
+end-to-end smoke test wired into CI, and automatic deployment to GitHub Pages on
+every merge to `main` (https://aimschroeds.github.io/trip-meal-planner/).
