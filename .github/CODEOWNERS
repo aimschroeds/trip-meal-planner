@@ -1,0 +1,4 @@
+# Code owners are auto-requested as reviewers on every PR — except the PR's
+# own author, so the two of us are assigned to review each other's PRs.
+# Pair with the `main` ruleset's "Require review from Code Owners" to enforce it.
+*  @aimschroeds  @MadsRoothman
