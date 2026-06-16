@@ -8,7 +8,8 @@ library with calorie-density math, and auto-generated meal plans.
 `main` by GitHub Actions. All data stays in your browser (IndexedDB); use the
 Backup tab to export it.
 
-See [PLAN.md](./PLAN.md) for the full build plan, data model, and milestones.
+See [STORIES.md](./STORIES.md) for the product spec (user stories) and
+[PLAN.md](./PLAN.md) for the build plan, data model, and milestones.
 
 ## Stack
 
