@@ -179,7 +179,7 @@ Extends Epic 3.
 
 - Each carry shows where it begins and ends by resupply location; the open ends read as trip “start” / “finish”
 - A carry ends at the *next* carry’s resupply location
-- Location is optional; when blank, the carry falls back to its day/slot boundary label
+- Location is optional; when a resupply has no location, its carry endpoints read as unnamed rather than inventing a label
 
 -----
 
@@ -197,7 +197,7 @@ Complements the CSV portability of 4.8–4.10 with a full-database safety net �
 
 - Restore previews the file’s contents and what it will overwrite, and requires explicit confirmation before replacing anything
 - Invalid or foreign files are rejected with a reason; a partial/failed restore leaves existing data untouched
-- A backup never contains the photo-extraction API key (Epic 11) — the key lives outside the database
+- **Security:** a backup never contains the photo-extraction API key (Epic 11). The key is held in `localStorage`, never in the Dexie database, precisely so that a JSON backup — which a user may email, share, or sync — can never leak the credential
 
 -----
 
