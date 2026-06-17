@@ -252,6 +252,12 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
           Uncheck slots on partial first/last days (e.g. off trail by lunch → brekkie + snacks
           only).
         </p>
+        <p className="mt-1 text-xs text-gray-500">
+          Tip: each snack is one slot, but you fill it with a meal — and a meal can hold several
+          items. So a single before-lunch snack of trail mix + a bar + dried fruit is one snack
+          here. Dessert after dinner is easiest as part of your dinner meal; add an extra evening
+          snack only if you want it tracked separately.
+        </p>
       </section>
     </div>
   )
