@@ -9,6 +9,7 @@ import {
   type BackupFile,
 } from '../domain/backup'
 import { downloadJson } from './download'
+import { fileInputClass } from './styles'
 
 const TABLE_LABELS: Record<(typeof BACKUP_TABLES)[number], string> = {
   trips: 'trips',
@@ -103,7 +104,7 @@ export function BackupPage() {
         <input
           type="file"
           accept=".json,application/json"
-          className="text-sm"
+          className={fileInputClass}
           onChange={(e) => {
             const file = e.target.files?.[0]
             if (file) pickFile(file)

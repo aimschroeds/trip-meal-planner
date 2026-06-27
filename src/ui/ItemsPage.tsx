@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitItemImport, deleteItem, ItemInUseError } from '../store/repos'
@@ -16,6 +16,7 @@ import type { InputBasis, Item } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtDensity } from './format'
 import { PhotoExtract } from './PhotoExtract'
+import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
 const BASES: { value: InputBasis; label: string }[] = [
@@ -113,6 +114,7 @@ export function ItemsPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [vegOnly, setVegOnly] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const density = draftDensity(draft)
   const bounds = draftBounds(draft)
@@ -162,6 +164,9 @@ export function ItemsPage() {
       servingG: item.servingG !== undefined ? String(item.servingG) : '',
     })
     setError(null)
+    // The form sits at the top of the page; bring it into view since the
+    // edit button can be far down a long list.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   /** Photo extraction drafts into the add form for review — never saves. */
@@ -203,6 +208,7 @@ export function ItemsPage() {
   return (
     <div className="space-y-6">
       <form
+        ref={formRef}
         className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
         onSubmit={(e) => {
           e.preventDefault()
@@ -436,6 +442,7 @@ function ItemsImportExport({ items }: { items: Item[] }) {
           <input
             type="file"
             accept=".csv,text/csv"
+            className={fileInputClass}
             onChange={(e) => {
               const file = e.target.files?.[0]
               if (file) void file.text().then((text) => setParsed(parseItemsCsv(text)))
