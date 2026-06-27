@@ -26,3 +26,27 @@ db.version(2).stores({
 db.version(3).stores({
   planEntries: 'id, tripId, [tripId+personId], mealId',
 })
+
+// Epic 13: a slot holds a list of parts (meals and/or loose items) instead
+// of a single meal. Drop the now-meaningless mealId index and fold each
+// legacy entry's single meal into a one-element parts list. Off-trail
+// entries are untouched.
+db.version(4)
+  .stores({
+    planEntries: 'id, tripId, [tripId+personId]',
+  })
+  .upgrade((tx) =>
+    tx
+      .table('planEntries')
+      .toCollection()
+      .modify((e: Record<string, unknown>) => {
+        if (e.kind === 'meal') {
+          e.kind = 'planned'
+          const part: Record<string, unknown> = { kind: 'meal', mealId: e.mealId }
+          if (e.quantityScale != null) part.quantityScale = e.quantityScale
+          e.parts = e.mealId ? [part] : []
+        }
+        delete e.mealId
+        delete e.quantityScale
+      }),
+  )

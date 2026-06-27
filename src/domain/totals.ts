@@ -33,12 +33,26 @@ export function entryTotals(
       unestimated: entry.offTrailCalories == null,
     }
   }
-  const meal = mealsById.get(entry.mealId ?? '')
-  if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${entry.mealId}`)
-  // Per-item bounds apply during scaling, so totals reflect the clamped
-  // quantities generation actually produces.
-  const rollup = rollUpMeal(meal, itemsById, entry.quantityScale ?? 1)
-  return { weightG: rollup.weightG, calories: rollup.calories, unestimated: false }
+  // A planned slot is the sum of its parts (Epic 13): library meals plus any
+  // loose items. Per-item bounds apply during meal scaling, so totals reflect
+  // the clamped quantities generation actually produces.
+  let weightG = 0
+  let calories = 0
+  for (const part of entry.parts ?? []) {
+    if (part.kind === 'meal') {
+      const meal = mealsById.get(part.mealId)
+      if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${part.mealId}`)
+      const rollup = rollUpMeal(meal, itemsById, part.quantityScale ?? 1)
+      weightG += rollup.weightG
+      calories += rollup.calories
+    } else {
+      const item = itemsById.get(part.itemId)
+      if (!item) throw new Error(`Plan entry ${entry.id} references missing item ${part.itemId}`)
+      weightG += part.grams
+      calories += part.grams * item.caloriesPerGram
+    }
+  }
+  return { weightG, calories, unestimated: false }
 }
 
 export type DayStatus = 'ok' | 'under' | 'over' | 'partial'

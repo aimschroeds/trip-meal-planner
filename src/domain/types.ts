@@ -105,8 +105,17 @@ export interface Meal {
   components: MealComponent[]
 }
 
+/** One part of a planned slot (Epic 13): a slot holds an ordered list of
+ *  these, so a single slot can mix library meals and loose items — e.g.
+ *  "dinner = Beef Stroganoff + 2 squares of chocolate", or a snack that's
+ *  just a bar. Grams stay canonical; meals carry an optional quantity scale
+ *  for generation fine-tuning. */
+export type PlanPart =
+  | { kind: 'meal'; mealId: string; quantityScale?: number }
+  | { kind: 'item'; itemId: string; grams: number }
+
 /** One person's assignment for one meal slot on one day (stories 5.1-5.3,
- *  6.1-6.2). Plans are fully individual per person. */
+ *  6.1-6.2; Epic 13). Plans are fully individual per person. */
 export interface PlanEntry {
   /** Deterministic: `${tripId}|${personId}|${dayIndex}|${slotKey}` so a
    *  slot has at most one entry and put() is a natural upsert. */
@@ -116,14 +125,14 @@ export interface PlanEntry {
   dayIndex: number
   /** Stable key from keyedSlots() identifying the slot within the day. */
   slotKey: string
-  kind: 'meal' | 'offTrail'
-  /** Set when kind === 'meal'. */
-  mealId?: string
+  /** A planned slot holds a list of parts; off-trail is a whole-slot state
+   *  with no parts (zero weight, optional calorie estimate). */
+  kind: 'planned' | 'offTrail'
+  /** The slot's food, in order. Set when kind === 'planned'. */
+  parts?: PlanPart[]
   /** Off-trail calorie estimate; omitted = "partially estimated" day,
    *  never counted as under target (resolved decision, story 6.2). */
   offTrailCalories?: number
-  /** Multiplier on the meal's quantities (generation fine-tuning, M6). */
-  quantityScale?: number
   /** Locked manual picks survive plan generation (story 8.2). */
   locked?: boolean
 }

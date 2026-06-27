@@ -46,8 +46,8 @@ const entry: PlanEntry = {
   personId: 'person-1',
   dayIndex: 1,
   slotKey: 'brekkie-0',
-  kind: 'meal',
-  mealId: 'meal-1',
+  kind: 'planned',
+  parts: [{ kind: 'meal', mealId: 'meal-1' }],
 }
 
 function fullData(): BackupData {

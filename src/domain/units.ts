@@ -62,18 +62,26 @@ export function carryShoppingList(args: {
   const { carry, personIds, entriesByKey, mealsById, itemsById } = args
   const gramsByItem = new Map<string, number>()
 
+  const add = (itemId: string, grams: number) =>
+    gramsByItem.set(itemId, (gramsByItem.get(itemId) ?? 0) + grams)
+
   for (const personId of personIds) {
     for (const ref of carry.slots) {
       const entry = entriesByKey.get(planKey(personId, ref.dayIndex, ref.key))
-      if (!entry || entry.kind !== 'meal') continue
-      const meal = mealsById.get(entry.mealId ?? '')
-      if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${entry.mealId}`)
-      const scale = entry.quantityScale ?? 1
-      for (const c of meal.components) {
-        const item = itemsById.get(c.itemId)
-        if (!item) throw new Error(`Meal "${meal.name}" references missing item ${c.itemId}`)
-        const g = scale === 1 ? c.grams : scaledGrams(c.grams, item, scale)
-        gramsByItem.set(c.itemId, (gramsByItem.get(c.itemId) ?? 0) + g)
+      if (!entry || entry.kind !== 'planned') continue
+      for (const part of entry.parts ?? []) {
+        if (part.kind === 'item') {
+          add(part.itemId, part.grams)
+          continue
+        }
+        const meal = mealsById.get(part.mealId)
+        if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${part.mealId}`)
+        const scale = part.quantityScale ?? 1
+        for (const c of meal.components) {
+          const item = itemsById.get(c.itemId)
+          if (!item) throw new Error(`Meal "${meal.name}" references missing item ${c.itemId}`)
+          add(c.itemId, scale === 1 ? c.grams : scaledGrams(c.grams, item, scale))
+        }
       }
     }
   }

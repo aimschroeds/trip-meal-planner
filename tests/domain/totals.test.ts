@@ -50,15 +50,47 @@ function entry(partial: Partial<PlanEntry> & Pick<PlanEntry, 'slotKey' | 'kind'>
   }
 }
 
+/** A planned slot holding a single meal part (the common case in totals). */
+function mealEntry(
+  slotKey: string,
+  mealId: string,
+  extra: Partial<PlanEntry> & { quantityScale?: number } = {},
+): PlanEntry {
+  const { quantityScale, ...rest } = extra
+  return entry({
+    slotKey,
+    kind: 'planned',
+    parts: [{ kind: 'meal', mealId, ...(quantityScale != null ? { quantityScale } : {}) }],
+    ...rest,
+  })
+}
+
 describe('entryTotals', () => {
   it('scales meal quantities by quantityScale', () => {
     const t = entryTotals(
-      entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge', quantityScale: 1.5 }),
+      mealEntry('brekkie:morning', 'porridge', { quantityScale: 1.5 }),
       mealsById,
       itemsById,
     )
     expect(t.weightG).toBe(150)
     expect(t.calories).toBe(600)
+  })
+
+  it('sums a slot with a meal plus loose dessert items (Epic 13)', () => {
+    const t = entryTotals(
+      entry({
+        slotKey: 'dinner:evening',
+        kind: 'planned',
+        parts: [
+          { kind: 'meal', mealId: 'porridge' }, // 100 g, 400 cal
+          { kind: 'item', itemId: 'bar', grams: 50 }, // 50 g, 250 cal
+        ],
+      }),
+      mealsById,
+      itemsById,
+    )
+    expect(t.weightG).toBe(150)
+    expect(t.calories).toBe(650)
   })
 
   it('off-trail meals weigh nothing and use the optional estimate', () => {
@@ -92,9 +124,9 @@ describe('dayTotals', () => {
     const totals = dayTotals({
       ...base,
       entries: [
-        entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge' }),
-        entry({ slotKey: 'snack:morning', kind: 'meal', mealId: 'barMeal' }),
-        entry({ slotKey: 'snack:afternoon', kind: 'meal', mealId: 'barMeal' }),
+        mealEntry('brekkie:morning', 'porridge'),
+        mealEntry('snack:morning', 'barMeal'),
+        mealEntry('snack:afternoon', 'barMeal'),
       ],
     })
     expect(totals.calories).toBe(900) // 400 + 250 + 250
@@ -109,9 +141,9 @@ describe('dayTotals', () => {
     const totals = dayTotals({
       ...base,
       entries: [
-        entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge' }),
-        entry({ slotKey: 'snack:morning', kind: 'meal', mealId: 'barMeal' }),
-        entry({ slotKey: 'snack:afternoon', kind: 'meal', mealId: 'barMeal' }),
+        mealEntry('brekkie:morning', 'porridge'),
+        mealEntry('snack:morning', 'barMeal'),
+        mealEntry('snack:afternoon', 'barMeal'),
         entry({ slotKey: 'lunch:midday', kind: 'offTrail', offTrailCalories: 130 }),
       ],
     })
@@ -122,9 +154,7 @@ describe('dayTotals', () => {
   it('flags overshoot beyond tolerance', () => {
     const totals = dayTotals({
       ...base,
-      entries: [
-        entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge', quantityScale: 3 }),
-      ],
+      entries: [mealEntry('brekkie:morning', 'porridge', { quantityScale: 3 })],
     })
     expect(totals.status).toBe('over')
   })
@@ -133,7 +163,7 @@ describe('dayTotals', () => {
     const totals = dayTotals({
       ...base,
       entries: [
-        entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge' }),
+        mealEntry('brekkie:morning', 'porridge'),
         entry({ slotKey: 'dinner:evening', kind: 'offTrail' }),
       ],
     })
@@ -154,10 +184,10 @@ describe('carryTotals', () => {
     const [carry] = deriveCarries(trip, [])
 
     const entries = [
-      entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge' }), // p1 d1
-      entry({ slotKey: 'brekkie:morning', kind: 'meal', mealId: 'porridge', dayIndex: 2, id: 'x1' }),
+      mealEntry('brekkie:morning', 'porridge'), // p1 d1
+      mealEntry('brekkie:morning', 'porridge', { dayIndex: 2, id: 'x1' }),
       entry({ slotKey: 'dinner:evening', kind: 'offTrail', offTrailCalories: 800 }), // p1 d1
-      entry({ slotKey: 'snack:morning', kind: 'meal', mealId: 'barMeal', personId: 'p2', id: 'x2' }),
+      mealEntry('snack:morning', 'barMeal', { personId: 'p2', id: 'x2' }),
     ]
     const entriesByKey = new Map(
       entries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),

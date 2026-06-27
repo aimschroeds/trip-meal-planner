@@ -131,9 +131,14 @@ export function generateDayPlan(args: {
     personId: person.id,
     dayIndex: day.index,
     slotKey: ks.key,
-    kind: 'meal' as const,
-    mealId: meal.id,
-    quantityScale: scale === 1 ? undefined : scale,
+    kind: 'planned' as const,
+    parts: [
+      {
+        kind: 'meal' as const,
+        mealId: meal.id,
+        ...(scale === 1 ? {} : { quantityScale: scale }),
+      },
+    ],
     locked: false,
   }))
 }

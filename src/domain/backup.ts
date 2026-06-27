@@ -3,7 +3,7 @@
 // envelope and entity shapes all-or-nothing — a backup either restores in
 // full or is rejected with the first problem found.
 
-import type { Item, Meal, Person, PlanEntry, Resupply, Trip } from './types'
+import type { Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from './types'
 
 export const BACKUP_FORMAT = 'hiking-meal-planner-backup'
 export const BACKUP_VERSION = 1
@@ -115,6 +115,31 @@ const ENTITY_CHECKS: Record<(typeof BACKUP_TABLES)[number], EntityCheck> = {
   meals: checkMeal,
   resupplies: checkResupply,
   planEntries: checkPlanEntry,
+}
+
+/** Migrate a plan entry from the pre-Epic-13 shape (one meal per slot, via
+ *  `kind: 'meal'` + `mealId` + `quantityScale`) to the parts model, so a
+ *  backup taken from an older app version restores cleanly. Idempotent:
+ *  entries already in the `planned`/`offTrail` shape pass through unchanged. */
+export function normalizePlanEntry(raw: PlanEntry): PlanEntry {
+  const e = raw as PlanEntry & { mealId?: string; quantityScale?: number }
+  if ((e.kind as string) !== 'meal') return raw
+  const parts: PlanPart[] = []
+  if (e.mealId) {
+    const part: PlanPart = { kind: 'meal', mealId: e.mealId }
+    if (typeof e.quantityScale === 'number') part.quantityScale = e.quantityScale
+    parts.push(part)
+  }
+  return {
+    id: e.id,
+    tripId: e.tripId,
+    personId: e.personId,
+    dayIndex: e.dayIndex,
+    slotKey: e.slotKey,
+    kind: 'planned',
+    parts,
+    ...(e.locked ? { locked: true } : {}),
+  }
 }
 
 export function parseBackup(text: string): ParseBackupResult {
