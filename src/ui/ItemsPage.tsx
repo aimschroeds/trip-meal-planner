@@ -12,7 +12,7 @@ import {
   type ParsedItemRow,
 } from '../domain/csv/items'
 import type { ExtractedItem } from '../domain/extract'
-import type { InputBasis, Item } from '../domain/types'
+import type { InputBasis, Item, MealType } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtDensity } from './format'
 import { PhotoExtract } from './PhotoExtract'
@@ -40,7 +40,11 @@ interface Draft {
   unitName: string
   /** Optional default serving the composer prefills; blank = derive it. */
   servingG: string
+  /** Slot types generation may auto-place this item into; empty = never. */
+  genMealTypes: MealType[]
 }
+
+const GEN_MEAL_TYPES: MealType[] = ['brekkie', 'lunch', 'dinner', 'snack']
 
 const emptyDraft: Draft = {
   name: '',
@@ -53,6 +57,7 @@ const emptyDraft: Draft = {
   unitWeightG: '',
   unitName: '',
   servingG: '',
+  genMealTypes: [],
 }
 
 /** Blank → undefined; otherwise a non-negative number or null when invalid. */
@@ -142,6 +147,7 @@ export function ItemsPage() {
       unitWeightG: unit.unitWeightG,
       unitName: unit.unitName,
       servingG: serving.servingG,
+      genMealTypes: draft.genMealTypes.length > 0 ? draft.genMealTypes : undefined,
     }
     await db.items.put(item)
     setDraft(emptyDraft)
@@ -162,6 +168,7 @@ export function ItemsPage() {
       unitWeightG: item.unitWeightG !== undefined ? String(item.unitWeightG) : '',
       unitName: item.unitName ?? '',
       servingG: item.servingG !== undefined ? String(item.servingG) : '',
+      genMealTypes: item.genMealTypes ?? [],
     })
     setError(null)
     // The form sits at the top of the page; bring it into view since the
@@ -184,6 +191,7 @@ export function ItemsPage() {
       unitWeightG: '',
       unitName: '',
       servingG: '',
+      genMealTypes: [],
     })
     setError(null)
   }
@@ -317,6 +325,31 @@ export function ItemsPage() {
               onChange={(e) => setDraft({ ...draft, unitName: e.target.value })}
             />
           </label>
+          <div
+            className="block"
+            title="Slots that plan generation may auto-fill with this item on its own (e.g. a freeze-dried dinner → dinner, a bar → snack). Leave all off to keep it manual-only."
+          >
+            <span className="block text-sm text-gray-600">Generate in</span>
+            <div className="mt-1 flex flex-wrap gap-2 pt-1">
+              {GEN_MEAL_TYPES.map((t) => (
+                <label key={t} className="flex items-center gap-1 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={draft.genMealTypes.includes(t)}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        genMealTypes: e.target.checked
+                          ? [...draft.genMealTypes, t]
+                          : draft.genMealTypes.filter((x) => x !== t),
+                      })
+                    }
+                  />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </div>
           <span className="pb-1.5 text-sm text-gray-500">
             {density !== null ? `= ${fmtDensity(density)}` : '—'}
           </span>

@@ -304,6 +304,24 @@ small/average/big/huge type — and therefore its calorie target — follows.
 
 -----
 
+## Epic 16: Generate From Loose Items
+
+Extends Epic 8: generation previously only placed library meals, so days
+built from single items (a freeze-dried dinner, a bar) couldn't be
+auto-filled. Items can now be tagged with the slot types they suit and the
+generator treats them as single-item candidates alongside meals.
+
+**16.1** As a trip planner, I want to mark which slot types an item can be auto-generated into, so that generation can fill slots with single items, not just composed meals.
+
+*Acceptance criteria:*
+
+- An item carries an optional set of generate-in meal types (brekkie/lunch/dinner/snack); empty means it is never auto-generated (still usable by hand)
+- Generation considers a tagged item as a one-item candidate for matching slots, scored against the slot's calorie target exactly like a meal, at one serving (the item's default serving) and scaled within the same bounds
+- The vegetarian constraint applies to item candidates too
+- The tags round-trip through the items CSV as an optional `gen_meal_types` column
+
+-----
+
 ## Resolved Decisions
 
 From the original PRD:

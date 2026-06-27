@@ -97,6 +97,11 @@ export interface Item {
    *  derives a serving from the entry basis / piece weight — see
    *  defaultServingG() in domain/units.ts. Entry convenience only. */
   servingG?: number
+  /** Slot types this item may be auto-placed into by generation (Epic 16):
+   *  a freeze-dried dinner tagged ['dinner'], a bar tagged ['snack']. Empty
+   *  or undefined = never auto-generated as a loose item (still usable by
+   *  hand). One serving (defaultServingG) is the generated quantity. */
+  genMealTypes?: MealType[]
 }
 
 export interface MealComponent {

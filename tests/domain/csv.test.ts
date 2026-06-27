@@ -115,6 +115,23 @@ describe('items CSV round-trip', () => {
     expect(rows[0].fields.servingG).toBe(60)
   })
 
+  it('round-trips generation meal-type tags (Epic 16)', () => {
+    const dinner: Item = { ...butter, name: 'Freeze-dried', genMealTypes: ['dinner', 'lunch'] }
+    const { rows, issues } = parseItemsCsv(itemsToCsv([dinner]))
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.genMealTypes).toEqual(['dinner', 'lunch'])
+  })
+
+  it('rejects an unknown gen_meal_types value', () => {
+    const csv = [
+      'name,weight_g,calories,vegetarian,gen_meal_types',
+      'Bad,100,380,true,brunch',
+    ].join('\n')
+    const { rows, issues } = parseItemsCsv(csv)
+    expect(rows).toHaveLength(0)
+    expect(issues[0].reason).toContain('gen_meal_types must be')
+  })
+
   it('rejects a non-positive serving_g', () => {
     const csv = [
       'name,weight_g,calories,vegetarian,serving_g',

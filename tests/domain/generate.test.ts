@@ -169,6 +169,44 @@ describe('generateDayPlan', () => {
   })
 })
 
+describe('generation from tagged loose items (Epic 16)', () => {
+  const freezeDried: Item = {
+    ...item('freeze-dried', 4),
+    inputBasis: 'per_serving',
+    inputWeightG: 200, // 200 g serving → 800 cal
+    genMealTypes: ['dinner'],
+  }
+  const tagged = new Map([...items, freezeDried].map((i) => [i.id, i]))
+
+  it('fills a slot with a tagged item when no meal of that type exists', () => {
+    const noDinnerMeals = library.filter((m) => m.type !== 'dinner')
+    const entries = generateDayPlan(baseArgs({ meals: noDinnerMeals, itemsById: tagged }))
+    const dinner = new Map(entries.map((e) => [e.slotKey, e])).get('dinner:evening')
+    expect(dinner?.parts?.[0]).toMatchObject({ kind: 'item', itemId: 'freeze-dried' })
+  })
+
+  it('never generates an untagged item', () => {
+    const untagged = new Map([...items, item('plain', 4)].map((i) => [i.id, i]))
+    const entries = generateDayPlan(baseArgs({ meals: [], itemsById: untagged }))
+    const parts = entries.flatMap((e) => e.parts ?? [])
+    expect(parts.some((p) => p.kind === 'item')).toBe(false)
+  })
+
+  it('respects the vegetarian constraint for items', () => {
+    const jerky: Item = { ...item('jerky', 5, false), genMealTypes: ['snack'] }
+    const withMeat = new Map([...items, jerky].map((i) => [i.id, i]))
+    for (const r of [0, 0.5, 0.99]) {
+      const entries = generateDayPlan(
+        baseArgs({ person: veggie, meals: [], itemsById: withMeat, rng: () => r }),
+      )
+      const itemIds = entries
+        .flatMap((e) => e.parts ?? [])
+        .flatMap((p) => (p.kind === 'item' ? [p.itemId] : []))
+      expect(itemIds).not.toContain('jerky')
+    }
+  })
+})
+
 describe('per-item quantity bounds (§6.3, backlog item 2)', () => {
   const cappedButter: Item = { ...item('butter', 7.2), maxGrams: 30 }
   const boundedItems = new Map([...items, cappedButter].map((i) => [i.id, i]))
