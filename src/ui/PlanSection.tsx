@@ -19,6 +19,7 @@ import { mealsToCsv } from '../domain/csv/meals'
 import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtCalories, fmtDensity, fmtGrams, fmtSlot } from './format'
+import { GroupedCombobox } from './GroupedCombobox'
 
 const OFF_TRAIL = '@offtrail'
 
@@ -526,34 +527,17 @@ function SlotCell({
               ))}
             </ul>
           )}
-          <select
-            className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5 text-sm text-gray-600"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addPart(e.target.value)
-            }}
-          >
-            <option value="">+ add meal or item…</option>
-            {parts.length === 0 && <option value={OFF_TRAIL}>off-trail (restaurant/town)</option>}
-            {eligibleMeals.length > 0 && (
-              <optgroup label="Meals">
-                {eligibleMeals.map((m) => (
-                  <option key={m.id} value={`m:${m.id}`}>
-                    {m.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {eligibleItems.length > 0 && (
-              <optgroup label="Items">
-                {eligibleItems.map((i) => (
-                  <option key={i.id} value={`i:${i.id}`}>
-                    {i.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+          <GroupedCombobox
+            placeholder="+ add meal or item…"
+            onSelect={addPart}
+            options={[
+              ...(parts.length === 0
+                ? [{ value: OFF_TRAIL, label: 'off-trail (restaurant/town)', group: '' }]
+                : []),
+              ...eligibleMeals.map((m) => ({ value: `m:${m.id}`, label: m.name, group: 'Meals' })),
+              ...eligibleItems.map((i) => ({ value: `i:${i.id}`, label: i.name, group: 'Items' })),
+            ]}
+          />
         </>
       )}
     </div>
