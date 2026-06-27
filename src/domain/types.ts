@@ -45,6 +45,12 @@ export interface Day {
   /** Slots that apply on this day; partial first/last days list a subset
    *  (story 2.3). */
   activeSlots: Slot[]
+  /** Optional itinerary detail (Epic 15): a leg name and the day's planned
+   *  distance / ascent. When distance & ascent are set, `type` is derived
+   *  from them (effort → day type); all optional and entry-only. */
+  name?: string
+  distanceKm?: number
+  ascentM?: number
 }
 
 export interface Trip {
