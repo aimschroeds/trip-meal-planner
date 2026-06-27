@@ -17,6 +17,20 @@ export function unitsForGrams(item: Item, grams: number): number | null {
   return grams / item.unitWeightG
 }
 
+/** A sensible default single serving in grams for the meal composer to
+ *  prefill when this item is picked. An explicit `servingG` always wins;
+ *  otherwise we infer from how the item was entered — a per-serving item's
+ *  serving weight, then one piece, then a whole package. Raw per-gram /
+ *  per-100g items carry no portion information, so they get no default
+ *  (undefined) and the user types the quantity as before. */
+export function defaultServingG(item: Item): number | undefined {
+  if (item.servingG !== undefined && item.servingG > 0) return item.servingG
+  if (item.inputBasis === 'per_serving' && item.inputWeightG > 0) return item.inputWeightG
+  if (item.unitWeightG !== undefined && item.unitWeightG > 0) return item.unitWeightG
+  if (item.inputBasis === 'per_package' && item.inputWeightG > 0) return item.inputWeightG
+  return undefined
+}
+
 /** Whole packages to buy to cover `grams`. Only meaningful when the item
  *  was entered per package, so inputWeightG is the package weight. */
 export function packagesForGrams(item: Item, grams: number): number | null {

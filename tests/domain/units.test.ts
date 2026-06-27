@@ -4,6 +4,7 @@ import { makeTrip } from '../../src/domain/trip'
 import { planKey } from '../../src/domain/totals'
 import {
   carryShoppingList,
+  defaultServingG,
   gramsForUnits,
   packagesForGrams,
   unitsForGrams,
@@ -47,6 +48,46 @@ describe('unit conversions', () => {
     expect(packagesForGrams(tortillas, 512)).toBe(1)
     expect(packagesForGrams(tortillas, 513)).toBe(2)
     expect(packagesForGrams(cheese, 500)).toBeNull() // per-100g entry ≠ package size
+  })
+})
+
+describe('defaultServingG', () => {
+  const base = {
+    id: 'x',
+    name: 'X',
+    caloriesPerGram: 4,
+    vegetarian: true,
+    inputCalories: 100,
+  }
+
+  it('prefers an explicit serving over everything', () => {
+    const item: Item = { ...base, inputBasis: 'per_package', inputWeightG: 512, unitWeightG: 64, servingG: 90 }
+    expect(defaultServingG(item)).toBe(90)
+  })
+
+  it('uses the serving weight for a per-serving item', () => {
+    const item: Item = { ...base, inputBasis: 'per_serving', inputWeightG: 60 }
+    expect(defaultServingG(item)).toBe(60)
+  })
+
+  it('falls back to one piece when there is a unit weight', () => {
+    expect(defaultServingG(tortillas)).toBe(64) // one tortilla, not the 512 g bag
+  })
+
+  it('uses the package weight for a per-package item without a piece', () => {
+    const pouch: Item = { ...base, inputBasis: 'per_package', inputWeightG: 130 }
+    expect(defaultServingG(pouch)).toBe(130)
+  })
+
+  it('gives no default for raw per-100g / per-gram items', () => {
+    expect(defaultServingG(cheese)).toBeUndefined() // per_100g
+    const perGram: Item = { ...base, inputBasis: 'per_gram', inputWeightG: 1 }
+    expect(defaultServingG(perGram)).toBeUndefined()
+  })
+
+  it('ignores a non-positive explicit serving and derives instead', () => {
+    const item: Item = { ...base, inputBasis: 'per_serving', inputWeightG: 60, servingG: 0 }
+    expect(defaultServingG(item)).toBe(60)
   })
 })
 

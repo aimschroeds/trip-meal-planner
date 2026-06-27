@@ -195,3 +195,10 @@ Remaining work after M0–M6, in priority order. One PR each.
    and shows piece counts plus whole packages to buy for items entered per
    package. Round-trips through the items CSV as optional `unit_weight_g` /
    `unit_name` columns.
+7. **Default serving in the meal composer** *(shipped)* — an optional
+   per-item `servingG` so the composer prefills a sensible quantity the
+   moment an item is picked (never clobbering a value already typed). When
+   it's unset, `defaultServingG()` derives one from how the item was entered
+   — a per-serving item's serving, one piece, or a whole package — and gives
+   up for raw per-gram/per-100g ingredients, which carry no portion info.
+   Round-trips through the items CSV as an optional `serving_g` column.

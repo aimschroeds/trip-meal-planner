@@ -86,6 +86,11 @@ export interface Item {
   unitWeightG?: number
   /** Singular label for the unit, e.g. "tortilla", "bar". Cosmetic. */
   unitName?: string
+  /** Optional default single serving in grams (PLAN.md §9.7): the meal
+   *  composer prefills it when this item is picked. When unset, the composer
+   *  derives a serving from the entry basis / piece weight — see
+   *  defaultServingG() in domain/units.ts. Entry convenience only. */
+  servingG?: number
 }
 
 export interface MealComponent {

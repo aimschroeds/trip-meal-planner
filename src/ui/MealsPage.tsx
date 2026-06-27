@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitMealImport, deleteMeal, MealInUseError } from '../store/repos'
 import { rollUpMeal } from '../domain/rollups'
-import { gramsForUnits, unitsForGrams } from '../domain/units'
+import { defaultServingG, gramsForUnits, unitsForGrams } from '../domain/units'
 import { itemsToCsv, type CsvIssue, type DuplicateResolution } from '../domain/csv/items'
 import {
   mealsToCsv,
@@ -146,7 +146,18 @@ export function MealsPage() {
               <select
                 className="rounded border border-gray-300 px-2 py-1"
                 value={c.itemId}
-                onChange={(e) => updateComponent(index, { itemId: e.target.value })}
+                onChange={(e) => {
+                  const itemId = e.target.value
+                  const patch: Partial<ComponentDraft> = { itemId }
+                  // Prefill a default serving on pick, but never clobber a
+                  // quantity the user has already typed.
+                  const picked = itemsById.get(itemId)
+                  if (c.grams.trim() === '' && picked) {
+                    const serving = defaultServingG(picked)
+                    if (serving !== undefined) patch.grams = String(Math.round(serving * 10) / 10)
+                  }
+                  updateComponent(index, patch)
+                }}
               >
                 <option value="">— pick item —</option>
                 {items.map((i) => (

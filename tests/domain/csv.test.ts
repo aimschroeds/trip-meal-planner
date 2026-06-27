@@ -108,6 +108,25 @@ describe('items CSV round-trip', () => {
     expect(rows[0].fields.unitName).toBe('tortilla')
   })
 
+  it('round-trips an explicit serving when set (§9.7)', () => {
+    const oatmeal: Item = { ...butter, name: 'Oatmeal', servingG: 60 }
+    const { rows, issues } = parseItemsCsv(itemsToCsv([oatmeal]))
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.servingG).toBe(60)
+  })
+
+  it('rejects a non-positive serving_g', () => {
+    const csv = [
+      'name,weight_g,calories,vegetarian,serving_g',
+      'Bad,100,380,true,0',
+    ].join('\n')
+    const { rows, issues } = parseItemsCsv(csv)
+    expect(rows).toHaveLength(0)
+    expect(issues).toEqual([
+      { line: 2, reason: 'serving_g must be a positive number, got "0"' },
+    ])
+  })
+
   it('treats blank unit cells as none and rejects bad unit weights', () => {
     const csv = [
       'name,weight_g,calories,vegetarian,unit_weight_g,unit_name',
