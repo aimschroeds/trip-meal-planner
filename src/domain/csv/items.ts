@@ -4,7 +4,7 @@
 // entry values so a round-trip is lossless.
 
 import Papa from 'papaparse'
-import type { Item } from '../types'
+import type { Item, MealType } from '../types'
 
 export const ITEM_CSV_COLUMNS = ['name', 'weight_g', 'calories', 'vegetarian'] as const
 
@@ -16,7 +16,10 @@ export const ITEM_CSV_OPTIONAL_COLUMNS = [
   'unit_weight_g',
   'unit_name',
   'serving_g',
+  'gen_meal_types',
 ] as const
+
+const MEAL_TYPES: MealType[] = ['brekkie', 'snack', 'lunch', 'dinner']
 
 export interface CsvIssue {
   line: number
@@ -33,6 +36,7 @@ export interface ItemFields {
   unitWeightG?: number
   unitName?: string
   servingG?: number
+  genMealTypes?: MealType[]
 }
 
 export interface ParsedItemRow {
@@ -119,6 +123,20 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
       servingG = n
     }
 
+    const genCell = raw.gen_meal_types?.trim()
+    let genMealTypes: MealType[] | undefined
+    if (genCell !== undefined && genCell !== '') {
+      const tokens = genCell.split(/[\s,|]+/).filter(Boolean)
+      const bad = tokens.find((t) => !MEAL_TYPES.includes(t as MealType))
+      if (bad !== undefined) {
+        return issues.push({
+          line,
+          reason: `gen_meal_types must be ${MEAL_TYPES.join('/')}, got "${bad}"`,
+        })
+      }
+      genMealTypes = [...new Set(tokens as MealType[])]
+    }
+
     rows.push({
       line,
       fields: {
@@ -131,6 +149,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
         unitWeightG,
         unitName,
         servingG,
+        genMealTypes,
       },
     })
   })
@@ -212,6 +231,7 @@ export function itemsToCsv(items: Item[]): string {
       unit_weight_g: i.unitWeightG ?? '',
       unit_name: i.unitName ?? '',
       serving_g: i.servingG ?? '',
+      gen_meal_types: (i.genMealTypes ?? []).join(' '),
     })),
     { columns: [...ITEM_CSV_COLUMNS, ...ITEM_CSV_OPTIONAL_COLUMNS] },
   )

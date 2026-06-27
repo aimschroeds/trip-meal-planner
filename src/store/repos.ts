@@ -139,6 +139,7 @@ function itemFromFields(fields: ItemFields, existing?: Item): Item {
     unitWeightG: fields.unitWeightG,
     unitName: fields.unitName,
     servingG: fields.servingG,
+    genMealTypes: fields.genMealTypes,
   }
 }
 

@@ -222,3 +222,9 @@ Remaining work after M0–M6, in priority order. One PR each.
     100 m) and `classifyDayType()` derive the day's small/avg/big/huge type
     from effort, which scales the calorie target through the existing day-type
     factors; the type stays manually overridable.
+11. **Generate from loose items (Epic 16)** *(shipped)* — items gain an
+    optional `genMealTypes` (which slots they may be auto-placed into), and the
+    generator treats a tagged item as a single-item candidate alongside meals
+    (same scoring, serving-based quantity, scale bounds, vegetarian filter).
+    Days built from single freeze-dried dinners / bars now auto-fill. Tags
+    round-trip via the items CSV `gen_meal_types` column.
