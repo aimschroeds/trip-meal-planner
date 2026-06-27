@@ -4,7 +4,7 @@ import { db } from '../../src/store/db'
 import { exportBackup, restoreBackup } from '../../src/store/backup'
 import { makeTrip } from '../../src/domain/trip'
 import type { BackupData } from '../../src/domain/backup'
-import type { Item, Person } from '../../src/domain/types'
+import type { Item, Person, PlanEntry } from '../../src/domain/types'
 
 const oatmeal: Item = {
   id: 'item-1',
@@ -37,8 +37,8 @@ function fullData(): BackupData {
         personId: 'person-1',
         dayIndex: 1,
         slotKey: 'brekkie-0',
-        kind: 'meal',
-        mealId: 'meal-1',
+        kind: 'planned',
+        parts: [{ kind: 'meal', mealId: 'meal-1' }],
       },
     ],
   }
@@ -83,6 +83,26 @@ describe('backup store', () => {
     expect(await db.trips.get('old-trip')).toBeUndefined()
     expect((await db.items.toArray()).map((i) => i.name)).toEqual(['Oatmeal'])
     expect(await db.planEntries.count()).toBe(1)
+  })
+
+  it('normalizes legacy one-meal-per-slot entries on restore (Epic 13)', async () => {
+    const legacy = fullData()
+    legacy.planEntries = [
+      {
+        id: 'trip-1|person-1|1|brekkie-0',
+        tripId: 'trip-1',
+        personId: 'person-1',
+        dayIndex: 1,
+        slotKey: 'brekkie-0',
+        kind: 'meal',
+        mealId: 'meal-1',
+        quantityScale: 1.5,
+      } as unknown as PlanEntry,
+    ]
+    await restoreBackup(legacy)
+    const restored = await db.planEntries.get('trip-1|person-1|1|brekkie-0')
+    expect(restored?.kind).toBe('planned')
+    expect(restored?.parts).toEqual([{ kind: 'meal', mealId: 'meal-1', quantityScale: 1.5 }])
   })
 
   it('restoring an empty backup clears the database', async () => {

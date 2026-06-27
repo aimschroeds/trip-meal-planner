@@ -239,6 +239,31 @@ Complements the CSV portability of 4.8–4.10 with a full-database safety net �
 
 -----
 
+## Epic 13: Flexible Slot Composition
+
+Generalises Epic 5: a day's meal slot is no longer one library meal but an
+ordered **list of parts**, where each part is either a library meal or a loose
+item with a gram quantity. Matches how real plans are written — a breakfast of
+oatmeal + dried blueberries + butter, a dinner of a main plus hot chocolate, a
+snack that's just a bar — without forcing every combination into a saved meal.
+
+**13.1** As a trip planner, I want to put several things in one slot — any mix of library meals and loose items — so that I can plan "dinner + dessert" or a multi-item snack without pre-composing a named meal for it.
+
+*Acceptance criteria:*
+
+- A slot holds an ordered list of parts; each part is a meal (with optional generation scale) or an item (with grams)
+- The slot's weight and calories are the sum of its parts; the per-day and per-carry totals and the shopping list all aggregate parts
+- A loose item defaults to its serving when added (Epic 9.7 / units), and its grams stay editable
+- Off-trail remains a whole-slot state (zero weight, optional estimate) and is offered only on an empty slot
+- Locking a slot preserves all its parts through generation; generation still fills empty unlocked slots with a single meal part
+- Deleting an item or meal is blocked while it's used directly in any plan slot, not only via a meal (extends 4.6)
+
+**13.2** As a trip planner restoring an older backup, I want my previous one-meal-per-slot plans to load unchanged, so that upgrading never loses a plan.
+
+*Acceptance criteria:* A pre-Epic-13 plan entry (a single meal per slot) is migrated to a one-part slot automatically — both by the Dexie schema upgrade and when restoring a legacy JSON backup.
+
+-----
+
 ## Resolved Decisions
 
 From the original PRD:

@@ -45,11 +45,11 @@ describe('plan entries', () => {
       personId,
       dayIndex: 1,
       slotKey: 'brekkie:morning',
-      kind: 'meal' as const,
-      mealId: 'porridge',
+      kind: 'planned' as const,
+      parts: [{ kind: 'meal' as const, mealId: 'porridge' }],
     }
     await setPlanEntry(fields)
-    await setPlanEntry({ ...fields, kind: 'offTrail', mealId: undefined })
+    await setPlanEntry({ ...fields, kind: 'offTrail', parts: undefined })
     const entries = await db.planEntries.where('tripId').equals(tripId).toArray()
     expect(entries).toHaveLength(1)
     expect(entries[0].kind).toBe('offTrail')
@@ -61,8 +61,8 @@ describe('plan entries', () => {
       personId,
       dayIndex: 1,
       slotKey: 'brekkie:morning',
-      kind: 'meal',
-      mealId: 'porridge',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'porridge' }],
     })
     await clearPlanEntry(tripId, personId, 1, 'brekkie:morning')
     expect(await db.planEntries.count()).toBe(0)
@@ -74,8 +74,8 @@ describe('plan entries', () => {
       personId,
       dayIndex: 2,
       slotKey: 'brekkie:morning',
-      kind: 'meal',
-      mealId: 'porridge',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'porridge' }],
     })
     const err = await deleteMeal('porridge').catch((e: unknown) => e)
     expect(err).toBeInstanceOf(MealInUseError)
@@ -88,8 +88,8 @@ describe('plan entries', () => {
       personId,
       dayIndex: 1,
       slotKey: 'dinner:evening',
-      kind: 'meal',
-      mealId: 'porridge',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'porridge' }],
     })
     await removePersonFromTrip(tripId, personId)
     expect(await db.planEntries.count()).toBe(0)

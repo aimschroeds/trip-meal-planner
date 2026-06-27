@@ -202,3 +202,12 @@ Remaining work after M0–M6, in priority order. One PR each.
    — a per-serving item's serving, one piece, or a whole package — and gives
    up for raw per-gram/per-100g ingredients, which carry no portion info.
    Round-trips through the items CSV as an optional `serving_g` column.
+8. **Flexible slot composition (Epic 13)** *(shipped)* — a plan slot holds an
+   ordered list of parts (library meals and/or loose items with grams) instead
+   of a single meal, matching how plans are really written (oatmeal +
+   blueberries + butter for breakfast; a main + hot choc for dinner; a bar as
+   a snack). `PlanEntry.kind` becomes `planned | offTrail` with a `parts[]`;
+   totals, the shopping list, generation, and delete-blocking all aggregate
+   parts. A Dexie v4 upgrade and the JSON-restore path migrate legacy
+   one-meal-per-slot entries into a one-part slot, so old data and backups
+   load unchanged.

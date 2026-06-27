@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { clearPlanEntry, setPlanEntry } from '../store/repos'
+import { clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { generateDayPlan } from '../domain/generate'
 import { rollUpMeal } from '../domain/rollups'
@@ -13,10 +13,10 @@ import {
   planKey,
   type DayStatus,
 } from '../domain/totals'
-import { carryShoppingList } from '../domain/units'
+import { carryShoppingList, defaultServingG } from '../domain/units'
 import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
-import type { Day, Item, Meal, Person, PlanEntry, Resupply, Trip } from '../domain/types'
+import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtCalories, fmtDensity, fmtGrams, fmtSlot } from './format'
 
@@ -90,7 +90,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
     })
     const generatedKeys = new Set(generated.map((e) => e.slotKey))
     for (const e of dayEntries) {
-      if (e.kind === 'meal' && !e.locked && !generatedKeys.has(e.slotKey)) {
+      if (e.kind !== 'offTrail' && !e.locked && !generatedKeys.has(e.slotKey)) {
         await clearPlanEntry(trip.id, person.id, day.index, e.slotKey)
       }
     }
@@ -103,11 +103,15 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
   // Export scoped to what this trip's plan actually uses (story 4.10).
   function exportUsed() {
+    const parts = allEntries.flatMap((e) => e.parts ?? [])
     const usedMealIds = new Set(
-      allEntries.filter((e) => e.kind === 'meal' && e.mealId).map((e) => e.mealId!),
+      parts.flatMap((p) => (p.kind === 'meal' ? [p.mealId] : [])),
     )
     const usedMeals = meals.filter((m) => usedMealIds.has(m.id))
-    const usedItemIds = new Set(usedMeals.flatMap((m) => m.components.map((c) => c.itemId)))
+    const usedItemIds = new Set([
+      ...usedMeals.flatMap((m) => m.components.map((c) => c.itemId)),
+      ...parts.flatMap((p) => (p.kind === 'item' ? [p.itemId] : [])),
+    ])
     const slug = trip.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     downloadCsv(`${slug}-meals.csv`, mealsToCsv(usedMeals, itemsById))
     downloadCsv(`${slug}-items.csv`, itemsToCsv(items.filter((i) => usedItemIds.has(i.id))))
@@ -379,99 +383,178 @@ function SlotCell({
   mealsById: ReadonlyMap<string, Meal>
   itemsById: ReadonlyMap<string, Item>
 }) {
-  // Vegetarian people only see vegetarian meals (story 1.3).
-  const eligible = meals
+  // Vegetarian people only see vegetarian meals/items (story 1.3).
+  const eligibleMeals = meals
     .filter((m) => m.type === keyed.slot.type)
     .filter((m) => !person.vegetarian || rollUpMeal(m, itemsById).vegetarian)
     .sort((a, b) => a.name.localeCompare(b.name))
+  const eligibleItems = [...itemsById.values()]
+    .filter((i) => !person.vegetarian || i.vegetarian)
+    .sort((a, b) => a.name.localeCompare(b.name))
 
-  const value = entry === undefined ? '' : entry.kind === 'offTrail' ? OFF_TRAIL : entry.mealId
+  const loc = {
+    tripId: trip.id,
+    personId: person.id,
+    dayIndex,
+    slotKey: keyed.key,
+    locked: entry?.locked,
+  }
+  const isOffTrail = entry?.kind === 'offTrail'
+  const parts: PlanPart[] = entry?.kind === 'planned' ? (entry.parts ?? []) : []
 
-  async function onChange(next: string) {
-    if (next === '') {
-      await clearPlanEntry(trip.id, person.id, dayIndex, keyed.key)
-    } else if (next === OFF_TRAIL) {
-      await setPlanEntry({
-        tripId: trip.id,
-        personId: person.id,
-        dayIndex,
-        slotKey: keyed.key,
-        kind: 'offTrail',
-      })
-    } else {
-      await setPlanEntry({
-        tripId: trip.id,
-        personId: person.id,
-        dayIndex,
-        slotKey: keyed.key,
-        kind: 'meal',
-        mealId: next,
-      })
+  const setParts = (next: PlanPart[]) => void setPlannedSlot(loc, next)
+  const removePart = (i: number) => setParts(parts.filter((_, idx) => idx !== i))
+  const setItemGrams = (i: number, grams: number) =>
+    setParts(parts.map((p, idx) => (idx === i && p.kind === 'item' ? { ...p, grams } : p)))
+
+  function addPart(value: string) {
+    if (value === OFF_TRAIL) {
+      void setPlanEntry({ ...loc, kind: 'offTrail' })
+    } else if (value.startsWith('m:')) {
+      setParts([...parts, { kind: 'meal', mealId: value.slice(2) }])
+    } else if (value.startsWith('i:')) {
+      const item = itemsById.get(value.slice(2))
+      const grams = item ? (defaultServingG(item) ?? item.inputWeightG) : 0
+      setParts([...parts, { kind: 'item', itemId: value.slice(2), grams }])
     }
   }
 
+  function partCalories(p: PlanPart): number {
+    if (p.kind === 'meal') {
+      const meal = mealsById.get(p.mealId)
+      return meal ? rollUpMeal(meal, itemsById, p.quantityScale ?? 1).calories : 0
+    }
+    return p.grams * (itemsById.get(p.itemId)?.caloriesPerGram ?? 0)
+  }
+
   const detail =
-    entry && (entry.kind === 'meal' || entry.offTrailCalories != null)
+    entry && (parts.length > 0 || (isOffTrail && entry.offTrailCalories != null))
       ? entryTotals(entry, mealsById, itemsById)
       : null
 
   return (
-    <div className="flex items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
-      <span className="w-32 shrink-0 text-sm text-gray-600">{fmtSlot(keyed.slot)}</span>
-      <select
-        className="min-w-0 flex-1 rounded border border-gray-300 px-1 py-0.5 text-sm"
-        value={value}
-        onChange={(e) => void onChange(e.target.value)}
-      >
-        <option value="">—</option>
-        <option value={OFF_TRAIL}>off-trail (restaurant/town)</option>
-        {eligible.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name}
-          </option>
-        ))}
-      </select>
-      {entry?.kind === 'offTrail' && (
-        <input
-          className="w-20 rounded border border-gray-300 px-1 py-0.5 text-sm"
-          inputMode="numeric"
-          placeholder="est. cal"
-          defaultValue={entry.offTrailCalories ?? ''}
-          onBlur={(e) => {
-            const v = e.target.value.trim()
-            const cal = Number(v)
-            void setPlanEntry({
-              tripId: trip.id,
-              personId: person.id,
-              dayIndex,
-              slotKey: keyed.key,
-              kind: 'offTrail',
-              offTrailCalories: v !== '' && Number.isFinite(cal) && cal >= 0 ? cal : undefined,
-            })
-          }}
-        />
-      )}
-      {detail && (
-        <span className="shrink-0 text-xs tabular-nums text-gray-500">
-          {fmtCalories(detail.calories)}
-          {detail.weightG > 0 && ` · ${fmtGrams(detail.weightG)}`}
-          {entry?.quantityScale != null && entry.quantityScale !== 1 && (
-            <span className="text-amber-700"> ×{entry.quantityScale}</span>
-          )}
-        </span>
-      )}
-      {entry?.kind === 'meal' && (
-        <label
-          className="flex shrink-0 items-center gap-0.5 text-xs text-gray-500"
-          title="Locked picks survive generation"
-        >
+    <div className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-600">{fmtSlot(keyed.slot)}</span>
+        {detail && (
+          <span className="text-xs tabular-nums text-gray-500">
+            {fmtCalories(detail.calories)}
+            {detail.weightG > 0 && ` · ${fmtGrams(detail.weightG)}`}
+          </span>
+        )}
+        {(parts.length > 0 || isOffTrail) && (
+          <label
+            className="ml-auto flex shrink-0 items-center gap-0.5 text-xs text-gray-500"
+            title="Locked slots survive generation"
+          >
+            <input
+              type="checkbox"
+              checked={entry?.locked ?? false}
+              onChange={(e) =>
+                void setPlanEntry({ ...entry!, locked: e.target.checked })
+              }
+            />
+            lock
+          </label>
+        )}
+      </div>
+
+      {isOffTrail ? (
+        <div className="mt-1 flex items-center gap-2 text-sm">
+          <span className="text-gray-600">off-trail (restaurant/town)</span>
           <input
-            type="checkbox"
-            checked={entry.locked ?? false}
-            onChange={(e) => void setPlanEntry({ ...entry, locked: e.target.checked })}
+            className="w-20 rounded border border-gray-300 px-1 py-0.5"
+            inputMode="numeric"
+            placeholder="est. cal"
+            defaultValue={entry.offTrailCalories ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              const cal = Number(v)
+              void setPlanEntry({
+                ...loc,
+                kind: 'offTrail',
+                offTrailCalories: v !== '' && Number.isFinite(cal) && cal >= 0 ? cal : undefined,
+              })
+            }}
           />
-          lock
-        </label>
+          <button
+            className="text-xs text-gray-500 underline"
+            onClick={() => void clearPlanEntry(trip.id, person.id, dayIndex, keyed.key)}
+          >
+            remove
+          </button>
+        </div>
+      ) : (
+        <>
+          {parts.length > 0 && (
+            <ul className="mt-1 space-y-1">
+              {parts.map((p, i) => (
+                <li
+                  key={`${p.kind}:${p.kind === 'meal' ? p.mealId : p.itemId}:${i}`}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {p.kind === 'meal'
+                      ? (mealsById.get(p.mealId)?.name ?? '— missing meal —')
+                      : (itemsById.get(p.itemId)?.name ?? '— missing item —')}
+                  </span>
+                  {p.kind === 'item' && (
+                    <>
+                      <input
+                        className="w-16 rounded border border-gray-300 px-1 py-0.5 text-right"
+                        inputMode="decimal"
+                        defaultValue={p.grams}
+                        onBlur={(e) => {
+                          const g = Number(e.target.value)
+                          if (Number.isFinite(g) && g >= 0) setItemGrams(i, g)
+                        }}
+                      />
+                      <span className="text-xs text-gray-500">g</span>
+                    </>
+                  )}
+                  <span className="shrink-0 text-xs tabular-nums text-gray-400">
+                    {fmtCalories(partCalories(p))}
+                  </span>
+                  <button
+                    className="shrink-0 text-xs text-red-700 underline"
+                    onClick={() => removePart(i)}
+                    title="remove"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <select
+            className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5 text-sm text-gray-600"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addPart(e.target.value)
+            }}
+          >
+            <option value="">+ add meal or item…</option>
+            {parts.length === 0 && <option value={OFF_TRAIL}>off-trail (restaurant/town)</option>}
+            {eligibleMeals.length > 0 && (
+              <optgroup label="Meals">
+                {eligibleMeals.map((m) => (
+                  <option key={m.id} value={`m:${m.id}`}>
+                    {m.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {eligibleItems.length > 0 && (
+              <optgroup label="Items">
+                {eligibleItems.map((i) => (
+                  <option key={i.id} value={`i:${i.id}`}>
+                    {i.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </>
       )}
     </div>
   )

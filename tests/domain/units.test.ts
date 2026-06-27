@@ -106,16 +106,23 @@ describe('carryShoppingList', () => {
   const trip = makeTrip('t1', 'Trip', 2)
   const [carry] = deriveCarries(trip, [])
 
-  const entry = (personId: string, dayIndex: number, extra?: Partial<PlanEntry>): PlanEntry => ({
-    id: `${personId}|${dayIndex}`,
-    tripId: 't1',
-    personId,
-    dayIndex,
-    slotKey: 'lunch:midday',
-    kind: 'meal',
-    mealId: 'wrap',
-    ...extra,
-  })
+  const entry = (
+    personId: string,
+    dayIndex: number,
+    extra?: Partial<PlanEntry> & { quantityScale?: number },
+  ): PlanEntry => {
+    const { quantityScale, ...rest } = extra ?? {}
+    return {
+      id: `${personId}|${dayIndex}`,
+      tripId: 't1',
+      personId,
+      dayIndex,
+      slotKey: 'lunch:midday',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'wrap', ...(quantityScale != null ? { quantityScale } : {}) }],
+      ...rest,
+    }
+  }
 
   function byKey(entries: PlanEntry[]) {
     return new Map(entries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]))
@@ -151,8 +158,26 @@ describe('carryShoppingList', () => {
     expect(list[0].grams).toBe(192) // 128 × 1.5
   })
 
+  it('includes loose item parts alongside meals (Epic 13)', () => {
+    const dinner = entry('alice', 1, {
+      parts: [
+        { kind: 'meal', mealId: 'wrap' }, // 128 g tortilla + 50 g cheese
+        { kind: 'item', itemId: 'cheese', grams: 30 }, // loose extra cheese
+      ],
+    })
+    const list = carryShoppingList({
+      carry,
+      personIds: ['alice'],
+      entriesByKey: byKey([dinner]),
+      mealsById,
+      itemsById,
+    })
+    const cheese = list.find((l) => l.item.id === 'cheese')!
+    expect(cheese.grams).toBe(80) // 50 from the wrap + 30 loose
+  })
+
   it('skips empty and off-trail slots', () => {
-    const offTrail = entry('alice', 1, { kind: 'offTrail', mealId: undefined })
+    const offTrail = entry('alice', 1, { kind: 'offTrail', parts: undefined })
     const list = carryShoppingList({
       carry,
       personIds: ['alice'],

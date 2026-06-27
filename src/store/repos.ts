@@ -7,31 +7,45 @@ import { calorieDensity } from '../domain/density'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
 import type { MealFields, MealImportPlan } from '../domain/csv/meals'
-import type { Item, Meal, MealComponent, Person, PlanEntry } from '../domain/types'
+import type { Item, Meal, MealComponent, Person, PlanEntry, PlanPart } from '../domain/types'
 
 export class ItemInUseError extends Error {
   readonly item: Item
   readonly usedBy: Meal[]
+  /** Plan slots that use the item directly as a loose part (Epic 13). */
+  readonly plannedCount: number
 
-  constructor(item: Item, usedBy: Meal[]) {
-    super(
-      `"${item.name}" is used by ${usedBy.length} meal${usedBy.length === 1 ? '' : 's'}: ` +
-        usedBy.map((m) => m.name).join(', '),
-    )
+  constructor(item: Item, usedBy: Meal[], plannedCount = 0) {
+    const where: string[] = []
+    if (usedBy.length > 0) {
+      where.push(
+        `${usedBy.length} meal${usedBy.length === 1 ? '' : 's'} (${usedBy
+          .map((m) => m.name)
+          .join(', ')})`,
+      )
+    }
+    if (plannedCount > 0) {
+      where.push(`${plannedCount} plan slot${plannedCount === 1 ? '' : 's'} directly`)
+    }
+    super(`"${item.name}" is used by ${where.join(' and ')}`)
     this.name = 'ItemInUseError'
     this.item = item
     this.usedBy = usedBy
+    this.plannedCount = plannedCount
   }
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  await db.transaction('rw', db.items, db.meals, async () => {
+  await db.transaction('rw', db.items, db.meals, db.planEntries, async () => {
     const item = await db.items.get(id)
     if (!item) return
     const usedBy = await db.meals
       .filter((m) => m.components.some((c) => c.itemId === id))
       .toArray()
-    if (usedBy.length > 0) throw new ItemInUseError(item, usedBy)
+    const plannedCount = await db.planEntries
+      .filter((e) => (e.parts ?? []).some((p) => p.kind === 'item' && p.itemId === id))
+      .count()
+    if (usedBy.length > 0 || plannedCount > 0) throw new ItemInUseError(item, usedBy, plannedCount)
     await db.items.delete(id)
   })
 }
@@ -55,7 +69,9 @@ export async function deleteMeal(id: string): Promise<void> {
   await db.transaction('rw', db.meals, db.planEntries, async () => {
     const meal = await db.meals.get(id)
     if (!meal) return
-    const entryCount = await db.planEntries.where('mealId').equals(id).count()
+    const entryCount = await db.planEntries
+      .filter((e) => (e.parts ?? []).some((p) => p.kind === 'meal' && p.mealId === id))
+      .count()
     if (entryCount > 0) throw new MealInUseError(meal, entryCount)
     await db.meals.delete(id)
   })
@@ -82,6 +98,19 @@ export async function clearPlanEntry(
   slotKey: string,
 ): Promise<void> {
   await db.planEntries.delete(planEntryId(tripId, personId, dayIndex, slotKey))
+}
+
+/** Upsert a planned slot from its parts (Epic 13), clearing the slot when no
+ *  parts remain so an emptied slot doesn't linger as a zero-calorie entry. */
+export async function setPlannedSlot(
+  loc: { tripId: string; personId: string; dayIndex: number; slotKey: string; locked?: boolean },
+  parts: PlanPart[],
+): Promise<void> {
+  if (parts.length === 0) {
+    await clearPlanEntry(loc.tripId, loc.personId, loc.dayIndex, loc.slotKey)
+    return
+  }
+  await setPlanEntry({ ...loc, kind: 'planned', parts })
 }
 
 function itemFromFields(fields: ItemFields, existing?: Item): Item {

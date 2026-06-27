@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { generateDayPlan } from '../../src/domain/generate'
 import { rollUpMeal, scaledGrams } from '../../src/domain/rollups'
 import { makeTrip } from '../../src/domain/trip'
-import type { Item, Meal, Person, PlanEntry } from '../../src/domain/types'
+import type { Item, Meal, Person, PlanEntry, PlanPart } from '../../src/domain/types'
+
+/** Generated entries hold parts; these read the single meal part out. */
+function mealPart(e?: { parts?: PlanPart[] }): Extract<PlanPart, { kind: 'meal' }> | undefined {
+  const p = e?.parts?.find((x) => x.kind === 'meal')
+  return p?.kind === 'meal' ? p : undefined
+}
+const mealIdOf = (e?: { parts?: PlanPart[] }) => mealPart(e)?.mealId
+const scaleOf = (e?: { parts?: PlanPart[] }) => mealPart(e)?.quantityScale ?? 1
 
 function item(id: string, caloriesPerGram: number, vegetarian = true): Item {
   return {
@@ -63,12 +71,12 @@ function baseArgs(overrides: Partial<Parameters<typeof generateDayPlan>[0]> = {}
 
 function totalCalories(entries: ReturnType<typeof generateDayPlan>): number {
   return entries.reduce((sum, e) => {
-    const m = library.find((x) => x.id === e.mealId)!
+    const m = library.find((x) => x.id === mealIdOf(e))!
     const cal = m.components.reduce(
       (n, c) => n + c.grams * itemsById.get(c.itemId)!.caloriesPerGram,
       0,
     )
-    return sum + cal * (e.quantityScale ?? 1)
+    return sum + cal * scaleOf(e)
   }, 0)
 }
 
@@ -77,9 +85,9 @@ describe('generateDayPlan', () => {
     const entries = generateDayPlan(baseArgs())
     expect(entries).toHaveLength(5)
     const byKey = new Map(entries.map((e) => [e.slotKey, e]))
-    expect(byKey.get('brekkie:morning')?.mealId).toBe('porridge')
-    expect(byKey.get('lunch:midday')?.mealId).toBe('wrap')
-    expect(['pasta-night', 'salami-dinner']).toContain(byKey.get('dinner:evening')?.mealId)
+    expect(mealIdOf(byKey.get('brekkie:morning'))).toBe('porridge')
+    expect(mealIdOf(byKey.get('lunch:midday'))).toBe('wrap')
+    expect(['pasta-night', 'salami-dinner']).toContain(mealIdOf(byKey.get('dinner:evening')))
 
     const total = totalCalories(entries)
     expect(Math.abs(total - 2500) / 2500).toBeLessThanOrEqual(0.05)
@@ -89,7 +97,7 @@ describe('generateDayPlan', () => {
     // Run with every rng value that selects different candidates.
     for (const r of [0, 0.4, 0.9]) {
       const entries = generateDayPlan(baseArgs({ person: veggie, rng: () => r }))
-      expect(entries.map((e) => e.mealId)).not.toContain('salami-dinner')
+      expect(entries.map(mealIdOf)).not.toContain('salami-dinner')
     }
   })
 
@@ -100,8 +108,8 @@ describe('generateDayPlan', () => {
       personId: 'p1',
       dayIndex: 1,
       slotKey: 'dinner:evening',
-      kind: 'meal',
-      mealId: 'salami-dinner', // 900 cal kept
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'salami-dinner' }], // 900 cal kept
       locked: true,
     }
     const entries = generateDayPlan(baseArgs({ existingEntries: [locked] }))
@@ -132,8 +140,8 @@ describe('generateDayPlan', () => {
       personId: 'p1',
       dayIndex: 1,
       slotKey: 'brekkie:morning',
-      kind: 'meal',
-      mealId: 'porridge',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'porridge' }],
     }
     const entries = generateDayPlan(baseArgs({ existingEntries: [unlocked] }))
     expect(entries.map((e) => e.slotKey)).toContain('brekkie:morning')
@@ -143,8 +151,8 @@ describe('generateDayPlan', () => {
     const hungry: Person = { id: 'p3', name: 'H', baselineCalories: 6000, vegetarian: false }
     const entries = generateDayPlan(baseArgs({ person: hungry }))
     for (const e of entries) {
-      expect(e.quantityScale ?? 1).toBeLessThanOrEqual(1.5)
-      expect(e.quantityScale ?? 1).toBeGreaterThanOrEqual(0.5)
+      expect(scaleOf(e)).toBeLessThanOrEqual(1.5)
+      expect(scaleOf(e)).toBeGreaterThanOrEqual(0.5)
     }
   })
 
@@ -157,7 +165,7 @@ describe('generateDayPlan', () => {
   it('varies picks with the rng for one-tap regeneration (story 8.3)', () => {
     const a = generateDayPlan(baseArgs({ rng: () => 0 }))
     const b = generateDayPlan(baseArgs({ rng: () => 0.99 }))
-    expect(a.map((e) => e.mealId).join()).not.toEqual(b.map((e) => e.mealId).join())
+    expect(a.map(mealIdOf).join()).not.toEqual(b.map(mealIdOf).join())
   })
 })
 
@@ -178,8 +186,7 @@ describe('per-item quantity bounds (§6.3, backlog item 2)', () => {
 
   const clampedTotal = (entries: ReturnType<typeof generateDayPlan>) =>
     entries.reduce(
-      (sum, e) =>
-        sum + rollUpMeal(lookup.get(e.mealId!)!, boundedItems, e.quantityScale ?? 1).calories,
+      (sum, e) => sum + rollUpMeal(lookup.get(mealIdOf(e)!)!, boundedItems, scaleOf(e)).calories,
       0,
     )
 
@@ -188,9 +195,9 @@ describe('per-item quantity bounds (§6.3, backlog item 2)', () => {
     const entries = generateDayPlan(
       baseArgs({ person: hungry, meals: boundedLibrary, itemsById: boundedItems }),
     )
-    const dinner = entries.find((e) => e.mealId === 'buttery-pasta')
+    const dinner = entries.find((e) => mealIdOf(e) === 'buttery-pasta')
     expect(dinner).toBeDefined()
-    const scale = dinner!.quantityScale ?? 1
+    const scale = scaleOf(dinner)
 
     // Butter rides its cap instead of scaling to 25 × scale ≈ 32 g.
     expect(scale).toBeGreaterThan(1.2)
@@ -212,9 +219,9 @@ describe('per-item quantity bounds (§6.3, backlog item 2)', () => {
     const entries = generateDayPlan(
       baseArgs({ person: light, meals: boundedLibrary, itemsById: flooredItems }),
     )
-    const brekkie = entries.find((e) => e.mealId === 'porridge')
+    const brekkie = entries.find((e) => mealIdOf(e) === 'porridge')
     expect(brekkie).toBeDefined()
-    const scale = brekkie!.quantityScale ?? 1
+    const scale = scaleOf(brekkie)
     expect(scale).toBeLessThan(0.7)
     // 100 g oats × scale would drop below 70 g; the floor holds it there.
     expect(scaledGrams(100, flooredOats, scale)).toBe(70)
