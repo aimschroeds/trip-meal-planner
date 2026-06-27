@@ -12,9 +12,13 @@ import {
   withSnackCount,
   type MainMealType,
 } from '../domain/trip'
+import { classifyDayType, dayEffortKm } from '../domain/effort'
+import { applyItinerary, parseItineraryCsv } from '../domain/csv/itinerary'
+import type { CsvIssue } from '../domain/csv/items'
 import type { Day, DayType, Person, Resupply, ResupplyTiming, Trip } from '../domain/types'
 import { fmtCalories, fmtSlot } from './format'
 import { PlanSection } from './PlanSection'
+import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
 const DAY_TYPES: DayType[] = ['small', 'average', 'big', 'huge']
@@ -128,6 +132,19 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
     await update({ days: trip.days.map((d) => (d.index === updated.index ? updated : d)) })
   }
 
+  /** Edit a day's itinerary fields; when both distance and ascent are set,
+   *  re-derive the day type from effort (Epic 15). */
+  async function setDayItinerary(
+    day: Day,
+    patch: { name?: string; distanceKm?: number; ascentM?: number },
+  ) {
+    const next: Day = { ...day, ...patch }
+    if (next.distanceKm != null && next.ascentM != null) {
+      next.type = classifyDayType(dayEffortKm(next.distanceKm, next.ascentM))
+    }
+    await updateDay(next)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -179,11 +196,16 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h3 className="mb-2 font-semibold text-gray-800">Days</h3>
+        <ItineraryUpload trip={trip} onApply={(days) => void update({ days })} />
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
               <th className="py-1 pr-2">Day</th>
-              <th className="py-1 pr-2">Effort</th>
+              <th className="py-1 pr-2">Leg</th>
+              <th className="py-1 pr-2 text-right">km</th>
+              <th className="py-1 pr-2 text-right">↑ m</th>
+              <th className="py-1 pr-2 text-right">effort</th>
+              <th className="py-1 pr-2">Type</th>
               <th className="py-1 pr-2">Slots</th>
               <th className="py-1 pr-2">Snacks</th>
               {people.map((p) => (
@@ -197,6 +219,57 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
             {trip.days.map((day) => (
               <tr key={day.index} className="border-b border-gray-100">
                 <td className="py-1.5 pr-2 font-medium">{day.index}</td>
+                <td className="py-1.5 pr-2">
+                  <input
+                    className="w-32 rounded border border-gray-300 px-1 py-0.5"
+                    placeholder="—"
+                    value={day.name ?? ''}
+                    onChange={(e) =>
+                      void setDayItinerary(day, {
+                        name: e.target.value === '' ? undefined : e.target.value,
+                      })
+                    }
+                  />
+                </td>
+                <td className="py-1.5 pr-2 text-right">
+                  <input
+                    key={`km-${day.index}-${day.distanceKm ?? ''}`}
+                    className="w-16 rounded border border-gray-300 px-1 py-0.5 text-right"
+                    inputMode="decimal"
+                    placeholder="—"
+                    defaultValue={day.distanceKm ?? ''}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim()
+                      const n = Number(v)
+                      void setDayItinerary(day, {
+                        distanceKm:
+                          v === '' ? undefined : Number.isFinite(n) && n >= 0 ? n : day.distanceKm,
+                      })
+                    }}
+                  />
+                </td>
+                <td className="py-1.5 pr-2 text-right">
+                  <input
+                    key={`asc-${day.index}-${day.ascentM ?? ''}`}
+                    className="w-16 rounded border border-gray-300 px-1 py-0.5 text-right"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={day.ascentM ?? ''}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim()
+                      const n = Number(v)
+                      void setDayItinerary(day, {
+                        ascentM:
+                          v === '' ? undefined : Number.isFinite(n) && n >= 0 ? n : day.ascentM,
+                      })
+                    }}
+                  />
+                </td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-gray-500">
+                  {day.distanceKm != null && day.ascentM != null
+                    ? `${Math.round(dayEffortKm(day.distanceKm, day.ascentM))} km`
+                    : '—'}
+                </td>
                 <td className="py-1.5 pr-2">
                   <select
                     className="rounded border border-gray-300 px-1 py-0.5"
@@ -260,6 +333,59 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </p>
       </section>
     </div>
+  )
+}
+
+/** Bulk-set day legs, distance, and ascent from a CSV (Epic 15). Each day's
+ *  type — and therefore the calorie target — is derived from its effort. */
+function ItineraryUpload({ trip, onApply }: { trip: Trip; onApply: (days: Day[]) => void }) {
+  const [result, setResult] = useState<{
+    applied: number
+    unmatched: number[]
+    issues: CsvIssue[]
+  } | null>(null)
+
+  function handle(text: string) {
+    const { rows, issues } = parseItineraryCsv(text)
+    const { days, unmatched } = applyItinerary(trip.days, rows)
+    onApply(days)
+    setResult({ applied: rows.length - unmatched.length, unmatched, issues })
+  }
+
+  return (
+    <details className="mb-3 rounded border border-gray-200 bg-gray-50 p-3">
+      <summary className="cursor-pointer text-sm font-medium text-gray-700">
+        Upload itinerary CSV
+      </summary>
+      <div className="mt-2 space-y-2 text-sm">
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          className={fileInputClass}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void file.text().then(handle)
+            e.target.value = ''
+          }}
+        />
+        <p className="text-xs text-gray-500">
+          Columns: <code>day, distance_km, ascent_m</code> (plus optional <code>name</code>). Each
+          day's size is set from its effort — distance + ascent ÷ 100 m — which scales that day's
+          calorie target. You can still override a day's type by hand afterwards.
+        </p>
+        {result && (
+          <p className="text-xs text-gray-600">
+            Applied {result.applied} day{result.applied === 1 ? '' : 's'}.
+            {result.unmatched.length > 0 &&
+              ` Skipped rows for days not in this trip: ${result.unmatched.join(', ')}.`}
+            {result.issues.length > 0 &&
+              ` ${result.issues.length} bad row(s): ${result.issues
+                .map((i) => `line ${i.line} — ${i.reason}`)
+                .join('; ')}.`}
+          </p>
+        )}
+      </div>
+    </details>
   )
 }
 

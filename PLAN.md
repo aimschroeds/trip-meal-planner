@@ -216,3 +216,9 @@ Remaining work after M0–M6, in priority order. One PR each.
    lunch / snacks of a multi-day trip are entered once. Pure `copyDayPlan()`
    matches slots by key (partial days keep their shape), skips locked target
    slots, and reports overwrites so the UI can confirm before replacing.
+10. **Itinerary-driven day sizing (Epic 15)** *(shipped)* — each day gains an
+    optional leg name, distance, and ascent (uploaded via a `day, distance_km,
+    ascent_m` CSV or typed inline). Pure `dayEffortKm()` (distance + ascent ÷
+    100 m) and `classifyDayType()` derive the day's small/avg/big/huge type
+    from effort, which scales the calorie target through the existing day-type
+    factors; the type stays manually overridable.

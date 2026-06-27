@@ -281,6 +281,29 @@ pain. Build one representative day, replicate it, then vary the dinners.
 
 -----
 
+## Epic 15: Itinerary-Driven Day Sizing
+
+Refines Epic 2: instead of hand-picking each day's effort, derive it from the
+route. Upload (or type) each day's distance and ascent, and the day's
+small/average/big/huge type — and therefore its calorie target — follows.
+
+**15.1** As a trip planner, I want to give each day a leg name and its planned distance and ascent, so that my plan reflects the actual route and days read as "Day 3 — Vizzavona → Petra Piana".
+
+*Acceptance criteria:*
+
+- Each day optionally carries a name, distance (km), and ascent (m); all can be uploaded from a CSV (`day, distance_km, ascent_m`, optional `name`) or typed inline
+- Bad CSV rows are reported with line and reason without blocking good rows; rows for days outside the trip are reported as unmatched
+
+**15.2** As a trip planner, I want the day's size to be derived from distance and climb, so that calorie targets scale with how hard the day actually is.
+
+*Acceptance criteria:*
+
+- Effort = distance + ascent ÷ 100 m (100 m of climb ≈ 1 km flat; the weighting is a documented default)
+- Effort maps to the day type (small < 12, average < 20, big < 28, huge ≥ 28 effort km), which scales the target via the existing day-type factors
+- The derived type can still be overridden by hand; re-uploading or editing distance/ascent re-derives it
+
+-----
+
 ## Resolved Decisions
 
 From the original PRD:
