@@ -15,6 +15,7 @@ export const ITEM_CSV_OPTIONAL_COLUMNS = [
   'max_grams',
   'unit_weight_g',
   'unit_name',
+  'serving_g',
 ] as const
 
 export interface CsvIssue {
@@ -31,6 +32,7 @@ export interface ItemFields {
   maxGrams?: number
   unitWeightG?: number
   unitName?: string
+  servingG?: number
 }
 
 export interface ParsedItemRow {
@@ -107,9 +109,29 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
     }
     const unitName = raw.unit_name?.trim() || undefined
 
+    const servingCell = raw.serving_g?.trim()
+    let servingG: number | undefined
+    if (servingCell !== undefined && servingCell !== '') {
+      const n = Number(servingCell)
+      if (!Number.isFinite(n) || n <= 0) {
+        return issues.push({ line, reason: `serving_g must be a positive number, got "${raw.serving_g}"` })
+      }
+      servingG = n
+    }
+
     rows.push({
       line,
-      fields: { name, weightG, calories, vegetarian, minGrams, maxGrams, unitWeightG, unitName },
+      fields: {
+        name,
+        weightG,
+        calories,
+        vegetarian,
+        minGrams,
+        maxGrams,
+        unitWeightG,
+        unitName,
+        servingG,
+      },
     })
   })
 
@@ -189,6 +211,7 @@ export function itemsToCsv(items: Item[]): string {
       max_grams: i.maxGrams ?? '',
       unit_weight_g: i.unitWeightG ?? '',
       unit_name: i.unitName ?? '',
+      serving_g: i.servingG ?? '',
     })),
     { columns: [...ITEM_CSV_COLUMNS, ...ITEM_CSV_OPTIONAL_COLUMNS] },
   )
