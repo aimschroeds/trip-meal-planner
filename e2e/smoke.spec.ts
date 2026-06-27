@@ -78,9 +78,10 @@ test('plan a day end to end', async ({ page }) => {
   await expect(page.getByText('on target')).toBeVisible()
 
   // Day 1 slots are all filled: brekkie can only be the hand-composed meal,
-  // which appears as a part in the slot (Epic 13: slots hold a list of parts).
+  // which appears as a part (a list item) in the slot — not the same as the
+  // "add meal" picker's <option> for it (Epic 13: slots hold a list of parts).
   const day1 = page.locator('section', { hasText: 'Day 1' }).first()
-  await expect(day1.getByText('Porridge')).toBeVisible()
+  await expect(day1.getByRole('listitem').filter({ hasText: 'Porridge' })).toBeVisible()
 
   // The carries table aggregates the generated day into real weight/calories.
   const tripRow = page.getByRole('row').filter({ hasText: 'Trip' })
