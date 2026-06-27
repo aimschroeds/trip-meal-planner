@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
+import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
+import { copyDayPlan } from '../domain/copyDay'
 import { generateDayPlan } from '../domain/generate'
 import { rollUpMeal } from '../domain/rollups'
 import {
@@ -345,7 +346,8 @@ function DayCard({
           ✨ generate
         </button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <CopyDayControl trip={trip} sourceDay={day} person={person} entriesByKey={entriesByKey} />
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {slots.map((keyed) => (
           <SlotCell
             key={keyed.key}
@@ -361,6 +363,126 @@ function DayCard({
         ))}
       </div>
     </section>
+  )
+}
+
+/** Copy one day's slots onto chosen other days for this person (Epic 14) —
+ *  build a representative day, then replicate it and just vary the dinners. */
+function CopyDayControl({
+  trip,
+  sourceDay,
+  person,
+  entriesByKey,
+}: {
+  trip: Trip
+  sourceDay: Day
+  person: Person
+  entriesByKey: ReadonlyMap<string, PlanEntry>
+}) {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  const otherDays = trip.days.filter((d) => d.index !== sourceDay.index)
+
+  const slotEntries = (day: Day): Map<string, PlanEntry> => {
+    const m = new Map<string, PlanEntry>()
+    for (const ks of keyedSlots(day)) {
+      const e = entriesByKey.get(planKey(person.id, day.index, ks.key))
+      if (e) m.set(ks.key, e)
+    }
+    return m
+  }
+
+  const hasContent = (e: PlanEntry) =>
+    e.kind === 'offTrail' || (e.parts?.length ?? 0) > 0
+  const sourceHasContent = [...slotEntries(sourceDay).values()].some(hasContent)
+
+  function reset() {
+    setOpen(false)
+    setSelected(new Set())
+  }
+
+  async function apply() {
+    const targets = [...selected]
+      .map((i) => trip.days.find((d) => d.index === i))
+      .filter((d): d is Day => d !== undefined)
+      .map((day) => ({ day, existing: slotEntries(day) }))
+    const plan = copyDayPlan({
+      tripId: trip.id,
+      personId: person.id,
+      source: slotEntries(sourceDay),
+      targets,
+    })
+    if (plan.overwrites > 0) {
+      const ok = window.confirm(
+        `Replace ${plan.overwrites} slot${plan.overwrites === 1 ? '' : 's'} that already ` +
+          `have food on the selected day${selected.size === 1 ? '' : 's'}?` +
+          (plan.skippedLocked > 0 ? ` (${plan.skippedLocked} locked slot(s) kept)` : ''),
+      )
+      if (!ok) return
+    }
+    await applyPlanWrites(plan.writes)
+    reset()
+  }
+
+  if (!open) {
+    return (
+      <button
+        className="mt-1 rounded border border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-600 disabled:opacity-40"
+        disabled={!sourceHasContent || otherDays.length === 0}
+        onClick={() => setOpen(true)}
+        title="Copy this day's plan to other days"
+      >
+        ⧉ copy to days…
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+      <span className="text-xs text-gray-600">copy day {sourceDay.index} to:</span>
+      {otherDays.map((d) => (
+        <label
+          key={d.index}
+          className={`cursor-pointer rounded px-1.5 py-0.5 text-xs ${
+            selected.has(d.index)
+              ? 'bg-emerald-700 text-white'
+              : 'border border-gray-300 bg-white text-gray-600'
+          }`}
+        >
+          <input
+            type="checkbox"
+            className="sr-only"
+            checked={selected.has(d.index)}
+            onChange={() =>
+              setSelected((s) => {
+                const n = new Set(s)
+                if (n.has(d.index)) n.delete(d.index)
+                else n.add(d.index)
+                return n
+              })
+            }
+          />
+          {d.index}
+        </label>
+      ))}
+      <button
+        className="text-xs text-emerald-700 underline"
+        onClick={() => setSelected(new Set(otherDays.map((d) => d.index)))}
+      >
+        all
+      </button>
+      <button
+        className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white disabled:opacity-40"
+        disabled={selected.size === 0}
+        onClick={() => void apply()}
+      >
+        copy
+      </button>
+      <button className="text-xs text-gray-500 underline" onClick={reset}>
+        cancel
+      </button>
+    </div>
   )
 }
 

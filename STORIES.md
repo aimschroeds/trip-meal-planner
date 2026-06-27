@@ -264,6 +264,23 @@ snack that's just a bar — without forcing every combination into a saved meal.
 
 -----
 
+## Epic 14: Copy a Day Across the Trip
+
+The reason to leave the spreadsheet: multi-day trips repeat the same
+breakfast / lunch / snacks every day, and re-entering them by hand is the
+pain. Build one representative day, replicate it, then vary the dinners.
+
+**14.1** As a trip planner, I want to copy one day's plan onto other days I choose, so that I don't re-enter the same meals for every day of the trip.
+
+*Acceptance criteria:*
+
+- Copy is per person (plans are individual) and targets a chosen set of other days
+- Only slots that exist on both the source and a target day are copied, so partial first/last days neither lose nor gain slots
+- Locked target slots are left untouched; copying onto a slot that already has food asks for confirmation first
+- The copy is independent — later editing the source day doesn't change the copies
+
+-----
+
 ## Resolved Decisions
 
 From the original PRD:
