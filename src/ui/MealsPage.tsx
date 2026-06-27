@@ -15,6 +15,7 @@ import {
 import type { Item, Meal, MealType } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtCalories, fmtDensity, fmtGrams } from './format'
+import { ItemCombobox } from './ItemCombobox'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
@@ -148,11 +149,10 @@ export function MealsPage() {
         <div className="space-y-2">
           {draft.components.map((c, index) => (
             <div key={index} className="flex items-center gap-2">
-              <select
-                className="rounded border border-gray-300 px-2 py-1"
+              <ItemCombobox
+                items={items}
                 value={c.itemId}
-                onChange={(e) => {
-                  const itemId = e.target.value
+                onSelect={(itemId) => {
                   const patch: Partial<ComponentDraft> = { itemId }
                   // Prefill a default serving on pick, but never clobber a
                   // quantity the user has already typed.
@@ -163,14 +163,7 @@ export function MealsPage() {
                   }
                   updateComponent(index, patch)
                 }}
-              >
-                <option value="">— pick item —</option>
-                {items.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
-              </select>
+              />
               <input
                 className="w-20 rounded border border-gray-300 px-2 py-1"
                 inputMode="decimal"

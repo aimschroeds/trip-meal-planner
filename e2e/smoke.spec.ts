@@ -46,13 +46,19 @@ test('plan a day end to end', async ({ page }) => {
   // Compose a brekkie by hand: 100 g oats + 20 g butter = 524 cal.
   await page.getByRole('button', { name: 'Meals' }).click()
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Porridge')
-  // Every component select contains the "— pick item —" option text, so
-  // target the just-added (last) row each time.
+  // The item picker is a searchable combobox (type to filter, click the
+  // option). Target the just-added (last) row's picker by its placeholder.
+  const pickItem = async (name: string) => {
+    const box = page.getByPlaceholder('— pick item —').last()
+    await box.click()
+    await box.fill(name)
+    await page.getByRole('button', { name, exact: true }).click()
+  }
   await page.getByRole('button', { name: '+ add item' }).click()
-  await page.getByRole('combobox').filter({ hasText: '— pick item —' }).last().selectOption({ label: 'Oats' })
+  await pickItem('Oats')
   await page.getByPlaceholder('g', { exact: true }).last().fill('100')
   await page.getByRole('button', { name: '+ add item' }).click()
-  await page.getByRole('combobox').filter({ hasText: '— pick item —' }).last().selectOption({ label: 'Butter' })
+  await pickItem('Butter')
   await page.getByPlaceholder('g', { exact: true }).last().fill('20')
   await expect(page.getByText('120 g · 524 cal')).toBeVisible()
   await page.getByRole('button', { name: 'Add to library' }).click()
