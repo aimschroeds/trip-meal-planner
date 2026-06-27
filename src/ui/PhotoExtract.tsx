@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ExtractedItem } from '../domain/extract'
 import { clearApiKey, getApiKey, setApiKey } from '../extract/apiKey'
 import { EXTRACT_MODEL } from '../extract/config'
 import { fileToJpegBase64 } from '../extract/image'
+import { fileInputClass } from './styles'
 
 /** Snap 1–2 photos of a product (front of pack and/or nutrition label) and
  *  prefill the Add Item form from them (PLAN.md §9.5). Extraction is a
@@ -14,6 +15,26 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extractedName, setExtractedName] = useState<string | null>(null)
+
+  // Let the user paste a screenshot (Cmd/Ctrl+V) instead of picking a file.
+  // Only image pastes are consumed, so pasting text into a form field on the
+  // page is unaffected; the listener is live only once a key is configured.
+  useEffect(() => {
+    if (!hasKey) return
+    function onPaste(e: ClipboardEvent) {
+      const images = Array.from(e.clipboardData?.items ?? [])
+        .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+        .map((it) => it.getAsFile())
+        .filter((f): f is File => f !== null)
+      if (images.length === 0) return
+      e.preventDefault()
+      setFiles((prev) => [...prev, ...images].slice(0, 2))
+      setExtractedName(null)
+      setError(null)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [hasKey])
 
   async function extract() {
     const apiKey = getApiKey()
@@ -85,7 +106,7 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
                 accept="image/*"
                 capture="environment"
                 multiple
-                className="text-sm"
+                className={fileInputClass}
                 onChange={(e) => {
                   setFiles(Array.from(e.target.files ?? []).slice(0, 2))
                   setExtractedName(null)
@@ -112,7 +133,7 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
             <p className="text-xs text-gray-500">
               {files.length > 0
                 ? `${files.length} photo${files.length === 1 ? '' : 's'} selected — front of pack and/or the nutrition label work best.`
-                : 'Take or pick 1–2 photos: the front of the pack and/or the nutrition label.'}
+                : 'Take, pick, or paste (⌘/Ctrl+V) 1–2 photos: the front of the pack and/or the nutrition label.'}
             </p>
           </>
         )}

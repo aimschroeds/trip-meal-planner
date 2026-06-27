@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitMealImport, deleteMeal, MealInUseError } from '../store/repos'
@@ -15,6 +15,7 @@ import {
 import type { Item, Meal, MealType } from '../domain/types'
 import { downloadCsv } from './download'
 import { fmtCalories, fmtDensity, fmtGrams } from './format'
+import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
 const MEAL_TYPES: MealType[] = ['brekkie', 'snack', 'lunch', 'dinner']
@@ -54,6 +55,7 @@ export function MealsPage() {
   const [vegOnly, setVegOnly] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   async function remove(id: string) {
     try {
@@ -90,6 +92,8 @@ export function MealsPage() {
       type: meal.type,
       components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
     })
+    // Bring the composer into view — the edit button can be far down the list.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const rows = meals
@@ -105,6 +109,7 @@ export function MealsPage() {
   return (
     <div className="space-y-6">
       <form
+        ref={formRef}
         className="space-y-3 rounded-lg border border-gray-200 bg-white p-4"
         onSubmit={(e) => {
           e.preventDefault()
@@ -366,6 +371,7 @@ function MealsImportExport({ items, meals }: { items: Item[]; meals: Meal[] }) {
           <input
             type="file"
             accept=".csv,text/csv"
+            className={fileInputClass}
             onChange={(e) => {
               const file = e.target.files?.[0]
               if (file) void file.text().then((text) => setParsed(parseMealsCsv(text)))
