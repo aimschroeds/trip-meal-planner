@@ -113,6 +113,17 @@ export async function setPlannedSlot(
   await setPlanEntry({ ...loc, kind: 'planned', parts })
 }
 
+/** Upsert many slot assignments at once (Epic 14 copy-day). */
+export async function applyPlanWrites(writes: Omit<PlanEntry, 'id'>[]): Promise<void> {
+  if (writes.length === 0) return
+  await db.planEntries.bulkPut(
+    writes.map((w) => ({
+      ...w,
+      id: planEntryId(w.tripId, w.personId, w.dayIndex, w.slotKey),
+    })),
+  )
+}
+
 function itemFromFields(fields: ItemFields, existing?: Item): Item {
   return {
     id: existing?.id ?? crypto.randomUUID(),

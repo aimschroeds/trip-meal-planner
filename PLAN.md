@@ -211,3 +211,8 @@ Remaining work after M0–M6, in priority order. One PR each.
    parts. A Dexie v4 upgrade and the JSON-restore path migrate legacy
    one-meal-per-slot entries into a one-part slot, so old data and backups
    load unchanged.
+9. **Copy a day across the trip (Epic 14)** *(shipped)* — replicate one day's
+   slots onto chosen other days for a person, so the repeated breakfast /
+   lunch / snacks of a multi-day trip are entered once. Pure `copyDayPlan()`
+   matches slots by key (partial days keep their shape), skips locked target
+   slots, and reports overwrites so the UI can confirm before replacing.
