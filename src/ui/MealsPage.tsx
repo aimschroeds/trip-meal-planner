@@ -359,16 +359,13 @@ export function MealsPage() {
           </thead>
           <tbody>
             {rows.map(({ meal, rollup }) => (
-              <tr key={meal.id} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2 font-medium">
-                  <button
-                    className="text-left text-emerald-800 hover:underline"
-                    onClick={() => startEdit(meal)}
-                    title="Edit this meal"
-                  >
-                    {meal.name}
-                  </button>
-                </td>
+              <tr
+                key={meal.id}
+                className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                onClick={() => startEdit(meal)}
+                title="Edit this meal"
+              >
+                <td className="py-1.5 pr-2 font-medium text-emerald-800">{meal.name}</td>
                 <td className="py-1.5 pr-2">{meal.type}</td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {meal.components
@@ -388,13 +385,19 @@ export function MealsPage() {
                 <td className="py-1.5 text-right">
                   <button
                     className="mr-3 text-emerald-700 underline"
-                    onClick={() => duplicate(meal)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      duplicate(meal)
+                    }}
                   >
                     duplicate
                   </button>
                   <button
                     className="text-red-700 underline"
-                    onClick={() => void remove(meal.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void remove(meal.id)
+                    }}
                   >
                     delete
                   </button>

@@ -426,16 +426,13 @@ export function ItemsPage() {
           </thead>
           <tbody>
             {visible.map((item) => (
-              <tr key={item.id} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2 font-medium">
-                  <button
-                    className="text-left text-emerald-800 hover:underline"
-                    onClick={() => startEdit(item)}
-                    title="Edit this item"
-                  >
-                    {item.name}
-                  </button>
-                </td>
+              <tr
+                key={item.id}
+                className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                onClick={() => startEdit(item)}
+                title="Edit this item"
+              >
+                <td className="py-1.5 pr-2 font-medium text-emerald-800">{item.name}</td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {Math.round(item.inputCalories)} cal / {Math.round(item.inputWeightG)} g
                 </td>
@@ -451,7 +448,10 @@ export function ItemsPage() {
                 <td className="py-1.5 text-right">
                   <button
                     className="text-red-700 underline"
-                    onClick={() => void remove(item.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void remove(item.id)
+                    }}
                   >
                     delete
                   </button>
