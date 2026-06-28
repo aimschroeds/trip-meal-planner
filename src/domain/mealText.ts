@@ -1,8 +1,10 @@
-// Natural-language meal builder codec (Epic 17). The user describes a meal in
-// plain text ("oatmeal 80g, 15g chia, 1/8 butter stick, 40g dried
-// blueberries"); a model turns it into {name, type, components}, and this
-// module owns the prompt, the response schema, validation of the model's
-// answer, and matching the named foods back to the library. Pure — the API
+// Natural-language meal builder codec (Epic 17). The user describes what they
+// want in plain language ("a few dinners built around different bean items,
+// each with a tortilla and a serving of olive oil"); the model is shown the
+// user's whole library and SELECTS items from it by number — so semantic
+// requests ("items containing beans") are the model's job, not a fragile
+// string match. This module owns the prompt, the response schema, validation,
+// and resolving the chosen references back to library items. Pure — the API
 // call lives in src/extract/.
 
 import { defaultServingG } from './units'
@@ -10,12 +12,21 @@ import type { Item, MealType } from './types'
 
 const MEAL_TYPES: MealType[] = ['brekkie', 'snack', 'lunch', 'dinner']
 
-/** The model's answer: a meal with components named in free text (not yet
- *  matched to library item ids). */
+/** One component of the model's answer: a reference into the library list it
+ *  was shown (1-based `ref`), or a free-text `name` for a food genuinely not in
+ *  the library. Exactly one is expected to be set. */
+export interface AnswerComponent {
+  ref: number | null
+  name: string | null
+  grams: number
+}
+
+/** The model's answer: a meal whose components reference library items by
+ *  number (not yet resolved to item ids). */
 export interface MealTextAnswer {
   name: string
   type: MealType
-  components: { item: string; grams: number }[]
+  components: AnswerComponent[]
 }
 
 /** A composer-ready draft after matching named foods to the library. */
@@ -28,44 +39,51 @@ export interface MealDraftMatch {
   unmatched: { name: string; grams: number }[]
 }
 
-/** Prompt for the model — the library names are listed so it reuses them
- *  verbatim, which makes matching reliable. */
+/** One line per library item, numbered, with the attributes the model needs to
+ *  choose well: serving size (grams grounding), calorie density, and a veg flag.
+ *  The [number] is the handle the model returns in `ref`. */
+function libraryListing(items: Item[]): string {
+  if (items.length === 0) return '(none yet)'
+  return items
+    .map((i, idx) => {
+      const bits: string[] = []
+      if (i.unitWeightG !== undefined && i.unitWeightG > 0) {
+        const unit = i.unitName || 'piece'
+        bits.push(`${Math.round(i.unitWeightG)} g per ${unit} (use whole ${unit}s)`)
+      } else {
+        bits.push(`${Math.round(defaultServingG(i) ?? i.inputWeightG)} g/serving`)
+      }
+      bits.push(`${i.caloriesPerGram.toFixed(1)} cal/g`)
+      if (i.vegetarian) bits.push('vegetarian')
+      return `[${idx + 1}] ${i.name} — ${bits.join(', ')}`
+    })
+    .join('\n')
+}
+
+/** Prompt for the model — it picks library items by their [number], so it does
+ *  the semantic selection ("items containing beans") and we never have to
+ *  re-match free text to the library. */
 export function buildMealPrompt(text: string, items: Item[]): string {
-  // Give the model each item's real serving size so its grams are grounded,
-  // not guessed — the main cause of "wildly unrealistic" quantities.
-  const list =
-    items.length > 0
-      ? items
-          .map((i) => {
-            const serving = defaultServingG(i) ?? i.inputWeightG
-            // For piece-based items (tortillas, bars), tell the model the unit
-            // weight so it sticks to whole pieces instead of odd gram amounts.
-            if (i.unitWeightG !== undefined && i.unitWeightG > 0) {
-              const unit = i.unitName || 'piece'
-              return `- ${i.name} (≈ ${Math.round(i.unitWeightG)} g per ${unit} — use whole ${unit}s)`
-            }
-            return `- ${i.name} (≈ ${Math.round(serving)} g per serving)`
-          })
-          .join('\n')
-      : '(none yet)'
-  return `You are composing one or more hiking meals from a free-text description.
+  return `You are composing hiking meals for someone, choosing from THEIR food library.
 
-Available library items, with each item's serving size — use these names VERBATIM whenever the description refers to one of them, and ground your grams in the serving sizes:
-${list}
+Their library (choose items by the [number]):
+${libraryListing(items)}
 
-Description:
+Request:
 """
 ${text}
 """
 
-Return JSON: { "meals": [ ... ] } where each meal has a short "name" (e.g. "Oatmeal + chia breakfast"), a "type" (one of brekkie/lunch/dinner/snack), and "components" — each a food "item" and its "grams". If the description clearly covers several distinct meals, return one object per meal; for a single meal, return an array with one object.
+Compose meals that satisfy the request. YOU decide which library items fit — use the names and attributes above to judge. For example: "items containing beans" → choose every library item whose food contains beans; "pair each with a tortilla" → add the tortilla item to each meal; "a serving of olive oil" → add the olive oil item at one serving. When the request implies several meals ("a bunch", "different items"), return one meal per qualifying item.
 
-Rules for grams:
-- If the description gives an explicit amount for a food (e.g. "80 g", "2 sachets", "1/8 stick"), use it.
-- Otherwise use the matching library item's serving size shown above — do NOT invent a number.
-- "N x" or "N sachets/bars/pieces" of an item = N times its serving size.
-- For piece-based items (those shown "per tortilla/bar/piece"), use whole-piece amounts — a multiple of the piece weight, never a fraction of one.
-For every food, output the matching library item name verbatim when one fits; otherwise use the food's name as written and your best gram estimate. Infer each meal's type from its foods if not stated.`
+Return JSON: { "meals": [ ... ] }. Each meal has:
+- "name": a short descriptive name (e.g. "Black bean & tortilla dinner")
+- "type": one of brekkie/lunch/dinner/snack (infer from the foods if unstated)
+- "components": an array, each { "ref": <library number>, "name": null, "grams": <number> }
+
+Rules for components:
+- Prefer library items: set "ref" to the item's [number] and "name" to null. Only for a food that is genuinely NOT in the library, set "ref" to null and "name" to the food's name.
+- grams: use any explicit amount in the request (e.g. "80 g", "1/8 stick"); otherwise use the item's serving size shown above. For piece-based items, use whole-piece multiples — never a fraction of a piece.`
 }
 
 const MEAL_SCHEMA = {
@@ -78,10 +96,11 @@ const MEAL_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          item: { type: 'string' },
+          ref: { type: ['integer', 'null'] },
+          name: { type: ['string', 'null'] },
           grams: { type: 'number' },
         },
-        required: ['item', 'grams'],
+        required: ['ref', 'name', 'grams'],
         additionalProperties: false,
       },
     },
@@ -116,13 +135,19 @@ function parseOneMeal(raw: unknown): MealTextAnswer | string {
   for (const c of obj.components) {
     if (typeof c !== 'object' || c === null) return 'a component is not an object'
     const comp = c as Record<string, unknown>
-    if (typeof comp.item !== 'string' || comp.item.trim() === '') {
-      return 'a component is missing an item name'
+    const hasRef = typeof comp.ref === 'number' && Number.isInteger(comp.ref)
+    const name = typeof comp.name === 'string' ? comp.name.trim() : ''
+    if (!hasRef && name === '') {
+      return `"${String(obj.name)}" has a component with neither a library ref nor a name`
     }
     if (typeof comp.grams !== 'number' || !Number.isFinite(comp.grams) || comp.grams <= 0) {
-      return `"${comp.item}" has invalid grams`
+      return `"${String(obj.name)}" has a component with invalid grams`
     }
-    components.push({ item: comp.item.trim(), grams: comp.grams })
+    components.push({
+      ref: hasRef ? (comp.ref as number) : null,
+      name: name === '' ? null : name,
+      grams: comp.grams,
+    })
   }
   return { name: obj.name.trim(), type: obj.type as MealType, components }
 }
@@ -178,26 +203,38 @@ function normalizeName(s: string): string {
     .trim()
 }
 
-/** Match the model's named foods to library items: normalized exact name
- *  first, then a normalized substring match either direction. Unmatched foods
- *  are returned separately so the UI can flag them for manual entry. */
+/** Resolve a free-text food name to a library item (fallback for when the
+ *  model emits a name instead of a ref): normalized exact match, then a
+ *  normalized substring match either direction. */
+function matchByName(name: string, items: Item[]): Item | undefined {
+  const key = normalizeName(name)
+  if (key === '') return undefined
+  return (
+    items.find((i) => normalizeName(i.name) === key) ??
+    items.find((i) => {
+      const n = normalizeName(i.name)
+      return n.includes(key) || key.includes(n)
+    })
+  )
+}
+
+/** Resolve the model's chosen references to library items. A valid `ref`
+ *  (1-based index into the same list the model was shown) is the primary path;
+ *  a free-text `name` falls back to name matching. Anything else is reported as
+ *  unmatched so the UI can flag it for manual entry. */
 export function matchMealDraft(answer: MealTextAnswer, items: Item[]): MealDraftMatch {
-  const byNorm = new Map(items.map((i) => [normalizeName(i.name), i]))
   const matched: MealDraftMatch['components'] = []
   const unmatched: MealDraftMatch['unmatched'] = []
 
   for (const c of answer.components) {
-    const key = normalizeName(c.item)
     const item =
-      key === ''
-        ? undefined
-        : (byNorm.get(key) ??
-          items.find((i) => {
-            const n = normalizeName(i.name)
-            return n.includes(key) || key.includes(n)
-          }))
+      c.ref !== null && c.ref >= 1 && c.ref <= items.length
+        ? items[c.ref - 1]
+        : c.name !== null
+          ? matchByName(c.name, items)
+          : undefined
     if (item) matched.push({ itemId: item.id, grams: snapGrams(item, c.grams) })
-    else unmatched.push({ name: c.item, grams: c.grams })
+    else unmatched.push({ name: c.name ?? `item #${c.ref}`, grams: c.grams })
   }
   return { name: answer.name, type: answer.type, components: matched, unmatched }
 }

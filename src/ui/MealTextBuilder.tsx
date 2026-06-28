@@ -110,9 +110,9 @@ export function MealTextBuilder({
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={
-                'Describe one or more meals, e.g.\n' +
-                'Breakfast: oatmeal, chia, 1/8 butter stick, dried blueberries\n' +
-                'Dinner: chicken fajita bowl + hot choc'
+                'Ask for meals in plain words, e.g.\n' +
+                'A few dinners using different bean items, each with a tortilla and a serving of olive oil\n' +
+                'Breakfast: oatmeal, chia, 1/8 butter stick, dried blueberries'
               }
             />
             <div className="flex items-center gap-3">
@@ -134,8 +134,9 @@ export function MealTextBuilder({
               </button>
             </div>
             <p className="text-xs text-gray-500">
-              Describe meals in plain words; it matches your library items and grounds quantities in
-              their serving sizes. Review below, then save.
+              It sees your whole library and picks items to fit — describe meals directly or by idea
+              ("different bean items, each with a tortilla"). Quantities use each item's serving size.
+              Review below, then save.
               {items.length === 0 && ' (add items in the Items tab first)'}
             </p>
           </>
