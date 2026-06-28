@@ -176,6 +176,21 @@ describe('dayTotals', () => {
     const totals = dayTotals({ ...base, day: bigDay, entries: [] })
     expect(totals.target).toBe(1250)
   })
+
+  it('shrinks the target on a partial day to the active slots (story 2.3)', () => {
+    // Town arrival: only dinner + a snack on trail. Target = baseline × factor
+    // × (dinner 0.30 + snacks 0.15) = 1000 × 1.0 × 0.45.
+    const partial = {
+      index: 1,
+      type: 'average' as const,
+      activeSlots: [
+        { type: 'dinner' as const, timing: 'evening' as const },
+        { type: 'snack' as const, timing: 'morning' as const },
+      ],
+    }
+    const totals = dayTotals({ ...base, day: partial, entries: [] })
+    expect(totals.target).toBeCloseTo(450)
+  })
 })
 
 describe('carryTotals', () => {

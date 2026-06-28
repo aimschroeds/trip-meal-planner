@@ -20,17 +20,17 @@ describe('dayEffortKm', () => {
 })
 
 describe('classifyDayType', () => {
-  it('maps effort to the four day types', () => {
-    expect(classifyDayType(8)).toBe('small') // < 12
-    expect(classifyDayType(15)).toBe('average') // 12–20
-    expect(classifyDayType(26)).toBe('big') // 20–28
-    expect(classifyDayType(35)).toBe('huge') // ≥ 28
+  it('maps effort to the four day types (tuned for a strong hiker)', () => {
+    expect(classifyDayType(15)).toBe('small') // < 20
+    expect(classifyDayType(26)).toBe('average') // 20–34 (a 25-26 day is average)
+    expect(classifyDayType(40)).toBe('big') // 34–46
+    expect(classifyDayType(50)).toBe('huge') // ≥ 46
   })
 
   it('treats thresholds as exclusive upper bounds', () => {
-    expect(classifyDayType(12)).toBe('average')
-    expect(classifyDayType(20)).toBe('big')
-    expect(classifyDayType(28)).toBe('huge')
+    expect(classifyDayType(20)).toBe('average')
+    expect(classifyDayType(34)).toBe('big')
+    expect(classifyDayType(46)).toBe('huge')
   })
 })
 
@@ -74,11 +74,11 @@ describe('applyItinerary', () => {
   it('sets each matched day and derives its type from effort', () => {
     const { days, unmatched } = applyItinerary(trip.days, [
       { dayIndex: 1, name: 'Easy in', distanceKm: 8, ascentM: 200 }, // effort 10 → small
-      { dayIndex: 2, distanceKm: 16, ascentM: 1000 }, // effort 26 → big
-      { dayIndex: 3, distanceKm: 24, ascentM: 1500 }, // effort 39 → huge
+      { dayIndex: 2, distanceKm: 16, ascentM: 1000 }, // effort 26 → average
+      { dayIndex: 3, distanceKm: 30, ascentM: 1500 }, // effort 45 → big
     ])
     expect(unmatched).toEqual([])
-    expect(days.map((d) => d.type)).toEqual(['small', 'big', 'huge'])
+    expect(days.map((d) => d.type)).toEqual(['small', 'average', 'big'])
     expect(days[0]).toMatchObject({ name: 'Easy in', distanceKm: 8, ascentM: 200 })
   })
 

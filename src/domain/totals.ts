@@ -69,6 +69,27 @@ export interface DayTotals {
   status: DayStatus
 }
 
+/** Share of a full day's calories each meal carries. Used to scale the target
+ *  on partial days (story 2.3): a town arrival where only dinner is on-trail
+ *  shouldn't expect a whole day's calories in that one slot. A full day —
+ *  all three mains plus any snacks — sums to 1.0. */
+const MAIN_TARGET_SHARES: Record<string, number> = { brekkie: 0.25, lunch: 0.3, dinner: 0.3 }
+const SNACK_TARGET_SHARE = 0.15
+
+/** Fraction of a full day's target the day's *active* slots represent. Off-trail
+ *  slots still count (the meal is eaten, just off-trail); only slots removed
+ *  from the day (unchecked) shrink the target. Always 1.0 for a full day. */
+export function activeDayFraction(day: Day): number {
+  let fraction = 0
+  let hasSnack = false
+  for (const slot of day.activeSlots) {
+    if (slot.type === 'snack') hasSnack = true
+    else fraction += MAIN_TARGET_SHARES[slot.type] ?? 0
+  }
+  if (hasSnack) fraction += SNACK_TARGET_SHARE
+  return Math.min(fraction, 1)
+}
+
 export function dayTotals(args: {
   day: Day
   person: Person
@@ -92,7 +113,8 @@ export function dayTotals(args: {
     unestimatedOffTrail ||= t.unestimated
   }
 
-  const target = scaledDailyTarget(person.baselineCalories, factors[day.type])
+  const target =
+    scaledDailyTarget(person.baselineCalories, factors[day.type]) * activeDayFraction(day)
   const delta = calories - target
   const deltaPct = target > 0 ? delta / target : 0
 
