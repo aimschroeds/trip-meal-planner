@@ -16,22 +16,13 @@ import { classifyDayType, dayEffortKm } from '../domain/effort'
 import { applyItinerary, parseItineraryCsv } from '../domain/csv/itinerary'
 import type { CsvIssue } from '../domain/csv/items'
 import type { Day, DayType, Person, Resupply, ResupplyTiming, Trip } from '../domain/types'
-import { fmtCalories, fmtSlot } from './format'
+import { fmtCalories, fmtSlot, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
 import { PlanSection } from './PlanSection'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
 const DAY_TYPES: DayType[] = ['small', 'average', 'big', 'huge']
 const MAINS: MainMealType[] = ['brekkie', 'lunch', 'dinner']
-
-const RESUPPLY_TIMINGS: { value: ResupplyTiming; label: string }[] = [
-  { value: 'before_breakfast', label: 'before brekkie' },
-  { value: 'after_breakfast', label: 'after brekkie' },
-  { value: 'before_lunch', label: 'before lunch' },
-  { value: 'after_lunch', label: 'after lunch' },
-  { value: 'late_afternoon', label: 'late afternoon (before dinner)' },
-  { value: 'after_dinner', label: 'after dinner' },
-]
 
 export function TripsPage() {
   const trips = useLiveQuery(() => db.trips.toArray(), [], [] as Trip[])
@@ -482,9 +473,6 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
   const day = Number(dayIndex)
   const canAdd = Number.isInteger(day) && day >= 1 && day <= trip.days.length
 
-  const timingLabel = (t: ResupplyTiming) =>
-    RESUPPLY_TIMINGS.find((rt) => rt.value === t)?.label ?? t
-
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="mb-2 font-semibold text-gray-800">Resupplies</h3>
@@ -494,7 +482,7 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
             <li key={r.id} className="flex items-center gap-3 text-sm">
               <span>
                 {r.location && <span className="font-medium">{r.location} — </span>}
-                Day {r.dayIndex}, {timingLabel(r.timing)}
+                Day {r.dayIndex}, {resupplyTimingLabel(r.timing)}
               </span>
               <button
                 className="text-red-700 underline"
