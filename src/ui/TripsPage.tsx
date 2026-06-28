@@ -85,7 +85,10 @@ export function TripsPage() {
       </form>
 
       {trips.length === 0 ? (
-        <p className="text-sm text-gray-500">No trips yet — create your first above.</p>
+        <p className="text-sm text-gray-500">
+          No trips yet. Create one above, then add who’s coming and their calorie targets and plan
+          each day. Tip: add a few Items (and optionally Meals) first so there’s food to plan with.
+        </p>
       ) : (
         <ul className="space-y-2">
           {trips.map((trip) => (

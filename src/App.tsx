@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BackupPage } from './ui/BackupPage'
+import { HelpPanel } from './ui/HelpPanel'
 import { ItemsPage } from './ui/ItemsPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
@@ -7,8 +8,12 @@ import { TripsPage } from './ui/TripsPage'
 const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
 type Tab = (typeof TABS)[number]
 
+const HELP_DISMISSED = 'intro-dismissed'
+
 function App() {
   const [tab, setTab] = useState<Tab>('Trips')
+  // Show the intro until dismissed once; re-openable via the Help button.
+  const [showHelp, setShowHelp] = useState(() => localStorage.getItem(HELP_DISMISSED) === null)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -30,9 +35,23 @@ function App() {
               </button>
             ))}
           </nav>
+          <button
+            className="ml-auto text-sm text-gray-500 hover:text-gray-800"
+            onClick={() => setShowHelp(true)}
+          >
+            Help
+          </button>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-6">
+      <main className="mx-auto max-w-4xl space-y-6 px-6 py-6">
+        {showHelp && (
+          <HelpPanel
+            onDismiss={() => {
+              localStorage.setItem(HELP_DISMISSED, '1')
+              setShowHelp(false)
+            }}
+          />
+        )}
         {tab === 'Trips' && <TripsPage />}
         {tab === 'Items' && <ItemsPage />}
         {tab === 'Meals' && <MealsPage />}
