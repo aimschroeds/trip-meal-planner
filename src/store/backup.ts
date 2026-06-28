@@ -18,6 +18,23 @@ export async function exportBackup(): Promise<BackupData> {
   }))
 }
 
+/** Merge a backup INTO the current data (union by primary key) rather than
+ *  replacing it: rows with a new id are added, rows with an existing id
+ *  overwrite that record. Enables collaboration without a server — two people
+ *  who share a trip and library can each edit their own per-person plan and
+ *  combine files, since plan entries are keyed by person and never collide.
+ *  Genuine conflicts (the same item/meal edited by both) are last-writer-wins. */
+export async function mergeBackup(data: BackupData): Promise<void> {
+  await db.transaction('rw', ALL_TABLES, async () => {
+    await db.trips.bulkPut(data.trips)
+    await db.people.bulkPut(data.people)
+    await db.items.bulkPut(data.items)
+    await db.meals.bulkPut(data.meals)
+    await db.resupplies.bulkPut(data.resupplies)
+    await db.planEntries.bulkPut(data.planEntries.map(normalizePlanEntry))
+  })
+}
+
 export async function restoreBackup(data: BackupData): Promise<void> {
   await db.transaction('rw', ALL_TABLES, async () => {
     await Promise.all(ALL_TABLES.map((t) => t.clear()))

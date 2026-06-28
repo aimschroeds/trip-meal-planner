@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../../src/store/db'
-import { exportBackup, restoreBackup } from '../../src/store/backup'
+import { exportBackup, mergeBackup, restoreBackup } from '../../src/store/backup'
 import { makeTrip } from '../../src/domain/trip'
 import type { BackupData } from '../../src/domain/backup'
 import type { Item, Person, PlanEntry } from '../../src/domain/types'
@@ -117,6 +117,36 @@ describe('backup store', () => {
     })
     expect(await db.items.count()).toBe(0)
     expect(await db.trips.count()).toBe(0)
+  })
+
+  it('merge unions by id without wiping existing data (collab)', async () => {
+    // Existing: a stale item + Bob's plan entry for the shared trip.
+    await db.items.add({ ...oatmeal, id: 'mine', name: 'My snack' })
+    await db.planEntries.add({
+      id: 'trip-1|bob|1|dinner-0',
+      tripId: 'trip-1',
+      personId: 'bob',
+      dayIndex: 1,
+      slotKey: 'dinner-0',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'meal-1' }],
+    })
+
+    // Merge in a partner's backup (Alice's plan entry + a shared item update).
+    const incoming = fullData()
+    await mergeBackup(incoming)
+
+    // Existing rows survive; incoming rows are added (different ids don't collide).
+    expect(await db.items.get('mine')).toBeDefined()
+    expect(await db.items.get('item-1')).toBeDefined()
+    expect(await db.planEntries.get('trip-1|bob|1|dinner-0')).toBeDefined() // Bob's plan kept
+    expect(await db.planEntries.get('trip-1|person-1|1|brekkie-0')).toBeDefined() // Alice's added
+  })
+
+  it('merge overwrites a row with the same id (last-writer-wins)', async () => {
+    await db.items.add({ ...oatmeal, name: 'Old name' })
+    await mergeBackup(fullData()) // contains oatmeal id 'item-1' named 'Oatmeal'
+    expect((await db.items.get('item-1'))?.name).toBe('Oatmeal')
   })
 
   it('a failed restore rolls back, leaving existing data untouched', async () => {

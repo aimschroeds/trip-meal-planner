@@ -196,7 +196,8 @@ Complements the CSV portability of 4.8–4.10 with a full-database safety net �
 *Acceptance criteria:*
 
 - Restore previews the file’s contents and what it will overwrite, and requires explicit confirmation before replacing anything
-- Invalid or foreign files are rejected with a reason; a partial/failed restore leaves existing data untouched
+- A **merge** option folds a backup into the current data (union by id: new rows added, same-id rows updated last-writer-wins) instead of replacing — enabling no-server collaboration, since per-person plan entries never collide, so two people can swap backups and combine plans
+- Invalid or foreign files are rejected with a reason; a partial/failed restore or merge leaves existing data untouched
 - **Security:** a backup never contains the photo-extraction API key (Epic 11). The key is held in `localStorage`, never in the Dexie database, precisely so that a JSON backup — which a user may email, share, or sync — can never leak the credential
 
 -----
