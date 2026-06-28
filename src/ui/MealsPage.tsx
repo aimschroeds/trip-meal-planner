@@ -13,9 +13,11 @@ import {
   type ParsedMealGroup,
 } from '../domain/csv/meals'
 import type { Item, Meal, MealType } from '../domain/types'
+import type { MealDraftMatch } from '../domain/mealText'
 import { downloadCsv } from './download'
 import { fmtCalories, fmtDensity, fmtGrams } from './format'
 import { ItemCombobox } from './ItemCombobox'
+import { MealTextBuilder } from './MealTextBuilder'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
@@ -131,6 +133,20 @@ export function MealsPage() {
       components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
     })
     // Bring the composer into view — the edit button can be far down the list.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  /** Drop a natural-language-built meal into the composer for review. */
+  function buildFromText(draft: MealDraftMatch) {
+    setEditingId(null)
+    setDraft({
+      name: draft.name,
+      type: draft.type,
+      components: [
+        ...draft.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
+        { itemId: '', grams: '' },
+      ],
+    })
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -273,6 +289,8 @@ export function MealsPage() {
           )}
         </div>
       </form>
+
+      <MealTextBuilder items={items} onBuild={buildFromText} />
 
       <div className="flex items-center gap-4 text-sm">
         <label className="flex items-center gap-1">
