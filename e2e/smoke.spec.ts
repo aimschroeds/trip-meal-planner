@@ -54,12 +54,14 @@ test('plan a day end to end', async ({ page }) => {
     await box.fill(name)
     await page.getByRole('button', { name, exact: true }).click()
   }
+  // Rapid entry: picking an item in the last row auto-appends a fresh row, so
+  // we just pick both, then set grams (oats=0, butter=1; a trailing empty row
+  // is row 2 and is ignored on save).
   await page.getByRole('button', { name: '+ add item' }).click()
   await pickItem('Oats')
-  await page.getByPlaceholder('g', { exact: true }).last().fill('100')
-  await page.getByRole('button', { name: '+ add item' }).click()
   await pickItem('Butter')
-  await page.getByPlaceholder('g', { exact: true }).last().fill('20')
+  await page.getByPlaceholder('g', { exact: true }).nth(0).fill('100')
+  await page.getByPlaceholder('g', { exact: true }).nth(1).fill('20')
   await expect(page.getByText('120 g · 524 cal')).toBeVisible()
   await page.getByRole('button', { name: 'Add to library' }).click()
   await expect(page.getByRole('cell', { name: 'Porridge' })).toBeVisible()
