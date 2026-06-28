@@ -322,7 +322,18 @@ generator treats them as single-item candidates alongside meals.
 
 -----
 
-## Resolved Decisions
+## Epic 17: Build a Meal From Text
+
+Speeds up the composer (Epic 4.3): instead of adding components one by one,
+describe the meal in plain words and have it drafted for review.
+
+**17.1** As a trip planner, I want to type a meal in natural language ("oatmeal 80g, 15g chia, ⅛ butter stick, 40g dried blueberries") and have it built into the composer, so that I don't add every component by hand.
+
+*Acceptance criteria:*
+
+- A vision-free LLM call (same user-supplied Anthropic key as photo extract, Epic 11; opt-in, key never in a backup; SDK lazy-loaded) returns a meal name, type, and components named in free text
+- Named foods are matched to library items (case-insensitive, then substring either direction); quantities are converted to grams; the result prefills the composer as a **draft for review — never a silent save**
+- Foods with no library match are reported so the planner adds them by hand; the matched ones still draft
 
 From the original PRD:
 

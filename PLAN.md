@@ -232,3 +232,10 @@ Remaining work after M0–M6, in priority order. One PR each.
     (same scoring, serving-based quantity, scale bounds, vegetarian filter).
     Days built from single freeze-dried dinners / bars now auto-fill. Tags
     round-trip via the items CSV `gen_meal_types` column.
+12. **Build a meal from text (Epic 17)** *(shipped)* — describe a meal in plain
+    language and have it drafted into the composer. Pure `mealText.ts` owns the
+    prompt, response schema, validation, and library matching (exact then
+    substring); the networked call (`src/extract/mealText.ts`) reuses the
+    photo-extract key + lazy-loaded SDK. Result is always a draft for review;
+    unmatched foods are reported. Composer speedups (duplicate, rapid
+    keyboard entry, multi-add) ship alongside.
