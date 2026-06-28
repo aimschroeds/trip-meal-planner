@@ -4,6 +4,7 @@ import { db } from '../store/db'
 import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
+import { dayLegLabel } from '../domain/dayDescription'
 import { generateDayPlan } from '../domain/generate'
 import { mealSlotTypes, rollUpMeal } from '../domain/rollups'
 import {
@@ -351,8 +352,16 @@ function DayCard({
           ✨ generate
         </button>
       </div>
+      {(day.start || day.end || day.name) && (
+        <p className="text-xs font-medium text-gray-600">{dayLegLabel(day)}</p>
+      )}
+      {day.description && (
+        <p className="mb-2 mt-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs italic text-gray-600">
+          {day.description}
+        </p>
+      )}
       {dayResupplies.length > 0 && (
-        <div className="mb-2 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-800">
+        <div className="mb-2 mt-1 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-800">
           🛒 Resupply{' '}
           {dayResupplies
             .map((r) => `${r.location ? `${r.location} ` : ''}(${resupplyTimingLabel(r.timing)})`)
