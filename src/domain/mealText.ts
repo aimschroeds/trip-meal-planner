@@ -38,6 +38,12 @@ export function buildMealPrompt(text: string, items: Item[]): string {
       ? items
           .map((i) => {
             const serving = defaultServingG(i) ?? i.inputWeightG
+            // For piece-based items (tortillas, bars), tell the model the unit
+            // weight so it sticks to whole pieces instead of odd gram amounts.
+            if (i.unitWeightG !== undefined && i.unitWeightG > 0) {
+              const unit = i.unitName || 'piece'
+              return `- ${i.name} (≈ ${Math.round(i.unitWeightG)} g per ${unit} — use whole ${unit}s)`
+            }
             return `- ${i.name} (≈ ${Math.round(serving)} g per serving)`
           })
           .join('\n')
@@ -58,6 +64,7 @@ Rules for grams:
 - If the description gives an explicit amount for a food (e.g. "80 g", "2 sachets", "1/8 stick"), use it.
 - Otherwise use the matching library item's serving size shown above — do NOT invent a number.
 - "N x" or "N sachets/bars/pieces" of an item = N times its serving size.
+- For piece-based items (those shown "per tortilla/bar/piece"), use whole-piece amounts — a multiple of the piece weight, never a fraction of one.
 For every food, output the matching library item name verbatim when one fits; otherwise use the food's name as written and your best gram estimate. Infer each meal's type from its foods if not stated.`
 }
 
@@ -147,23 +154,49 @@ export function parseMealTextAnswers(text: string): ParseMealTextResult {
   return { ok: true, meals }
 }
 
-/** Match the model's named foods to library items: case-insensitive exact
- *  name first, then a substring match either direction. Unmatched foods are
- *  returned separately so the UI can flag them for manual entry. */
+/** Snap a matched component's grams to something sensible: items measured in
+ *  discrete pieces (tortillas, bars, sachets — they carry a unit weight) land
+ *  on whole units, since "1.11 tortillas" is meaningless on the trail.
+ *  Everything else just rounds to one decimal. */
+function snapGrams(item: Item, grams: number): number {
+  if (item.unitWeightG !== undefined && item.unitWeightG > 0) {
+    const units = Math.max(1, Math.round(grams / item.unitWeightG))
+    return Math.round(units * item.unitWeightG * 10) / 10
+  }
+  return Math.round(grams * 10) / 10
+}
+
+/** Normalize a food name for matching: lowercase, "&" → "and", drop
+ *  punctuation, collapse whitespace. Lets the model's paraphrases line up with
+ *  library names despite cosmetic differences ("Bean & Cheese" vs
+ *  "bean and cheese") — the main reason components were dropped as unmatched. */
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/** Match the model's named foods to library items: normalized exact name
+ *  first, then a normalized substring match either direction. Unmatched foods
+ *  are returned separately so the UI can flag them for manual entry. */
 export function matchMealDraft(answer: MealTextAnswer, items: Item[]): MealDraftMatch {
-  const byLower = new Map(items.map((i) => [i.name.toLowerCase(), i]))
+  const byNorm = new Map(items.map((i) => [normalizeName(i.name), i]))
   const matched: MealDraftMatch['components'] = []
   const unmatched: MealDraftMatch['unmatched'] = []
 
   for (const c of answer.components) {
-    const key = c.item.toLowerCase()
+    const key = normalizeName(c.item)
     const item =
-      byLower.get(key) ??
-      items.find((i) => {
-        const n = i.name.toLowerCase()
-        return n.includes(key) || key.includes(n)
-      })
-    if (item) matched.push({ itemId: item.id, grams: Math.round(c.grams * 10) / 10 })
+      key === ''
+        ? undefined
+        : (byNorm.get(key) ??
+          items.find((i) => {
+            const n = normalizeName(i.name)
+            return n.includes(key) || key.includes(n)
+          }))
+    if (item) matched.push({ itemId: item.id, grams: snapGrams(item, c.grams) })
     else unmatched.push({ name: c.item, grams: c.grams })
   }
   return { name: answer.name, type: answer.type, components: matched, unmatched }

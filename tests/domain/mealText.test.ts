@@ -141,4 +141,29 @@ describe('matchMealDraft', () => {
     const draft = matchMealDraft(answer([{ item: 'Oatmeal', grams: 80.347 }]), library)
     expect(draft.components[0].grams).toBe(80.3)
   })
+
+  it('matches across "&" vs "and" and punctuation/paraphrase differences', () => {
+    const burrito = item('burr', 'Trailside Bean & Cheese Burrito')
+    // Model paraphrases the name (& → and, drops "Trailside"): still matches,
+    // instead of being dropped as unmatched.
+    const draft = matchMealDraft(
+      answer([{ item: 'Bean and Cheese Burrito', grams: 170 }]),
+      [burrito],
+    )
+    expect(draft.components).toEqual([{ itemId: 'burr', grams: 170 }])
+    expect(draft.unmatched).toEqual([])
+  })
+
+  it('snaps piece-based items to whole units (no 1.11 tortillas)', () => {
+    const tortillas: Item = { ...item('tort', 'Flour Tortillas'), unitWeightG: 54, unitName: 'tortilla' }
+    // 60 g ≈ 1.11 tortillas → snap to 1 tortilla (54 g).
+    const one = matchMealDraft(answer([{ item: 'Flour Tortillas', grams: 60 }]), [tortillas])
+    expect(one.components).toEqual([{ itemId: 'tort', grams: 54 }])
+    // 90 g ≈ 1.67 → snap up to 2 tortillas (108 g).
+    const two = matchMealDraft(answer([{ item: 'Flour Tortillas', grams: 90 }]), [tortillas])
+    expect(two.components).toEqual([{ itemId: 'tort', grams: 108 }])
+    // Always at least one piece, even for a tiny amount.
+    const min = matchMealDraft(answer([{ item: 'Flour Tortillas', grams: 5 }]), [tortillas])
+    expect(min.components).toEqual([{ itemId: 'tort', grams: 54 }])
+  })
 })

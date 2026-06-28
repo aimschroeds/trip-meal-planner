@@ -49,8 +49,14 @@ export function MealTextBuilder({
   function saveAll() {
     if (!drafts) return
     const saveable = drafts.filter((d) => d.components.length > 0)
+    const dropped = drafts.length - saveable.length
     onSave(saveable)
-    setNote(`Saved ${saveable.length} meal${saveable.length === 1 ? '' : 's'} to the library.`)
+    setNote(
+      `Saved ${saveable.length} meal${saveable.length === 1 ? '' : 's'} to the library.` +
+        (dropped > 0
+          ? ` ${dropped} skipped — no library items matched. Add those items first, then rebuild.`
+          : ''),
+    )
     setDrafts(null)
     setText('')
   }
