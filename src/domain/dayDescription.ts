@@ -39,6 +39,7 @@ ${lines.join('\n')}
 For each day write ONE to TWO sentences on the day's eating strategy:
 - Is there a natural lunch stop roughly midway (name the place only if you are reasonably confident it is on or near this route); or is it better to eat on the go (e.g. a long climb, exposed ridge, or a short day)?
 - Mention a likely snack-break spot if one stands out.
+- If the day's route crosses any named mountain pass(es) or saddle(s), name them and say to eat/snack before or after the climb as appropriate — only when you are reasonably confident the pass is actually on this leg.
 Keep it practical and specific to the terrain and distance. If you are not confident about exact place names, describe the spot by its terrain ("a shaded creek crossing about midway") rather than inventing a name. Do not repeat the distance/ascent numbers back.
 
 Return JSON: { "days": [ { "day": <day number>, "description": "<1–2 sentences>" } ] } with one entry per day above.`

@@ -395,31 +395,35 @@ export function ItemsPage() {
         </p>
       )}
 
-      <div className="flex items-center gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          sort by
-          <select
-            className="rounded border border-gray-300 px-1 py-0.5"
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-          >
-            <option value="name">name</option>
-            <option value="density">density</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={vegOnly}
-            onChange={(e) => setVegOnly(e.target.checked)}
-          />
-          vegetarian only
-        </label>
-      </div>
-
       <PhotoExtract onExtract={prefillFromPhotos} />
 
       <ItemsImportExport items={items} />
+
+      {/* Sort/filter sit directly above the list they control. */}
+      {items.length > 0 && (
+        <div className="flex items-center gap-4 border-b border-gray-200 pb-2 text-sm">
+          <span className="font-medium text-gray-700">{items.length} items</span>
+          <label className="flex items-center gap-1">
+            sort by
+            <select
+              className="rounded border border-gray-300 px-1 py-0.5"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+            >
+              <option value="name">name</option>
+              <option value="density">density</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={vegOnly}
+              onChange={(e) => setVegOnly(e.target.checked)}
+            />
+            vegetarian only
+          </label>
+        </div>
+      )}
 
       {visible.length === 0 ? (
         <p className="text-sm text-gray-500">
