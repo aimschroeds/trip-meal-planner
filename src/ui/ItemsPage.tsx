@@ -424,7 +424,15 @@ export function ItemsPage() {
           <tbody>
             {visible.map((item) => (
               <tr key={item.id} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2 font-medium">{item.name}</td>
+                <td className="py-1.5 pr-2 font-medium">
+                  <button
+                    className="text-left text-emerald-800 hover:underline"
+                    onClick={() => startEdit(item)}
+                    title="Edit this item"
+                  >
+                    {item.name}
+                  </button>
+                </td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {Math.round(item.inputCalories)} cal / {Math.round(item.inputWeightG)} g
                 </td>
@@ -438,12 +446,6 @@ export function ItemsPage() {
                   <VegBadge vegetarian={item.vegetarian} />
                 </td>
                 <td className="py-1.5 text-right">
-                  <button
-                    className="mr-3 text-emerald-700 underline"
-                    onClick={() => startEdit(item)}
-                  >
-                    edit
-                  </button>
                   <button
                     className="text-red-700 underline"
                     onClick={() => void remove(item.id)}
