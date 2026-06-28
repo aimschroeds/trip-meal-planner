@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { exportBackup, restoreBackup } from '../store/backup'
+import { exportBackup, mergeBackup, restoreBackup } from '../store/backup'
 import {
   BACKUP_TABLES,
   parseBackup,
@@ -38,7 +38,7 @@ export function BackupPage() {
   )
   const [pending, setPending] = useState<BackupFile | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [restored, setRestored] = useState(false)
+  const [done, setDone] = useState<null | 'restored' | 'merged'>(null)
 
   async function exportToFile() {
     const data = await exportBackup()
@@ -50,7 +50,7 @@ export function BackupPage() {
   }
 
   function pickFile(file: File) {
-    setRestored(false)
+    setDone(null)
     void file.text().then((text) => {
       const result = parseBackup(text)
       if (result.ok) {
@@ -68,10 +68,22 @@ export function BackupPage() {
     try {
       await restoreBackup(pending.data)
       setPending(null)
-      setRestored(true)
+      setDone('restored')
       setError(null)
     } catch (e) {
       setError(`Restore failed, existing data is unchanged: ${String(e)}`)
+    }
+  }
+
+  async function confirmMerge() {
+    if (!pending) return
+    try {
+      await mergeBackup(pending.data)
+      setPending(null)
+      setDone('merged')
+      setError(null)
+    } catch (e) {
+      setError(`Merge failed, existing data is unchanged: ${String(e)}`)
     }
   }
 
@@ -96,10 +108,12 @@ export function BackupPage() {
       </section>
 
       <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-        <h2 className="font-semibold text-gray-800">Restore from backup</h2>
+        <h2 className="font-semibold text-gray-800">Restore or merge a backup</h2>
         <p className="text-sm text-gray-600">
-          Restoring replaces <span className="font-medium">everything</span> currently in the
-          app with the backup's contents.
+          <span className="font-medium">Replace</span> swaps everything for the backup's contents.
+          <span className="font-medium"> Merge</span> keeps what you have and folds the file in
+          (adds new trips/items/meals/plans, updates ones with the same id) — handy for combining a
+          plan with a hiking partner: share a backup, then merge each other's in.
         </p>
         <input
           type="file"
@@ -120,19 +134,24 @@ export function BackupPage() {
               </span>{' '}
               containing {summarize(countTables(pending))}.
             </p>
-            <p className="font-medium text-amber-900">
+            <p className="text-amber-900">
               {hasExistingData
-                ? `This will permanently replace your current data (${
-                    liveCounts ? summarize(liveCounts) : '…'
-                  }).`
-                : 'The app is currently empty — nothing will be overwritten.'}
+                ? `You have ${liveCounts ? summarize(liveCounts) : '…'}. ` +
+                  'Merge folds the file in; Replace overwrites all of it.'
+                : 'The app is currently empty — Merge and Replace do the same thing here.'}
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="rounded bg-emerald-700 px-3 py-1 font-medium text-white"
+                onClick={() => void confirmMerge()}
+              >
+                Merge into current data
+              </button>
               <button
                 className="rounded bg-red-700 px-3 py-1 font-medium text-white"
                 onClick={() => void confirmRestore()}
               >
-                Replace everything &amp; restore
+                Replace everything
               </button>
               <button className="text-gray-500 underline" onClick={() => setPending(null)}>
                 cancel
@@ -140,9 +159,9 @@ export function BackupPage() {
             </div>
           </div>
         )}
-        {restored && (
+        {done && (
           <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
-            Backup restored.
+            {done === 'merged' ? 'Backup merged in.' : 'Backup restored.'}
           </p>
         )}
         {error && (
