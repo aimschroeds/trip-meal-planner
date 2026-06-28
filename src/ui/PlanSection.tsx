@@ -19,7 +19,7 @@ import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
 import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from '../domain/types'
 import { downloadCsv } from './download'
-import { fmtCalories, fmtDensity, fmtGrams, fmtSlot } from './format'
+import { fmtCalories, fmtDensity, fmtGrams, fmtSlot, resupplyTimingLabel } from './format'
 import { GroupedCombobox } from './GroupedCombobox'
 
 const OFF_TRAIL = '@offtrail'
@@ -154,6 +154,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
             day={day}
             person={person}
             entriesByKey={entriesByKey}
+            dayResupplies={resupplies.filter((r) => r.dayIndex === day.index)}
             meals={meals}
             mealsById={mealsById}
             itemsById={itemsById}
@@ -294,6 +295,7 @@ function DayCard({
   day,
   person,
   entriesByKey,
+  dayResupplies,
   meals,
   mealsById,
   itemsById,
@@ -303,6 +305,7 @@ function DayCard({
   day: Day
   person: Person
   entriesByKey: ReadonlyMap<string, PlanEntry>
+  dayResupplies: Resupply[]
   meals: Meal[]
   mealsById: ReadonlyMap<string, Meal>
   itemsById: ReadonlyMap<string, Item>
@@ -348,6 +351,15 @@ function DayCard({
           ✨ generate
         </button>
       </div>
+      {dayResupplies.length > 0 && (
+        <div className="mb-2 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-800">
+          🛒 Resupply{' '}
+          {dayResupplies
+            .map((r) => `${r.location ? `${r.location} ` : ''}(${resupplyTimingLabel(r.timing)})`)
+            .join(', ')}{' '}
+          — a town stop is a chance to log a big off-trail meal in one go.
+        </div>
+      )}
       <CopyDayControl trip={trip} sourceDay={day} person={person} entriesByKey={entriesByKey} />
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {slots.map((keyed) => (
