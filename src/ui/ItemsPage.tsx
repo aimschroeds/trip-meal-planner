@@ -408,7 +408,10 @@ export function ItemsPage() {
       <ItemsImportExport items={items} />
 
       {visible.length === 0 ? (
-        <p className="text-sm text-gray-500">No items yet — add your first above.</p>
+        <p className="text-sm text-gray-500">
+          No items yet. This is your food library — add one above, import a CSV, or snap a photo of
+          a label. Everything else (meals, plans) builds on items, so start here.
+        </p>
       ) : (
         <table className="w-full border-collapse text-sm">
           <thead>

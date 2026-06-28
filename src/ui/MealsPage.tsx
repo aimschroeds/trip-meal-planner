@@ -278,7 +278,11 @@ export function MealsPage() {
       <MealsImportExport items={items} meals={meals} />
 
       {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">No meals match.</p>
+        <p className="text-sm text-gray-500">
+          {meals.length === 0
+            ? 'No meals yet. Combine items into a reusable meal above (e.g. a standard breakfast) — or skip this entirely and drop loose items straight into a day on a trip’s Plan view.'
+            : 'No meals match.'}
+        </p>
       ) : (
         <table className="w-full border-collapse text-sm">
           <thead>
