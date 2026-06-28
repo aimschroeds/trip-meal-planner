@@ -1,7 +1,7 @@
 // Networked side of the natural-language meal builder (Epic 17): send the
-// user's description + their library item names to the Anthropic API (browser
-// → API, user's own key) and get back a meal answer. The answer's shape is
-// validated by the pure codec in src/domain/mealText.ts.
+// user's request + their numbered library to the Anthropic API (browser → API,
+// user's own key) and get back meals that reference library items by number.
+// The answer's shape is validated by the pure codec in src/domain/mealText.ts.
 
 import Anthropic from '@anthropic-ai/sdk'
 import {
@@ -22,7 +22,8 @@ export async function buildMealsFromText(
 
   const response = await client.messages.create({
     model: EXTRACT_MODEL,
-    max_tokens: 2048,
+    // Generous: "make me a bunch of meals" can be many meals at once.
+    max_tokens: 4096,
     output_config: { format: { type: 'json_schema', schema: MEAL_TEXT_SCHEMA } },
     messages: [{ role: 'user', content: [{ type: 'text', text: buildMealPrompt(text, items) }] }],
   })
