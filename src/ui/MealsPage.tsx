@@ -296,7 +296,15 @@ export function MealsPage() {
           <tbody>
             {rows.map(({ meal, rollup }) => (
               <tr key={meal.id} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2 font-medium">{meal.name}</td>
+                <td className="py-1.5 pr-2 font-medium">
+                  <button
+                    className="text-left text-emerald-800 hover:underline"
+                    onClick={() => startEdit(meal)}
+                    title="Edit this meal"
+                  >
+                    {meal.name}
+                  </button>
+                </td>
                 <td className="py-1.5 pr-2">{meal.type}</td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {meal.components
@@ -314,12 +322,6 @@ export function MealsPage() {
                   <VegBadge vegetarian={rollup.vegetarian} />
                 </td>
                 <td className="py-1.5 text-right">
-                  <button
-                    className="mr-3 text-emerald-700 underline"
-                    onClick={() => startEdit(meal)}
-                  >
-                    edit
-                  </button>
                   <button
                     className="text-red-700 underline"
                     onClick={() => void remove(meal.id)}
