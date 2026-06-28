@@ -7,7 +7,7 @@
 import { keyedSlots, type KeyedSlot } from './carries'
 import { scaledDailyTarget } from './density'
 import { rollUpMeal, scaledGrams } from './rollups'
-import { entryTotals } from './totals'
+import { activeDayFraction, entryTotals } from './totals'
 import { defaultServingG } from './units'
 import type { Day, Item, Meal, MealType, PlanPart, Person, PlanEntry, Trip } from './types'
 
@@ -65,7 +65,9 @@ export function generateDayPlan(args: {
     else open.push(ks)
   }
 
-  const target = scaledDailyTarget(person.baselineCalories, trip.dayTypeFactors[day.type])
+  const target =
+    scaledDailyTarget(person.baselineCalories, trip.dayTypeFactors[day.type]) *
+    activeDayFraction(day)
   const keptCalories = kept.reduce(
     (n, e) => n + entryTotals(e, new Map(meals.map((m) => [m.id, m])), itemsById).calories,
     0,

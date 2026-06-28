@@ -26,7 +26,7 @@
 
 **2.2** As a trip planner, I want configurable scaling factors per day type (defaults e.g. small 0.75×, avg 1.0×, big 1.25×, huge 1.5×), so that I can tune them to my group.
 
-*Acceptance criteria:* A person’s target for a day = baseline target × day-type factor.
+*Acceptance criteria:* A person’s target for a day = baseline target × day-type factor × the share of the day's meals actually on trail — so a partial day (story 2.3) where only some slots are active (e.g. a town arrival with only dinner on trail) targets just those meals, not a full day's calories. A full day (all three mains + snacks) is the full target.
 
 **2.3** As a trip planner, I want to mark the first and/or last day as partial by specifying which meal slots apply (e.g., last day = brekkie + snacks only, off trail by lunch), so that I don’t carry food I won’t eat.
 
@@ -299,7 +299,7 @@ small/average/big/huge type — and therefore its calorie target — follows.
 *Acceptance criteria:*
 
 - Effort = distance + ascent ÷ 100 m (100 m of climb ≈ 1 km flat; the weighting is a documented default)
-- Effort maps to the day type (small < 12, average < 20, big < 28, huge ≥ 28 effort km), which scales the target via the existing day-type factors
+- Effort maps to the day type (small < 20, average < 34, big < 46, huge ≥ 46 effort km — tuned so a 25–26 km day reads "average" for a strong hiker), which scales the target via the existing day-type factors
 - The derived type can still be overridden by hand; re-uploading or editing distance/ascent re-derives it
 
 -----

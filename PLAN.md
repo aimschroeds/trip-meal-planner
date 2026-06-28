@@ -220,8 +220,12 @@ Remaining work after M0–M6, in priority order. One PR each.
     optional leg name, distance, and ascent (uploaded via a `day, distance_km,
     ascent_m` CSV or typed inline). Pure `dayEffortKm()` (distance + ascent ÷
     100 m) and `classifyDayType()` derive the day's small/avg/big/huge type
-    from effort, which scales the calorie target through the existing day-type
-    factors; the type stays manually overridable.
+    from effort (bands tuned for a strong hiker: small <20, avg <34, big <46,
+    huge ≥46 effort-km), which scales the calorie target through the existing
+    day-type factors; the type stays manually overridable. Day targets also
+    scale by `activeDayFraction()` — a partial day (only some slots on trail,
+    e.g. a town arrival with dinner only) targets just those meals, not a full
+    day (story 2.3).
 11. **Generate from loose items (Epic 16)** *(shipped)* — items gain an
     optional `genMealTypes` (which slots they may be auto-placed into), and the
     generator treats a tagged item as a single-item candidate alongside meals

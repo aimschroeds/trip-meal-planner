@@ -18,9 +18,10 @@ export function dayEffortKm(
   return distanceKm + ascentM / ascentPerKmM
 }
 
-/** Upper bounds (exclusive) for each day type, in effort kilometres.
- *  e.g. a 16 km day with 1000 m climb = 26 effort km → "big". */
-export const DEFAULT_EFFORT_THRESHOLDS = { small: 12, average: 20, big: 28 }
+/** Upper bounds (exclusive) for each day type, in effort kilometres. Tuned
+ *  for a strong hiker: a 25-26 effort-km day reads "average", and only long
+ *  days (34+) tip into big. e.g. a 21 km day with 800 m climb = 29 → average. */
+export const DEFAULT_EFFORT_THRESHOLDS = { small: 20, average: 34, big: 46 }
 
 export function classifyDayType(
   effortKm: number,
