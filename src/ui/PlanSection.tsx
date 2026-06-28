@@ -337,6 +337,7 @@ function DayCard({
           {STATUS_LABELS[totals.status]} · {fmtCalories(totals.calories)} (
           {totals.delta >= 0 ? '+' : ''}
           {Math.round(totals.deltaPct * 100)}%) · {fmtGrams(totals.weightG)}
+          {totals.weightG > 0 && ` · ${fmtDensity(totals.density)}`}
         </span>
         <button
           className="rounded border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-800 disabled:opacity-40"
@@ -656,8 +657,21 @@ function SlotCell({
               ...(parts.length === 0
                 ? [{ value: OFF_TRAIL, label: 'off-trail (restaurant/town)', group: '' }]
                 : []),
-              ...eligibleMeals.map((m) => ({ value: `m:${m.id}`, label: m.name, group: 'Meals' })),
-              ...eligibleItems.map((i) => ({ value: `i:${i.id}`, label: i.name, group: 'Items' })),
+              ...eligibleMeals.map((m) => {
+                const r = rollUpMeal(m, itemsById)
+                return {
+                  value: `m:${m.id}`,
+                  label: m.name,
+                  group: 'Meals',
+                  hint: r.weightG > 0 ? fmtDensity(r.calories / r.weightG) : undefined,
+                }
+              }),
+              ...eligibleItems.map((i) => ({
+                value: `i:${i.id}`,
+                label: i.name,
+                group: 'Items',
+                hint: fmtDensity(i.caloriesPerGram),
+              })),
             ]}
           />
         </>

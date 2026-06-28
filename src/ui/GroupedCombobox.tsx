@@ -5,6 +5,8 @@ export interface ComboOption {
   label: string
   /** Section heading; '' for an ungrouped option (e.g. an action). */
   group: string
+  /** Optional right-aligned metadata (e.g. calorie density). */
+  hint?: string
 }
 
 /** A searchable, grouped action picker. Unlike a value-holding combobox this
@@ -77,14 +79,19 @@ export function GroupedCombobox({
                     <li key={o.value}>
                       <button
                         type="button"
-                        className="block w-full px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-emerald-50"
+                        className="flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-emerald-50"
                         onMouseDown={(e) => {
                           e.preventDefault()
                           if (blurTimer.current) clearTimeout(blurTimer.current)
                           choose(o.value)
                         }}
                       >
-                        {o.label}
+                        <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                        {o.hint && (
+                          <span className="shrink-0 tabular-nums text-xs text-gray-400">
+                            {o.hint}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
