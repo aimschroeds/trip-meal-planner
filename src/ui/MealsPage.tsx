@@ -35,13 +35,15 @@ interface Draft {
 const emptyDraft: Draft = { name: '', type: 'brekkie', components: [] }
 
 function draftToMeal(draft: Draft, id: string): Meal | null {
-  if (draft.name.trim() === '' || draft.components.length === 0) return null
+  if (draft.name.trim() === '') return null
   const components = []
   for (const c of draft.components) {
+    if (c.itemId === '') continue // skip blank rows (e.g. the trailing rapid-entry row)
     const grams = Number(c.grams)
-    if (c.itemId === '' || !Number.isFinite(grams) || grams <= 0) return null
+    if (!Number.isFinite(grams) || grams <= 0) return null
     components.push({ itemId: c.itemId, grams })
   }
+  if (components.length === 0) return null
   return { id, name: draft.name.trim(), type: draft.type, components }
 }
 
@@ -78,6 +80,41 @@ export function MealsPage() {
     })
   }
 
+  function servingFor(itemId: string): string {
+    const picked = itemsById.get(itemId)
+    const serving = picked ? defaultServingG(picked) : undefined
+    return serving !== undefined ? String(Math.round(serving * 10) / 10) : ''
+  }
+
+  // Rapid entry: picking an item prefills its serving (without clobbering a
+  // typed value), and selecting in the last row appends a fresh row that
+  // auto-focuses — so it's pick → grams → pick → … without reaching for the
+  // "+ add item" button each time.
+  function pickItem(index: number, itemId: string) {
+    setDraft((d) => {
+      const components = d.components.map((c, i) =>
+        i === index ? { ...c, itemId, grams: c.grams.trim() === '' ? servingFor(itemId) : c.grams } : c,
+      )
+      if (itemId !== '' && index === components.length - 1) {
+        components.push({ itemId: '', grams: '' })
+      }
+      return { ...d, components }
+    })
+  }
+
+  /** Add one component per item id (multi-select), each at its default serving. */
+  function addItems(itemIds: string[]) {
+    if (itemIds.length === 0) return
+    setDraft((d) => ({
+      ...d,
+      components: [
+        ...d.components.filter((c) => c.itemId !== ''),
+        ...itemIds.map((itemId) => ({ itemId, grams: servingFor(itemId) })),
+        { itemId: '', grams: '' },
+      ],
+    }))
+  }
+
   async function save() {
     const meal = draftToMeal(draft, editingId ?? crypto.randomUUID())
     if (!meal) return
@@ -94,6 +131,17 @@ export function MealsPage() {
       components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
     })
     // Bring the composer into view — the edit button can be far down the list.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  /** Open a copy of a meal in the composer as a new (unsaved) meal. */
+  function duplicate(meal: Meal) {
+    setEditingId(null)
+    setDraft({
+      name: `${meal.name} (copy)`,
+      type: meal.type,
+      components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
+    })
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -152,17 +200,8 @@ export function MealsPage() {
               <ItemCombobox
                 items={items}
                 value={c.itemId}
-                onSelect={(itemId) => {
-                  const patch: Partial<ComponentDraft> = { itemId }
-                  // Prefill a default serving on pick, but never clobber a
-                  // quantity the user has already typed.
-                  const picked = itemsById.get(itemId)
-                  if (c.grams.trim() === '' && picked) {
-                    const serving = defaultServingG(picked)
-                    if (serving !== undefined) patch.grams = String(Math.round(serving * 10) / 10)
-                  }
-                  updateComponent(index, patch)
-                }}
+                autoFocus={index === draft.components.length - 1 && c.itemId === ''}
+                onSelect={(itemId) => pickItem(index, itemId)}
               />
               <input
                 className="w-20 rounded border border-gray-300 px-2 py-1"
@@ -188,19 +227,22 @@ export function MealsPage() {
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            className="text-sm text-emerald-700 underline disabled:text-gray-400"
-            disabled={items.length === 0}
-            onClick={() =>
-              setDraft({ ...draft, components: [...draft.components, { itemId: '', grams: '' }] })
-            }
-          >
-            + add item
-          </button>
-          {items.length === 0 && (
-            <span className="ml-2 text-sm text-gray-500">(add items in the Items tab first)</span>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="text-sm text-emerald-700 underline disabled:text-gray-400"
+              disabled={items.length === 0}
+              onClick={() =>
+                setDraft({ ...draft, components: [...draft.components, { itemId: '', grams: '' }] })
+              }
+            >
+              + add item
+            </button>
+            <MultiAddItems items={items} onAdd={addItems} />
+            {items.length === 0 && (
+              <span className="text-sm text-gray-500">(add items in the Items tab first)</span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -323,6 +365,12 @@ export function MealsPage() {
                 </td>
                 <td className="py-1.5 text-right">
                   <button
+                    className="mr-3 text-emerald-700 underline"
+                    onClick={() => duplicate(meal)}
+                  >
+                    duplicate
+                  </button>
+                  <button
                     className="text-red-700 underline"
                     onClick={() => void remove(meal.id)}
                   >
@@ -334,6 +382,89 @@ export function MealsPage() {
           </tbody>
         </table>
       )}
+    </div>
+  )
+}
+
+/** Pick several library items at once; each is added at its default serving. */
+function MultiAddItems({ items, onAdd }: { items: Item[]; onAdd: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  if (items.length === 0) return null
+
+  const q = query.trim().toLowerCase()
+  const filtered = [...items]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter((i) => q === '' || i.name.toLowerCase().includes(q))
+
+  function reset() {
+    setOpen(false)
+    setQuery('')
+    setSelected(new Set())
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="text-sm text-emerald-700 underline"
+        onClick={() => setOpen(true)}
+      >
+        + add several…
+      </button>
+    )
+  }
+
+  return (
+    <div className="w-full rounded border border-gray-200 bg-gray-50 p-2">
+      <input
+        className="mb-2 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        placeholder="filter items…"
+        value={query}
+        autoFocus
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="max-h-48 overflow-auto">
+        {filtered.length === 0 ? (
+          <p className="px-1 py-1 text-sm text-gray-400">no match</p>
+        ) : (
+          filtered.map((i) => (
+            <label key={i.id} className="flex items-center gap-2 px-1 py-0.5 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.has(i.id)}
+                onChange={() =>
+                  setSelected((s) => {
+                    const n = new Set(s)
+                    if (n.has(i.id)) n.delete(i.id)
+                    else n.add(i.id)
+                    return n
+                  })
+                }
+              />
+              {i.name}
+            </label>
+          ))
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          className="rounded bg-emerald-700 px-2 py-0.5 text-sm font-medium text-white disabled:opacity-40"
+          disabled={selected.size === 0}
+          onClick={() => {
+            onAdd([...selected])
+            reset()
+          }}
+        >
+          add {selected.size || ''} selected
+        </button>
+        <button type="button" className="text-sm text-gray-500 underline" onClick={reset}>
+          cancel
+        </button>
+      </div>
     </div>
   )
 }

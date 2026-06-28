@@ -9,11 +9,13 @@ export function ItemCombobox({
   value,
   onSelect,
   placeholder = '— pick item —',
+  autoFocus = false,
 }: {
   items: Item[]
   value: string
   onSelect: (itemId: string) => void
   placeholder?: string
+  autoFocus?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -36,6 +38,7 @@ export function ItemCombobox({
         type="text"
         role="combobox"
         aria-expanded={open}
+        autoFocus={autoFocus}
         className="w-full rounded border border-gray-300 px-2 py-1"
         placeholder={placeholder}
         // Closed: show the selected item's name. Open: show what's being typed.
