@@ -5,6 +5,9 @@ export interface ComboOption {
   label: string
   /** Section heading; '' for an ungrouped option (e.g. an action). */
   group: string
+  /** Optional muted text shown after the label (e.g. an item's brand); also
+   *  matched by the type-to-filter search. */
+  sublabel?: string
   /** Optional right-aligned metadata (e.g. calorie density). */
   hint?: string
 }
@@ -27,7 +30,13 @@ export function GroupedCombobox({
   const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const q = query.trim().toLowerCase()
-  const filtered = q === '' ? options : options.filter((o) => o.label.toLowerCase().includes(q))
+  const filtered =
+    q === ''
+      ? options
+      : options.filter(
+          (o) =>
+            o.label.toLowerCase().includes(q) || (o.sublabel?.toLowerCase().includes(q) ?? false),
+        )
   const groups: { group: string; opts: ComboOption[] }[] = []
   for (const o of filtered) {
     let g = groups.find((x) => x.group === o.group)
@@ -86,7 +95,12 @@ export function GroupedCombobox({
                           choose(o.value)
                         }}
                       >
-                        <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {o.label}
+                          {o.sublabel && (
+                            <span className="ml-2 text-xs text-gray-400">{o.sublabel}</span>
+                          )}
+                        </span>
                         {o.hint && (
                           <span className="shrink-0 tabular-nums text-xs text-gray-400">
                             {o.hint}
