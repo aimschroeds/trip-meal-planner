@@ -4,6 +4,7 @@
 // are computed from items, never imported.
 
 import Papa from 'papaparse'
+import { mealSlotTypes } from '../rollups'
 import type { Item, Meal, MealType } from '../types'
 import type { CsvIssue, DuplicateResolution } from './items'
 
@@ -11,9 +12,25 @@ export const MEAL_CSV_COLUMNS = ['meal_name', 'meal_type', 'item_name', 'quantit
 
 const MEAL_TYPES: MealType[] = ['brekkie', 'snack', 'lunch', 'dinner']
 
+/** Parse a meal_type cell into one or more slot types. A meal usable in
+ *  several slots is written pipe-separated ("lunch|dinner"); a single value
+ *  stays backward compatible. Returns null if empty or any token is invalid;
+ *  the result is deduped and in canonical order. */
+function parseMealTypes(cell: string): MealType[] | null {
+  const tokens = cell
+    .split('|')
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t !== '')
+  if (tokens.length === 0 || tokens.some((t) => !MEAL_TYPES.includes(t as MealType))) return null
+  return MEAL_TYPES.filter((t) => tokens.includes(t))
+}
+
+const sameTypes = (a: MealType[], b: MealType[]) =>
+  a.length === b.length && a.every((t, i) => t === b[i])
+
 export interface ParsedMealGroup {
   name: string
-  type: MealType
+  types: MealType[]
   firstLine: number
   components: { itemName: string; grams: number }[]
 }
@@ -34,15 +51,15 @@ export function parseMealsCsv(text: string): { groups: ParsedMealGroup[]; issues
   parsed.data.forEach((raw, i) => {
     const line = i + 2
     const name = (raw.meal_name ?? '').trim()
-    const type = (raw.meal_type ?? '').trim().toLowerCase() as MealType
+    const types = parseMealTypes(raw.meal_type ?? '')
     const itemName = (raw.item_name ?? '').trim()
     const grams = Number(raw.quantity_g)
 
     if (name === '') return issues.push({ line, reason: 'missing meal_name' })
-    if (!MEAL_TYPES.includes(type)) {
+    if (!types) {
       return issues.push({
         line,
-        reason: `meal_type must be one of ${MEAL_TYPES.join('/')}, got "${raw.meal_type}"`,
+        reason: `meal_type must be one or more of ${MEAL_TYPES.join('/')} (pipe-separated), got "${raw.meal_type}"`,
       })
     }
     if (itemName === '') return issues.push({ line, reason: 'missing item_name' })
@@ -56,11 +73,11 @@ export function parseMealsCsv(text: string): { groups: ParsedMealGroup[]; issues
     const key = name.toLowerCase()
     const group = groups.get(key)
     if (!group) {
-      groups.set(key, { name, type, firstLine: line, components: [{ itemName, grams }] })
-    } else if (group.type !== type) {
+      groups.set(key, { name, types, firstLine: line, components: [{ itemName, grams }] })
+    } else if (!sameTypes(group.types, types)) {
       issues.push({
         line,
-        reason: `meal_type "${type}" conflicts with "${group.type}" for meal "${group.name}" (line ${group.firstLine})`,
+        reason: `meal_type "${types.join('|')}" conflicts with "${group.types.join('|')}" for meal "${group.name}" (line ${group.firstLine})`,
       })
     } else {
       group.components.push({ itemName, grams })
@@ -74,7 +91,7 @@ export type MissingItemPolicy = 'fail' | 'stub'
 
 export interface MealFields {
   name: string
-  type: MealType
+  types: MealType[]
   /** Resolved by name at commit time (stubs may not exist yet). */
   components: { itemName: string; grams: number }[]
 }
@@ -130,7 +147,7 @@ export function planMealImport(
 
     const fields: MealFields = {
       name: group.name,
-      type: group.type,
+      types: group.types,
       components: group.components,
     }
     const existing = mealsByName.get(group.name.toLowerCase())
@@ -160,7 +177,7 @@ export function mealsToCsv(meals: Meal[], itemsById: ReadonlyMap<string, Item>):
   const rows = meals.flatMap((meal) =>
     meal.components.map((c) => ({
       meal_name: meal.name,
-      meal_type: meal.type,
+      meal_type: mealSlotTypes(meal).join('|'),
       item_name: itemsById.get(c.itemId)?.name ?? c.itemId,
       quantity_g: c.grams,
     })),

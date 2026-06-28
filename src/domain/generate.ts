@@ -6,7 +6,7 @@
 
 import { keyedSlots, type KeyedSlot } from './carries'
 import { scaledDailyTarget } from './density'
-import { rollUpMeal, scaledGrams } from './rollups'
+import { mealSlotTypes, rollUpMeal, scaledGrams } from './rollups'
 import { activeDayFraction, entryTotals } from './totals'
 import { defaultServingG } from './units'
 import type { Day, Item, Meal, MealType, PlanPart, Person, PlanEntry, Trip } from './types'
@@ -84,7 +84,7 @@ export function generateDayPlan(args: {
     if (!list) {
       // Only vegetarian meals/items for vegetarian people (story 8.1).
       const mealCands: Candidate[] = meals
-        .filter((m) => m.type === type)
+        .filter((m) => mealSlotTypes(m).includes(type))
         .map((meal) => ({ meal, rollup: rollUpMeal(meal, itemsById) }))
         .filter(({ rollup }) => rollup.calories > 0)
         .filter(({ rollup }) => !person.vegetarian || rollup.vegetarian)

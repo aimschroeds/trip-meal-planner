@@ -290,11 +290,27 @@ describe('meals CSV round-trip', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
       name: 'Buttered oats',
-      type: 'brekkie',
+      types: ['brekkie'],
       components: [
         { itemName: 'Oatmeal', grams: 80 },
         { itemName: 'Butter', grams: 20 },
       ],
     })
+  })
+
+  it('round-trips a meal usable in several slots (pipe-separated meal_type)', () => {
+    const meal: Meal = {
+      id: 'm2',
+      name: 'Rice & beans',
+      type: 'lunch',
+      types: ['lunch', 'dinner'],
+      components: [{ itemId: 'butter', grams: 50 }],
+    }
+    const itemsById = new Map([['butter', butter]])
+    const csv = mealsToCsv([meal], itemsById)
+    expect(csv).toContain('lunch|dinner')
+    const { groups, issues } = parseMealsCsv(csv)
+    expect(issues).toHaveLength(0)
+    expect(groups[0].types).toEqual(['lunch', 'dinner'])
   })
 })

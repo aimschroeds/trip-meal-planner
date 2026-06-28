@@ -178,14 +178,16 @@ export async function commitMealImport(plan: MealImportPlan): Promise<void> {
       plan.creates.map((fields) => ({
         id: crypto.randomUUID(),
         name: fields.name,
-        type: fields.type,
+        type: fields.types[0],
+        types: fields.types,
         components: resolve(fields),
       })),
     )
     await db.meals.bulkPut(
       plan.updates.map(({ meal, fields }) => ({
         ...meal,
-        type: fields.type,
+        type: fields.types[0],
+        types: fields.types,
         components: resolve(fields),
       })),
     )

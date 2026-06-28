@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rollUpMeal } from '../../src/domain/rollups'
+import { mealSlotTypes, rollUpMeal } from '../../src/domain/rollups'
 import type { Item, Meal } from '../../src/domain/types'
 
 function item(partial: Partial<Item> & Pick<Item, 'id' | 'caloriesPerGram'>): Item {
@@ -23,6 +23,22 @@ const itemsById = new Map([oatmeal, chia, butter, jerky].map((i) => [i.id, i]))
 function meal(components: Meal['components']): Meal {
   return { id: 'm1', name: 'Test meal', type: 'brekkie', components }
 }
+
+describe('mealSlotTypes', () => {
+  const base = meal([{ itemId: 'oatmeal', grams: 80 }])
+
+  it('falls back to the single type for a legacy meal', () => {
+    expect(mealSlotTypes(base)).toEqual(['brekkie'])
+  })
+
+  it('returns the full set when a meal lists several slots', () => {
+    expect(mealSlotTypes({ ...base, types: ['lunch', 'dinner'] })).toEqual(['lunch', 'dinner'])
+  })
+
+  it('ignores an empty types array', () => {
+    expect(mealSlotTypes({ ...base, type: 'snack', types: [] })).toEqual(['snack'])
+  })
+})
 
 describe('rollUpMeal', () => {
   it('sums weight and calories across components (story 4.3 example)', () => {

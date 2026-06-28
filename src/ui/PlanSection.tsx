@@ -5,7 +5,7 @@ import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot } from '.
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
 import { generateDayPlan } from '../domain/generate'
-import { rollUpMeal } from '../domain/rollups'
+import { mealSlotTypes, rollUpMeal } from '../domain/rollups'
 import {
   carryTotals,
   combineTotals,
@@ -521,7 +521,7 @@ function SlotCell({
 }) {
   // Vegetarian people only see vegetarian meals/items (story 1.3).
   const eligibleMeals = meals
-    .filter((m) => m.type === keyed.slot.type)
+    .filter((m) => mealSlotTypes(m).includes(keyed.slot.type))
     .filter((m) => !person.vegetarian || rollUpMeal(m, itemsById).vegetarian)
     .sort((a, b) => a.name.localeCompare(b.name))
   const eligibleItems = [...itemsById.values()]

@@ -93,6 +93,19 @@ describe('generateDayPlan', () => {
     expect(Math.abs(total - 2500) / 2500).toBeLessThanOrEqual(0.05)
   })
 
+  it('places a multi-slot meal in a slot that is not its primary type', () => {
+    // "leftovers" is primary dinner but tagged for lunch too — it should be the
+    // chosen lunch meal when no lunch-primary meal exists.
+    const leftovers: Meal = {
+      ...meal('leftovers', 'dinner', 'pasta', 150),
+      types: ['lunch', 'dinner'],
+    }
+    const lib = library.filter((m) => m.id !== 'wrap').concat(leftovers)
+    const entries = generateDayPlan(baseArgs({ meals: lib }))
+    const byKey = new Map(entries.map((e) => [e.slotKey, e]))
+    expect(mealIdOf(byKey.get('lunch:midday'))).toBe('leftovers')
+  })
+
   it('only selects vegetarian meals for vegetarian people', () => {
     // Run with every rng value that selects different candidates.
     for (const r of [0, 0.4, 0.9]) {
