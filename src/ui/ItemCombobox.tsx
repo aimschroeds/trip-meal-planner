@@ -24,7 +24,14 @@ export function ItemCombobox({
   const selected = items.find((i) => i.id === value)
   const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name))
   const q = query.trim().toLowerCase()
-  const filtered = q === '' ? sorted : sorted.filter((i) => i.name.toLowerCase().includes(q))
+  // Match on brand too, so "firepot" or "gu" finds the item even though the
+  // brand isn't part of the name anymore.
+  const filtered =
+    q === ''
+      ? sorted
+      : sorted.filter(
+          (i) => i.name.toLowerCase().includes(q) || (i.brand?.toLowerCase().includes(q) ?? false),
+        )
 
   function choose(itemId: string) {
     onSelect(itemId)
@@ -64,7 +71,7 @@ export function ItemCombobox({
               <li key={i.id}>
                 <button
                   type="button"
-                  className={`block w-full px-2 py-1.5 text-left text-sm hover:bg-emerald-50 ${
+                  className={`flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-sm hover:bg-emerald-50 ${
                     i.id === value ? 'font-medium text-emerald-800' : 'text-gray-700'
                   }`}
                   // Fire before the input's blur so the click isn't lost.
@@ -74,7 +81,8 @@ export function ItemCombobox({
                     choose(i.id)
                   }}
                 >
-                  {i.name}
+                  <span className="min-w-0 flex-1 truncate">{i.name}</span>
+                  {i.brand && <span className="shrink-0 text-xs text-gray-400">{i.brand}</span>}
                 </button>
               </li>
             ))

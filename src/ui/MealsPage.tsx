@@ -447,7 +447,10 @@ function MultiAddItems({ items, onAdd }: { items: Item[]; onAdd: (ids: string[])
   const q = query.trim().toLowerCase()
   const filtered = [...items]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .filter((i) => q === '' || i.name.toLowerCase().includes(q))
+    .filter(
+      (i) =>
+        q === '' || i.name.toLowerCase().includes(q) || (i.brand?.toLowerCase().includes(q) ?? false),
+    )
 
   function reset() {
     setOpen(false)
@@ -494,7 +497,8 @@ function MultiAddItems({ items, onAdd }: { items: Item[]; onAdd: (ids: string[])
                   })
                 }
               />
-              {i.name}
+              <span className="min-w-0 flex-1 truncate">{i.name}</span>
+              {i.brand && <span className="shrink-0 text-xs text-gray-400">{i.brand}</span>}
             </label>
           ))
         )}

@@ -690,6 +690,7 @@ function SlotCell({
               ...eligibleItems.map((i) => ({
                 value: `i:${i.id}`,
                 label: i.name,
+                sublabel: i.brand,
                 group: 'Items',
                 hint: fmtDensity(i.caloriesPerGram),
               })),
