@@ -12,12 +12,13 @@ import {
 
 const SNACK_TIMINGS: SlotTiming[] = ['morning', 'afternoon', 'evening']
 
-/** Snack slots cycle morning → afternoon → evening so mid-day resupplies
- *  can split them across carries (PLAN.md §6.1). */
-export function snackSlots(count: number): Slot[] {
+/** Snack slots cycle through the given timings so mid-day resupplies can
+ *  split them across carries (PLAN.md §6.1). */
+export function snackSlots(count: number, timings: SlotTiming[] = SNACK_TIMINGS): Slot[] {
+  const cycle = timings.length > 0 ? timings : SNACK_TIMINGS
   return Array.from({ length: count }, (_, i) => ({
     type: 'snack' as const,
-    timing: SNACK_TIMINGS[i % SNACK_TIMINGS.length],
+    timing: cycle[i % cycle.length],
   }))
 }
 
@@ -63,18 +64,37 @@ export function snackCount(day: Day): number {
   return day.activeSlots.filter((s) => s.type === 'snack').length
 }
 
-/** Add or remove a main meal slot — how partial days are edited (story 2.3). */
+/** Snack timings that fall within a day's active eating window, derived from
+ *  which main meals are on. A late-afternoon start (dinner only) yields
+ *  afternoon/evening snacks, never a nonsensical morning one; a full day keeps
+ *  the morning → afternoon → evening cycle. Falls back to the full cycle for a
+ *  snacks-only day. */
+export function activeSnackTimings(day: Day): SlotTiming[] {
+  const timings: SlotTiming[] = []
+  if (hasMainSlot(day, 'brekkie')) timings.push('morning')
+  if (hasMainSlot(day, 'lunch') || hasMainSlot(day, 'dinner')) timings.push('afternoon')
+  if (hasMainSlot(day, 'dinner')) timings.push('evening')
+  return timings.length > 0 ? timings : SNACK_TIMINGS
+}
+
+/** Add or remove a main meal slot — how partial days are edited (story 2.3).
+ *  Snacks are re-timed to the new active window so dropping brekkie/lunch moves
+ *  a lone snack out of the morning. */
 export function toggleMainSlot(day: Day, type: MainMealType): Day {
-  const activeSlots = hasMainSlot(day, type)
+  const mains = hasMainSlot(day, type)
     ? day.activeSlots.filter((s) => s.type !== type)
     : [...day.activeSlots, { type, timing: MAIN_SLOT_TIMINGS[type] }]
-  return { ...day, activeSlots }
+  const next = { ...day, activeSlots: mains }
+  return withSnackCount(next, snackCount(next))
 }
 
 export function withSnackCount(day: Day, count: number): Day {
   return {
     ...day,
-    activeSlots: [...day.activeSlots.filter((s) => s.type !== 'snack'), ...snackSlots(count)],
+    activeSlots: [
+      ...day.activeSlots.filter((s) => s.type !== 'snack'),
+      ...snackSlots(count, activeSnackTimings(day)),
+    ],
   }
 }
 
