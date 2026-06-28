@@ -112,7 +112,14 @@ export interface MealComponent {
 export interface Meal {
   id: string
   name: string
+  /** Primary slot type — used for grouping, sorting, and as the CSV/default
+   *  value. For eligibility (which slots a meal may go in) read `types` via
+   *  mealSlotTypes(), not this field directly. */
   type: MealType
+  /** All slot types this meal fits — a meal like rice & beans can be both
+   *  lunch and dinner. Optional/legacy meals fall back to `[type]`. Always
+   *  includes `type` when set. */
+  types?: MealType[]
   components: MealComponent[]
 }
 

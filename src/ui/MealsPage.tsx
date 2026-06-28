@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitMealImport, deleteMeal, MealInUseError } from '../store/repos'
-import { rollUpMeal } from '../domain/rollups'
+import { mealSlotTypes, rollUpMeal } from '../domain/rollups'
 import { defaultServingG, gramsForUnits, unitsForGrams } from '../domain/units'
 import { itemsToCsv, type CsvIssue, type DuplicateResolution } from '../domain/csv/items'
 import {
@@ -30,14 +30,18 @@ interface ComponentDraft {
 
 interface Draft {
   name: string
-  type: MealType
+  /** Slot types this meal may be used in — at least one (Epic 18). */
+  types: MealType[]
   components: ComponentDraft[]
 }
 
-const emptyDraft: Draft = { name: '', type: 'brekkie', components: [] }
+const emptyDraft: Draft = { name: '', types: ['brekkie'], components: [] }
 
 function draftToMeal(draft: Draft, id: string): Meal | null {
   if (draft.name.trim() === '') return null
+  // Keep canonical order and dedupe; a meal needs at least one slot type.
+  const types = MEAL_TYPES.filter((t) => draft.types.includes(t))
+  if (types.length === 0) return null
   const components = []
   for (const c of draft.components) {
     if (c.itemId === '') continue // skip blank rows (e.g. the trailing rapid-entry row)
@@ -46,7 +50,7 @@ function draftToMeal(draft: Draft, id: string): Meal | null {
     components.push({ itemId: c.itemId, grams })
   }
   if (components.length === 0) return null
-  return { id, name: draft.name.trim(), type: draft.type, components }
+  return { id, name: draft.name.trim(), type: types[0], types, components }
 }
 
 type SortKey = 'name' | 'density'
@@ -129,7 +133,7 @@ export function MealsPage() {
     setEditingId(meal.id)
     setDraft({
       name: meal.name,
-      type: meal.type,
+      types: mealSlotTypes(meal),
       components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
     })
     // Bring the composer into view — the edit button can be far down the list.
@@ -146,6 +150,7 @@ export function MealsPage() {
         id: crypto.randomUUID(),
         name: d.name,
         type: d.type,
+        types: [d.type],
         components: d.components,
       }))
     if (newMeals.length > 0) await db.meals.bulkPut(newMeals)
@@ -156,7 +161,7 @@ export function MealsPage() {
     setEditingId(null)
     setDraft({
       name: `${meal.name} (copy)`,
-      type: meal.type,
+      types: mealSlotTypes(meal),
       components: meal.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
     })
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -164,7 +169,7 @@ export function MealsPage() {
 
   const rows = meals
     .map((meal) => ({ meal, rollup: rollUpMeal(meal, itemsById) }))
-    .filter(({ meal }) => typeFilter === 'all' || meal.type === typeFilter)
+    .filter(({ meal }) => typeFilter === 'all' || mealSlotTypes(meal).includes(typeFilter))
     .filter(({ rollup }) => !vegOnly || rollup.vegetarian)
     .sort((a, b) =>
       sortKey === 'name'
@@ -195,20 +200,39 @@ export function MealsPage() {
               placeholder="Standard oatmeal brekkie"
             />
           </label>
-          <label className="block">
-            <span className="block text-sm text-gray-600">Type</span>
-            <select
-              className="mt-1 rounded border border-gray-300 px-2 py-1"
-              value={draft.type}
-              onChange={(e) => setDraft({ ...draft, type: e.target.value as MealType })}
-            >
-              {MEAL_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="block">
+            <span className="block text-sm text-gray-600">Used for</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {MEAL_TYPES.map((t) => {
+                const on = draft.types.includes(t)
+                return (
+                  <label
+                    key={t}
+                    className={`cursor-pointer rounded border px-2 py-1 text-sm ${
+                      on
+                        ? 'border-emerald-700 bg-emerald-700 text-white'
+                        : 'border-gray-300 bg-white text-gray-600'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={on}
+                      onChange={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          types: d.types.includes(t)
+                            ? d.types.filter((x) => x !== t)
+                            : [...d.types, t],
+                        }))
+                      }
+                    />
+                    {t}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -367,7 +391,7 @@ export function MealsPage() {
                 title="Edit this meal"
               >
                 <td className="py-1.5 pr-2 font-medium text-emerald-800">{meal.name}</td>
-                <td className="py-1.5 pr-2">{meal.type}</td>
+                <td className="py-1.5 pr-2">{mealSlotTypes(meal).join(', ')}</td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {meal.components
                     .map((c) => `${itemsById.get(c.itemId)?.name ?? '?'} ${Math.round(c.grams)}g`)

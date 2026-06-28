@@ -2,7 +2,14 @@
 // are always derived from the meal's components — never stored — so editing
 // an item automatically updates every meal that contains it (story 4.6).
 
-import type { Item, Meal } from './types'
+import type { Item, Meal, MealType } from './types'
+
+/** The slot types a meal may be used in. A meal with an explicit `types` set
+ *  is eligible for all of them; otherwise it falls back to its single `type`.
+ *  This is the one read path for meal slot eligibility. */
+export function mealSlotTypes(meal: Meal): MealType[] {
+  return meal.types && meal.types.length > 0 ? meal.types : [meal.type]
+}
 
 export interface MealRollup {
   weightG: number
