@@ -133,7 +133,7 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
             <p className="text-xs text-gray-500">
               {files.length > 0
                 ? `${files.length} photo${files.length === 1 ? '' : 's'} selected — front of pack and/or the nutrition label work best.`
-                : 'Take, pick, or paste (⌘/Ctrl+V) 1–2 photos: the front of the pack and/or the nutrition label.'}
+                : 'Take, pick, or paste (Cmd+V, or Ctrl+V on Windows) 1–2 photos: the front of the pack and/or the nutrition label.'}
             </p>
           </>
         )}
