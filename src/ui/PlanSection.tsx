@@ -326,6 +326,16 @@ function DayCard({
     itemsById,
   })
 
+  // Leg + distance/ascent meta line (Epic 19): the description reads better
+  // with the raw itinerary numbers visible next to it.
+  const legText = day.start || day.end || day.name ? dayLegLabel(day) : null
+  const stats = [
+    day.distanceKm != null ? `${day.distanceKm} km` : null,
+    day.ascentM != null ? `↑ ${day.ascentM} m` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-2 flex items-center gap-3">
@@ -352,8 +362,12 @@ function DayCard({
           ✨ generate
         </button>
       </div>
-      {(day.start || day.end || day.name) && (
-        <p className="text-xs font-medium text-gray-600">{dayLegLabel(day)}</p>
+      {(legText || stats) && (
+        <p className="text-xs text-gray-600">
+          {legText && <span className="font-medium">{legText}</span>}
+          {legText && stats && ' · '}
+          {stats && <span className="text-gray-500">{stats}</span>}
+        </p>
       )}
       {day.description && (
         <p className="mb-2 mt-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs italic text-gray-600">

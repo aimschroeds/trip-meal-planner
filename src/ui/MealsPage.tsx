@@ -317,43 +317,6 @@ export function MealsPage() {
 
       <MealTextBuilder items={items} onSave={(drafts) => void saveBuiltMeals(drafts)} />
 
-      <div className="flex items-center gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          type
-          <select
-            className="rounded border border-gray-300 px-1 py-0.5"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as MealType | 'all')}
-          >
-            <option value="all">all</option>
-            {MEAL_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1">
-          sort by
-          <select
-            className="rounded border border-gray-300 px-1 py-0.5"
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-          >
-            <option value="name">name</option>
-            <option value="density">density</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={vegOnly}
-            onChange={(e) => setVegOnly(e.target.checked)}
-          />
-          vegetarian only
-        </label>
-      </div>
-
       {error && (
         <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
           {error}
@@ -361,6 +324,47 @@ export function MealsPage() {
       )}
 
       <MealsImportExport items={items} meals={meals} />
+
+      {/* Sort/filter sit directly above the list they control. */}
+      {meals.length > 0 && (
+        <div className="flex items-center gap-4 border-b border-gray-200 pb-2 text-sm">
+          <span className="font-medium text-gray-700">{meals.length} meals</span>
+          <label className="flex items-center gap-1">
+            type
+            <select
+              className="rounded border border-gray-300 px-1 py-0.5"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as MealType | 'all')}
+            >
+              <option value="all">all</option>
+              {MEAL_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            sort by
+            <select
+              className="rounded border border-gray-300 px-1 py-0.5"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+            >
+              <option value="name">name</option>
+              <option value="density">density</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={vegOnly}
+              onChange={(e) => setVegOnly(e.target.checked)}
+            />
+            vegetarian only
+          </label>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500">

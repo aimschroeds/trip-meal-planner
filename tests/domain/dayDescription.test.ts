@@ -39,6 +39,11 @@ describe('buildDayDescriptionsPrompt', () => {
     expect(prompt).toContain('Day 1: A → B, 12 km, 800 m ascent, big')
     expect(prompt).toContain('"days"')
   })
+
+  it('asks the model to name any passes crossed', () => {
+    const prompt = buildDayDescriptionsPrompt([day({ index: 1, start: 'A', end: 'B' })])
+    expect(prompt.toLowerCase()).toContain('pass')
+  })
 })
 
 describe('parseDayDescriptions', () => {

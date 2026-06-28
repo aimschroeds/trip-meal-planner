@@ -114,6 +114,8 @@ export function TripsPage() {
 
 function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   const [view, setView] = useState<'setup' | 'plan'>('setup')
+  const [descBusy, setDescBusy] = useState(false)
+  const [descNote, setDescNote] = useState<string | null>(null)
   const people = useLiveQuery(
     () => db.people.where('id').anyOf(trip.peopleIds).toArray(),
     [trip.peopleIds.join()],
@@ -122,6 +124,36 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
   async function update(patch: Partial<Trip>) {
     await db.trips.put({ ...trip, ...patch })
+  }
+
+  /** Generate a 1–2 sentence eating note per day from the itinerary (Epic 19).
+   *  Needs the user's API key; days without a route/name are skipped. Runs both
+   *  on demand (the Days header button) and automatically after a CSV import. */
+  async function describeDays(days: Day[]) {
+    const key = getApiKey()
+    if (!key) {
+      setDescNote('Add an Anthropic API key (via photo extract on the Items tab) to get day notes.')
+      return
+    }
+    const describable = days.filter(hasItinerary)
+    if (describable.length === 0) {
+      setDescNote('Add start/end locations (or a leg name) to days first.')
+      return
+    }
+    setDescBusy(true)
+    setDescNote(null)
+    const client = await import('../extract/dayDescription')
+    try {
+      const byDay = await client.describeDays(key, describable)
+      await update({
+        days: days.map((d) => (byDay.has(d.index) ? { ...d, description: byDay.get(d.index) } : d)),
+      })
+      setDescNote(`Described ${byDay.size} day${byDay.size === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setDescNote(client.dayDescriptionErrorMessage(e))
+    } finally {
+      setDescBusy(false)
+    }
   }
 
   async function updateDay(updated: Day) {
@@ -191,8 +223,24 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
       )}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-2 font-semibold text-gray-800">Days</h3>
-        <ItineraryUpload trip={trip} onApply={(days) => void update({ days })} />
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <h3 className="font-semibold text-gray-800">Days</h3>
+          <button
+            type="button"
+            className="rounded border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-800 disabled:opacity-40"
+            disabled={descBusy || !trip.days.some(hasItinerary)}
+            onClick={() => void describeDays(trip.days)}
+            title="Generate an AI eating note (lunch stops, passes, snacks) for every day with a route"
+          >
+            {descBusy ? 'describing…' : '✨ describe days'}
+          </button>
+          {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
+        </div>
+        <ItineraryUpload
+          trip={trip}
+          onApply={(days) => void update({ days })}
+          onDescribe={describeDays}
+        />
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
@@ -334,41 +382,20 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
 /** Bulk-set day legs, distance, and ascent from a CSV (Epic 15). Each day's
  *  type — and therefore the calorie target — is derived from its effort. */
-function ItineraryUpload({ trip, onApply }: { trip: Trip; onApply: (days: Day[]) => void }) {
+function ItineraryUpload({
+  trip,
+  onApply,
+  onDescribe,
+}: {
+  trip: Trip
+  onApply: (days: Day[]) => void
+  onDescribe: (days: Day[]) => void | Promise<void>
+}) {
   const [result, setResult] = useState<{
     applied: number
     unmatched: number[]
     issues: CsvIssue[]
   } | null>(null)
-  const [descBusy, setDescBusy] = useState(false)
-  const [descNote, setDescNote] = useState<string | null>(null)
-
-  // Generate a 1–2 sentence eating note per day from the itinerary. Needs the
-  // user's API key; skips silently-described days without a route/name.
-  async function describe(days: Day[]) {
-    const key = getApiKey()
-    if (!key) {
-      setDescNote('Add an Anthropic API key (via photo extract on the Items tab) to get AI day descriptions, then use “describe days”.')
-      return
-    }
-    const describable = days.filter(hasItinerary)
-    if (describable.length === 0) {
-      setDescNote('Add start/end locations (or a leg name) to days to get descriptions.')
-      return
-    }
-    setDescBusy(true)
-    setDescNote(null)
-    const client = await import('../extract/dayDescription')
-    try {
-      const byDay = await client.describeDays(key, describable)
-      onApply(days.map((d) => (byDay.has(d.index) ? { ...d, description: byDay.get(d.index) } : d)))
-      setDescNote(`Described ${byDay.size} day${byDay.size === 1 ? '' : 's'}.`)
-    } catch (e) {
-      setDescNote(client.dayDescriptionErrorMessage(e))
-    } finally {
-      setDescBusy(false)
-    }
-  }
 
   async function handle(text: string) {
     const { rows, issues } = parseItineraryCsv(text)
@@ -376,7 +403,7 @@ function ItineraryUpload({ trip, onApply }: { trip: Trip; onApply: (days: Day[])
     onApply(days)
     setResult({ applied: rows.length - unmatched.length, unmatched, issues })
     // Auto-describe right after a successful import (the user's chosen flow).
-    if (rows.length - unmatched.length > 0) await describe(days)
+    if (rows.length - unmatched.length > 0) await onDescribe(days)
   }
 
   return (
@@ -399,21 +426,9 @@ function ItineraryUpload({ trip, onApply }: { trip: Trip; onApply: (days: Day[])
           Columns: <code>day, distance_km, ascent_m</code> (plus optional <code>name</code>,{' '}
           <code>start</code>, <code>end</code>). Each day's size is set from its effort — distance +
           ascent ÷ 100 m — which scales that day's calorie target. <code>start</code>/<code>end</code>{' '}
-          feed an AI note (lunch stops, snack spots, or eat-on-the-go) shown on the Plan view; it's
-          a best-effort suggestion — sanity-check named places.
+          feed the per-day AI note (the “describe days” button up by the Days heading) — lunch
+          stops, named passes, and snack spots. It's a best-effort suggestion — sanity-check places.
         </p>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="rounded border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-800 disabled:opacity-40"
-            disabled={descBusy || !trip.days.some(hasItinerary)}
-            onClick={() => void describe(trip.days)}
-            title="Re-generate the AI eating notes for every day"
-          >
-            {descBusy ? 'describing…' : '✨ describe days'}
-          </button>
-          {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
-        </div>
         {result && (
           <p className="text-xs text-gray-600">
             Applied {result.applied} day{result.applied === 1 ? '' : 's'}.
