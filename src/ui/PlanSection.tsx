@@ -15,12 +15,12 @@ import {
   planKey,
   type DayStatus,
 } from '../domain/totals'
-import { carryShoppingList, defaultServingG } from '../domain/units'
+import { carryShoppingList, defaultServingG, tripShoppingList } from '../domain/units'
 import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
 import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from '../domain/types'
 import { downloadCsv } from './download'
-import { fmtCalories, fmtDensity, fmtGrams, fmtSlot, resupplyTimingLabel } from './format'
+import { fmtCalories, fmtDensity, fmtGrams, fmtPurchase, fmtSlot, resupplyTimingLabel } from './format'
 import { GroupedCombobox } from './GroupedCombobox'
 
 const OFF_TRAIL = '@offtrail'
@@ -41,6 +41,9 @@ const STATUS_LABELS: Record<DayStatus, string> = {
 
 export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) {
   const [personId, setPersonId] = useState<string | null>(null)
+  // Ticked-off items while shopping. Ephemeral — a single shopping session,
+  // not persisted (reloading clears it).
+  const [bought, setBought] = useState<Set<string>>(new Set())
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
   const resupplies = useLiveQuery(
@@ -232,9 +235,73 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
           </tbody>
         </table>
 
+        <details className="mt-3" open>
+          <summary className="cursor-pointer text-sm font-medium text-gray-700">
+            🛒 Shopping list — buy for the whole trip
+          </summary>
+          {(() => {
+            const shopping = tripShoppingList({
+              carries,
+              personIds,
+              entriesByKey,
+              mealsById,
+              itemsById,
+            })
+            const toggle = (id: string) =>
+              setBought((s) => {
+                const n = new Set(s)
+                if (n.has(id)) n.delete(id)
+                else n.add(id)
+                return n
+              })
+            return shopping.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-500">Nothing planned yet.</p>
+            ) : (
+              <>
+                <ul className="mt-2 space-y-0.5 text-sm">
+                  {shopping.map((s) => {
+                    const checked = bought.has(s.item.id)
+                    return (
+                      <li key={s.item.id}>
+                        <label className="flex cursor-pointer items-baseline gap-2">
+                          <input
+                            type="checkbox"
+                            className="shrink-0"
+                            checked={checked}
+                            onChange={() => toggle(s.item.id)}
+                          />
+                          <span
+                            className={`min-w-0 flex-1 truncate ${checked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                          >
+                            {s.item.brand && <span className="text-gray-400">{s.item.brand} · </span>}
+                            {s.item.name}
+                          </span>
+                          <span
+                            className={`shrink-0 font-medium ${checked ? 'text-gray-400 line-through' : 'text-emerald-800'}`}
+                          >
+                            {fmtPurchase(s.purchase)}
+                          </span>
+                          <span className="w-14 shrink-0 text-right text-xs tabular-nums text-gray-400">
+                            {fmtGrams(s.grams)}
+                          </span>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="mt-2 text-xs text-gray-500">
+                  Whole-trip totals for everyone, scaling included. Items entered per package or
+                  with a piece weight show whole packs/pieces; the rest show weight (buy a bag).
+                  Tick-offs reset on reload.
+                </p>
+              </>
+            )
+          })()}
+        </details>
+
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
-            Shopping list per carry
+            🎒 Packing list — per resupply carry
           </summary>
           <div className="mt-2 space-y-3">
             {carries.map((carry, i) => {
@@ -258,19 +325,13 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
                     <ul className="mt-1 space-y-0.5">
                       {lines.map((l) => (
                         <li key={l.item.id} className="text-gray-700">
+                          {l.item.brand && <span className="text-gray-400">{l.item.brand} · </span>}
                           {l.item.name} — {fmtGrams(l.grams)}
                           {l.units !== null && (
                             <span className="text-gray-500">
                               {' '}
-                              · ≈ {Math.round(l.units * 10) / 10}{' '}
+                              · {Math.round(l.units * 10) / 10}{' '}
                               {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
-                            </span>
-                          )}
-                          {l.packages !== null && (
-                            <span className="text-gray-500">
-                              {' '}
-                              · {l.packages} package{l.packages === 1 ? '' : 's'} of{' '}
-                              {fmtGrams(l.item.inputWeightG)}
                             </span>
                           )}
                         </li>
@@ -282,8 +343,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
             })}
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            Whole-group totals, scaling included. Package counts appear for items entered per
-            package; piece counts for items with a piece weight.
+            What to put in each carry's resupply box — whole-group totals, scaling included.
           </p>
         </details>
       </section>
