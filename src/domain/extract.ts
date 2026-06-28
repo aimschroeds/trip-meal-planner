@@ -26,6 +26,24 @@ Extract, for the WHOLE PACKAGE:
 
 Use null for any value that is not legible or not present in the photos. Do not guess numbers.`
 
+/** Prompt for extracting an item from a product web page (Epic 20). The URL is
+ *  included verbatim because the web-fetch tool only fetches URLs already
+ *  present in the conversation. Same answer shape as the photo extract, parsed
+ *  by parseExtractedItem. */
+export function buildUrlExtractPrompt(url: string): string {
+  return `Fetch this product page and read its food facts:
+${url}
+
+Extract, for the WHOLE PACKAGE/PRODUCT:
+- name: the product name as a shopper would say it, WITHOUT the brand and without slogans (e.g. "Dal & rice with spinach", not "Firepot Dal & rice")
+- brand: the brand / manufacturer on its own (e.g. "Firepot"); null if not shown
+- weight_grams: net weight of the whole package in grams; convert from oz if needed (1 oz = 28.35 g)
+- calories_per_package: total calories in the whole package; if the page only gives per-serving values, multiply by the servings per package
+- vegetarian: true if marked vegetarian/vegan or clearly plant-based, false if it contains meat or fish, null if unclear
+
+Return only a JSON object with those keys. Use null for any value the page doesn't clearly state — do not guess numbers.`
+}
+
 /** Structured-output schema matching parseExtractedItem. */
 export const EXTRACT_SCHEMA = {
   type: 'object',

@@ -5,13 +5,15 @@ import { EXTRACT_MODEL } from '../extract/config'
 import { fileToJpegBase64 } from '../extract/image'
 import { fileInputClass } from './styles'
 
-/** Snap 1–2 photos of a product (front of pack and/or nutrition label) and
- *  prefill the Add Item form from them (PLAN.md §9.5). Extraction is a
- *  draft, never a silent write — the user reviews before saving. */
+/** Prefill the Add Item form from a product — either 1–2 photos (front of pack
+ *  / nutrition label, PLAN.md §9.5) or a product page URL the model fetches and
+ *  reads (Epic 20). Extraction is a draft, never a silent write — the user
+ *  reviews before saving. */
 export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) => void }) {
   const [hasKey, setHasKey] = useState(getApiKey() !== null)
   const [keyDraft, setKeyDraft] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extractedName, setExtractedName] = useState<string | null>(null)
@@ -57,10 +59,29 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
     }
   }
 
+  async function extractFromUrl() {
+    const apiKey = getApiKey()
+    if (!apiKey || url.trim() === '') return
+    setBusy(true)
+    setError(null)
+    setExtractedName(null)
+    const client = await import('../extract/client')
+    try {
+      const item = await client.extractItemFromUrl(apiKey, url.trim())
+      onExtract(item)
+      setExtractedName(item.name)
+      setUrl('')
+    } catch (e) {
+      setError(client.extractErrorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <details className="rounded-lg border border-gray-200 bg-white p-4">
       <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-        Add item from photos
+        Add item from photos or a link
       </summary>
       <div className="mt-3 space-y-3 text-sm">
         {!hasKey ? (
@@ -135,6 +156,42 @@ export function PhotoExtract({ onExtract }: { onExtract: (item: ExtractedItem) =
                 ? `${files.length} photo${files.length === 1 ? '' : 's'} selected — front of pack and/or the nutrition label work best.`
                 : 'Take, pick, or paste (Cmd+V, or Ctrl+V on Windows) 1–2 photos: the front of the pack and/or the nutrition label.'}
             </p>
+
+            <div className="border-t border-gray-100 pt-3">
+              <form
+                className="flex flex-wrap items-end gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void extractFromUrl()
+                }}
+              >
+                <label className="block grow">
+                  <span className="block text-gray-600">…or paste a product page link</span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value)
+                      setExtractedName(null)
+                    }}
+                    placeholder="https://…"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={busy || url.trim() === ''}
+                  className="rounded bg-emerald-700 px-3 py-1.5 font-medium text-white disabled:opacity-40"
+                >
+                  {busy ? 'Reading page…' : 'Extract from link'}
+                </button>
+              </form>
+              <p className="mt-1 text-xs text-gray-500">
+                The model fetches the page and reads its name, weight, calories, and diet. Review
+                the prefilled form, fix anything it got wrong, then Add.
+              </p>
+            </div>
           </>
         )}
         {extractedName && (

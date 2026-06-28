@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { parseExtractedItem } from '../../src/domain/extract'
+import { buildUrlExtractPrompt, parseExtractedItem } from '../../src/domain/extract'
+
+describe('buildUrlExtractPrompt', () => {
+  it('embeds the URL and asks for the item fields as JSON', () => {
+    const prompt = buildUrlExtractPrompt('https://shop.example/dal')
+    expect(prompt).toContain('https://shop.example/dal')
+    expect(prompt).toContain('calories_per_package')
+    expect(prompt).toContain('JSON')
+  })
+})
 
 const valid = JSON.stringify({
   name: "Firepot Mac'n'Greens",
