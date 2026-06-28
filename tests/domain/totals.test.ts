@@ -131,6 +131,7 @@ describe('dayTotals', () => {
     })
     expect(totals.calories).toBe(900) // 400 + 250 + 250
     expect(totals.weightG).toBe(200)
+    expect(totals.density).toBeCloseTo(4.5) // 900 cal / 200 g
     expect(totals.target).toBe(1000)
     expect(totals.delta).toBe(-100)
     expect(totals.deltaPct).toBeCloseTo(-0.1)
@@ -148,6 +149,9 @@ describe('dayTotals', () => {
       ],
     })
     expect(totals.calories).toBe(1030)
+    // Off-trail calories aren't carried, so density stays the cal/g of the
+    // on-trail food only (900 cal / 200 g), not 1030 / 200.
+    expect(totals.density).toBeCloseTo(4.5)
     expect(totals.status).toBe('ok')
   })
 

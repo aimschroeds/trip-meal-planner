@@ -60,6 +60,10 @@ export type DayStatus = 'ok' | 'under' | 'over' | 'partial'
 export interface DayTotals {
   calories: number
   weightG: number
+  /** Avg cal/g of the day's *carried* (on-trail) food; 0 when weightless.
+   *  Off-trail calories are excluded — they aren't in the pack, so they
+   *  shouldn't distort the density that drives carry decisions. */
+  density: number
   target: number
   /** calories - target */
   delta: number
@@ -105,13 +109,18 @@ export function dayTotals(args: {
 
   let calories = 0
   let weightG = 0
+  let carriedCalories = 0
   let unestimatedOffTrail = false
   for (const entry of entries) {
     const t = entryTotals(entry, mealsById, itemsById)
     calories += t.calories
     weightG += t.weightG
+    // Off-trail meals add calories but no carried weight; keep them out of the
+    // density numerator so it stays the cal/g of food actually in the pack.
+    if (entry.kind !== 'offTrail') carriedCalories += t.calories
     unestimatedOffTrail ||= t.unestimated
   }
+  const density = weightG > 0 ? carriedCalories / weightG : 0
 
   const target =
     scaledDailyTarget(person.baselineCalories, factors[day.type]) * activeDayFraction(day)
@@ -127,7 +136,7 @@ export function dayTotals(args: {
     status = 'over'
   }
 
-  return { calories, weightG, target, delta, deltaPct, unestimatedOffTrail, status }
+  return { calories, weightG, density, target, delta, deltaPct, unestimatedOffTrail, status }
 }
 
 export interface MassTotals {
