@@ -92,6 +92,22 @@ describe('items CSV round-trip', () => {
     })
   })
 
+  it('parses rename_to and updates the matched item in place (keeps id)', () => {
+    const existing: Item = { ...butter, id: 'firepot-id', name: 'Firepot: Dal and rice' }
+    const { rows, issues } = parseItemsCsv(
+      'name,weight_g,calories,vegetarian,brand,rename_to\nFirepot: Dal and rice,200,760,true,Firepot,Dal and rice',
+    )
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.renameTo).toBe('Dal and rice')
+
+    // Matching is still by the original name, so it updates the existing item.
+    const plan = planItemImport(rows, [existing], 'update')
+    expect(plan.creates).toHaveLength(0)
+    expect(plan.updates).toHaveLength(1)
+    expect(plan.updates[0].item.id).toBe('firepot-id')
+    expect(plan.updates[0].fields).toMatchObject({ brand: 'Firepot', renameTo: 'Dal and rice' })
+  })
+
   it('round-trips the brand when set', () => {
     const branded: Item = { ...butter, brand: 'Firepot' }
     const { rows, issues } = parseItemsCsv(itemsToCsv([branded]))

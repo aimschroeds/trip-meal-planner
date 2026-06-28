@@ -29,6 +29,11 @@ export interface CsvIssue {
 
 export interface ItemFields {
   name: string
+  /** Optional new name (the `rename_to` column): rows match an existing item
+   *  by `name`, then the item is renamed to this. Lets a CSV clean up names
+   *  (e.g. pull the brand out) in place — same item id, meal links intact —
+   *  instead of importing a renamed copy as a duplicate. */
+  renameTo?: string
   brand?: string
   weightG: number
   calories: number
@@ -71,6 +76,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
   parsed.data.forEach((raw, i) => {
     const line = i + 2
     const name = (raw.name ?? '').trim()
+    const renameTo = raw.rename_to?.trim() || undefined
     const brand = raw.brand?.trim() || undefined
     const weightG = Number(raw.weight_g)
     const calories = Number(raw.calories)
@@ -144,6 +150,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
       line,
       fields: {
         name,
+        renameTo,
         brand,
         weightG,
         calories,

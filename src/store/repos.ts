@@ -127,7 +127,9 @@ export async function applyPlanWrites(writes: Omit<PlanEntry, 'id'>[]): Promise<
 function itemFromFields(fields: ItemFields, existing?: Item): Item {
   return {
     id: existing?.id ?? crypto.randomUUID(),
-    name: fields.name,
+    // `rename_to` renames a matched item in place (id preserved); falls back to
+    // the match name when not renaming.
+    name: fields.renameTo ?? fields.name,
     brand: fields.brand,
     caloriesPerGram: calorieDensity({ weightG: fields.weightG, calories: fields.calories }),
     vegetarian: fields.vegetarian,

@@ -514,8 +514,9 @@ function ItemsImportExport({ items }: { items: Item[] }) {
         </div>
         <p className="text-xs text-gray-500">
           Columns: name, weight_g, calories, vegetarian — weight/calories on any consistent
-          basis. Optional: brand, min_grams, max_grams (generation bounds), serving_g (default
-          serving).
+          basis. Optional: brand, rename_to (with “update existing”, renames the matched item in
+          place — keeps its meal links), min_grams, max_grams (generation bounds), serving_g
+          (default serving).
         </p>
         {parsed && plan && (
           <div className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
