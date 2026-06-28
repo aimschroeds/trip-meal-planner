@@ -5,6 +5,8 @@
 
 export interface ExtractedItem {
   name: string
+  /** Brand / manufacturer, separate from the name; null when unclear. */
+  brand: string | null
   /** Net weight of the whole package in grams; null when not legible. */
   weightG: number | null
   /** Calories for the whole package; null when not legible. */
@@ -16,7 +18,8 @@ export interface ExtractedItem {
 export const EXTRACT_PROMPT = `These photos show a packaged food product (front of pack and/or its nutrition label).
 
 Extract, for the WHOLE PACKAGE:
-- name: the product name as a shopper would say it (brand optional, no slogans)
+- name: the product name as a shopper would say it, WITHOUT the brand and without slogans (e.g. "Dal & rice with spinach", not "Firepot Dal & rice")
+- brand: the brand / manufacturer on its own (e.g. "Firepot"); null if not shown
 - weight_grams: net weight of the whole package in grams; convert from oz if needed (1 oz = 28.35 g)
 - calories_per_package: total calories in the whole package; if the label only gives per-serving values, multiply by the servings per package
 - vegetarian: true if marked vegetarian/vegan or clearly plant-based, false if it contains meat or fish, null if unclear
@@ -27,12 +30,13 @@ Use null for any value that is not legible or not present in the photos. Do not 
 export const EXTRACT_SCHEMA = {
   type: 'object',
   properties: {
-    name: { type: 'string', description: 'Product name' },
+    name: { type: 'string', description: 'Product name without the brand' },
+    brand: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     weight_grams: { anyOf: [{ type: 'number' }, { type: 'null' }] },
     calories_per_package: { anyOf: [{ type: 'number' }, { type: 'null' }] },
     vegetarian: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
   },
-  required: ['name', 'weight_grams', 'calories_per_package', 'vegetarian'],
+  required: ['name', 'brand', 'weight_grams', 'calories_per_package', 'vegetarian'],
   additionalProperties: false,
 } as const
 
@@ -66,6 +70,10 @@ export function parseExtractedItem(text: string): ParseExtractedResult {
   if (typeof obj.name !== 'string' || obj.name.trim() === '') {
     return { ok: false, error: 'missing product name' }
   }
+  if (obj.brand !== null && obj.brand !== undefined && typeof obj.brand !== 'string') {
+    return { ok: false, error: `brand must be a string or null, got ${JSON.stringify(obj.brand)}` }
+  }
+  const brand = typeof obj.brand === 'string' && obj.brand.trim() !== '' ? obj.brand.trim() : null
   const weightG = numberOrNull(obj.weight_grams, 'weight_grams', 0.1)
   if (typeof weightG === 'string') return { ok: false, error: weightG }
   const calories = numberOrNull(obj.calories_per_package, 'calories_per_package', 0)
@@ -78,6 +86,7 @@ export function parseExtractedItem(text: string): ParseExtractedResult {
     ok: true,
     item: {
       name: obj.name.trim(),
+      brand,
       weightG,
       calories,
       vegetarian: obj.vegetarian as boolean | null,

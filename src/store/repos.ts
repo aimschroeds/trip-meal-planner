@@ -128,6 +128,7 @@ function itemFromFields(fields: ItemFields, existing?: Item): Item {
   return {
     id: existing?.id ?? crypto.randomUUID(),
     name: fields.name,
+    brand: fields.brand,
     caloriesPerGram: calorieDensity({ weightG: fields.weightG, calories: fields.calories }),
     vegetarian: fields.vegetarian,
     // CSV doesn't carry the basis; the raw values round-trip regardless.

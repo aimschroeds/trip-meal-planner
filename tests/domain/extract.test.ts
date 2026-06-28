@@ -12,17 +12,33 @@ describe('parseExtractedItem', () => {
   it('accepts a complete answer', () => {
     expect(parseExtractedItem(valid)).toEqual({
       ok: true,
-      item: { name: "Firepot Mac'n'Greens", weightG: 200, calories: 850, vegetarian: true },
+      item: { name: "Firepot Mac'n'Greens", brand: null, weightG: 200, calories: 850, vegetarian: true },
+    })
+  })
+
+  it('extracts the brand separately from the name', () => {
+    const result = parseExtractedItem(
+      '{"name": "Dal & rice with spinach", "brand": "Firepot", "weight_grams": 200, "calories_per_package": 760, "vegetarian": true}',
+    )
+    expect(result).toEqual({
+      ok: true,
+      item: {
+        name: 'Dal & rice with spinach',
+        brand: 'Firepot',
+        weightG: 200,
+        calories: 760,
+        vegetarian: true,
+      },
     })
   })
 
   it('accepts nulls for unreadable values', () => {
     const result = parseExtractedItem(
-      '{"name": "Mystery bar", "weight_grams": null, "calories_per_package": null, "vegetarian": null}',
+      '{"name": "Mystery bar", "brand": null, "weight_grams": null, "calories_per_package": null, "vegetarian": null}',
     )
     expect(result).toEqual({
       ok: true,
-      item: { name: 'Mystery bar', weightG: null, calories: null, vegetarian: null },
+      item: { name: 'Mystery bar', brand: null, weightG: null, calories: null, vegetarian: null },
     })
   })
 

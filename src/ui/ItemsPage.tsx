@@ -28,6 +28,7 @@ const BASES: { value: InputBasis; label: string }[] = [
 
 interface Draft {
   name: string
+  brand: string
   basis: InputBasis
   weightG: string
   calories: string
@@ -48,6 +49,7 @@ const GEN_MEAL_TYPES: MealType[] = ['brekkie', 'lunch', 'dinner', 'snack']
 
 const emptyDraft: Draft = {
   name: '',
+  brand: '',
   basis: 'per_100g',
   weightG: '100',
   calories: '',
@@ -137,6 +139,7 @@ export function ItemsPage() {
     const item: Item = {
       id: editingId ?? crypto.randomUUID(),
       name: draft.name.trim(),
+      brand: draft.brand.trim() || undefined,
       caloriesPerGram: density,
       vegetarian: draft.vegetarian,
       inputBasis: draft.basis,
@@ -159,6 +162,7 @@ export function ItemsPage() {
     setEditingId(item.id)
     setDraft({
       name: item.name,
+      brand: item.brand ?? '',
       basis: item.inputBasis,
       weightG: String(item.inputWeightG),
       calories: String(item.inputCalories),
@@ -181,6 +185,7 @@ export function ItemsPage() {
     setEditingId(null)
     setDraft({
       name: extracted.name,
+      brand: extracted.brand ?? '',
       basis: 'per_package',
       weightG: extracted.weightG !== null ? String(extracted.weightG) : '',
       calories: extracted.calories !== null ? String(extracted.calories) : '',
@@ -227,13 +232,22 @@ export function ItemsPage() {
           {editingId ? 'Edit item' : 'Add item'}
         </h2>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
+          <label className="block grow">
             <span className="block text-sm text-gray-600">Name</span>
             <input
-              className="mt-1 rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full min-w-72 rounded border border-gray-300 px-2 py-1"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="Oatmeal"
+              placeholder="Dal & rice with spinach"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-sm text-gray-600">Brand</span>
+            <input
+              className="mt-1 w-44 rounded border border-gray-300 px-2 py-1"
+              value={draft.brand}
+              onChange={(e) => setDraft({ ...draft, brand: e.target.value })}
+              placeholder="Firepot"
             />
           </label>
           <label className="block">
@@ -432,7 +446,10 @@ export function ItemsPage() {
                 onClick={() => startEdit(item)}
                 title="Edit this item"
               >
-                <td className="py-1.5 pr-2 font-medium text-emerald-800">{item.name}</td>
+                <td className="py-1.5 pr-2">
+                  <div className="font-medium text-emerald-800">{item.name}</div>
+                  {item.brand && <div className="text-xs text-gray-400">{item.brand}</div>}
+                </td>
                 <td className="py-1.5 pr-2 text-gray-500">
                   {Math.round(item.inputCalories)} cal / {Math.round(item.inputWeightG)} g
                 </td>
@@ -497,7 +514,7 @@ function ItemsImportExport({ items }: { items: Item[] }) {
         </div>
         <p className="text-xs text-gray-500">
           Columns: name, weight_g, calories, vegetarian — weight/calories on any consistent
-          basis. Optional: min_grams, max_grams (generation bounds), serving_g (default
+          basis. Optional: brand, min_grams, max_grams (generation bounds), serving_g (default
           serving).
         </p>
         {parsed && plan && (

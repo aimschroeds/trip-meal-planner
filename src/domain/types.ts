@@ -82,6 +82,9 @@ export interface Resupply {
 export interface Item {
   id: string
   name: string
+  /** Optional brand / manufacturer, kept separate from the name so it isn't
+   *  stuffed into the title (e.g. brand "Firepot", name "Dal & rice"). */
+  brand?: string
   /** Canonical calorie density (story 4.1). */
   caloriesPerGram: number
   vegetarian: boolean
