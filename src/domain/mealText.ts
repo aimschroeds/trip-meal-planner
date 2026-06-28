@@ -5,6 +5,7 @@
 // answer, and matching the named foods back to the library. Pure — the API
 // call lives in src/extract/.
 
+import { defaultServingG } from './units'
 import type { Item, MealType } from './types'
 
 const MEAL_TYPES: MealType[] = ['brekkie', 'snack', 'lunch', 'dinner']
@@ -29,11 +30,21 @@ export interface MealDraftMatch {
 
 /** Prompt for the model — the library names are listed so it reuses them
  *  verbatim, which makes matching reliable. */
-export function buildMealPrompt(text: string, libraryNames: string[]): string {
-  const list = libraryNames.length > 0 ? libraryNames.map((n) => `- ${n}`).join('\n') : '(none yet)'
-  return `You are composing a hiking meal from a free-text description.
+export function buildMealPrompt(text: string, items: Item[]): string {
+  // Give the model each item's real serving size so its grams are grounded,
+  // not guessed — the main cause of "wildly unrealistic" quantities.
+  const list =
+    items.length > 0
+      ? items
+          .map((i) => {
+            const serving = defaultServingG(i) ?? i.inputWeightG
+            return `- ${i.name} (≈ ${Math.round(serving)} g per serving)`
+          })
+          .join('\n')
+      : '(none yet)'
+  return `You are composing one or more hiking meals from a free-text description.
 
-Available library items — use these names VERBATIM whenever the description refers to one of them:
+Available library items, with each item's serving size — use these names VERBATIM whenever the description refers to one of them, and ground your grams in the serving sizes:
 ${list}
 
 Description:
@@ -41,11 +52,16 @@ Description:
 ${text}
 """
 
-Return JSON: a short meal "name" (e.g. "Oatmeal + chia breakfast"), a "type" (one of brekkie/lunch/dinner/snack), and "components" — each a food "item" and its "grams". For every food in the description, output the matching library item name verbatim when one fits; otherwise use the food's name as written. Convert quantities to grams (e.g. a per-piece or per-package weight if known, otherwise your best estimate). Infer the meal type from the foods if the description doesn't state one.`
+Return JSON: { "meals": [ ... ] } where each meal has a short "name" (e.g. "Oatmeal + chia breakfast"), a "type" (one of brekkie/lunch/dinner/snack), and "components" — each a food "item" and its "grams". If the description clearly covers several distinct meals, return one object per meal; for a single meal, return an array with one object.
+
+Rules for grams:
+- If the description gives an explicit amount for a food (e.g. "80 g", "2 sachets", "1/8 stick"), use it.
+- Otherwise use the matching library item's serving size shown above — do NOT invent a number.
+- "N x" or "N sachets/bars/pieces" of an item = N times its serving size.
+For every food, output the matching library item name verbatim when one fits; otherwise use the food's name as written and your best gram estimate. Infer each meal's type from its foods if not stated.`
 }
 
-/** Structured-output schema matching parseMealTextAnswer. */
-export const MEAL_TEXT_SCHEMA = {
+const MEAL_SCHEMA = {
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -67,12 +83,46 @@ export const MEAL_TEXT_SCHEMA = {
   additionalProperties: false,
 } as const
 
+/** Structured-output schema: a list of meals. */
+export const MEAL_TEXT_SCHEMA = {
+  type: 'object',
+  properties: { meals: { type: 'array', items: MEAL_SCHEMA } },
+  required: ['meals'],
+  additionalProperties: false,
+} as const
+
 export type ParseMealTextResult =
-  | { ok: true; answer: MealTextAnswer }
+  | { ok: true; meals: MealTextAnswer[] }
   | { ok: false; error: string }
 
-/** Validates the model's JSON answer (tolerant of a fenced code block). */
-export function parseMealTextAnswer(text: string): ParseMealTextResult {
+function parseOneMeal(raw: unknown): MealTextAnswer | string {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return 'a meal is not an object'
+  const obj = raw as Record<string, unknown>
+  if (typeof obj.name !== 'string' || obj.name.trim() === '') return 'a meal is missing a name'
+  if (typeof obj.type !== 'string' || !MEAL_TYPES.includes(obj.type as MealType)) {
+    return `"${String(obj.name)}" has an invalid type (must be ${MEAL_TYPES.join('/')})`
+  }
+  if (!Array.isArray(obj.components) || obj.components.length === 0) {
+    return `"${String(obj.name)}" has no components`
+  }
+  const components: MealTextAnswer['components'] = []
+  for (const c of obj.components) {
+    if (typeof c !== 'object' || c === null) return 'a component is not an object'
+    const comp = c as Record<string, unknown>
+    if (typeof comp.item !== 'string' || comp.item.trim() === '') {
+      return 'a component is missing an item name'
+    }
+    if (typeof comp.grams !== 'number' || !Number.isFinite(comp.grams) || comp.grams <= 0) {
+      return `"${comp.item}" has invalid grams`
+    }
+    components.push({ item: comp.item.trim(), grams: comp.grams })
+  }
+  return { name: obj.name.trim(), type: obj.type as MealType, components }
+}
+
+/** Validates the model's JSON answer (tolerant of a fenced code block, a bare
+ *  array, or a single meal object) and returns the list of meals. */
+export function parseMealTextAnswers(text: string): ParseMealTextResult {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
   let raw: unknown
   try {
@@ -80,32 +130,21 @@ export function parseMealTextAnswer(text: string): ParseMealTextResult {
   } catch {
     return { ok: false, error: 'the model did not return valid JSON' }
   }
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { ok: false, error: 'expected a JSON object' }
+  // Accept { meals: [...] }, a bare [...], or a single meal object.
+  let list: unknown[]
+  if (Array.isArray(raw)) list = raw
+  else if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).meals)) {
+    list = (raw as Record<string, unknown>).meals as unknown[]
+  } else list = [raw]
+
+  if (list.length === 0) return { ok: false, error: 'no meals returned' }
+  const meals: MealTextAnswer[] = []
+  for (const m of list) {
+    const parsed = parseOneMeal(m)
+    if (typeof parsed === 'string') return { ok: false, error: parsed }
+    meals.push(parsed)
   }
-  const obj = raw as Record<string, unknown>
-  if (typeof obj.name !== 'string' || obj.name.trim() === '') {
-    return { ok: false, error: 'missing meal name' }
-  }
-  if (typeof obj.type !== 'string' || !MEAL_TYPES.includes(obj.type as MealType)) {
-    return { ok: false, error: `type must be one of ${MEAL_TYPES.join('/')}` }
-  }
-  if (!Array.isArray(obj.components) || obj.components.length === 0) {
-    return { ok: false, error: 'no components returned' }
-  }
-  const components: MealTextAnswer['components'] = []
-  for (const c of obj.components) {
-    if (typeof c !== 'object' || c === null) return { ok: false, error: 'a component is not an object' }
-    const comp = c as Record<string, unknown>
-    if (typeof comp.item !== 'string' || comp.item.trim() === '') {
-      return { ok: false, error: 'a component is missing an item name' }
-    }
-    if (typeof comp.grams !== 'number' || !Number.isFinite(comp.grams) || comp.grams <= 0) {
-      return { ok: false, error: `"${comp.item}" has invalid grams` }
-    }
-    components.push({ item: comp.item.trim(), grams: comp.grams })
-  }
-  return { ok: true, answer: { name: obj.name.trim(), type: obj.type as MealType, components } }
+  return { ok: true, meals }
 }
 
 /** Match the model's named foods to library items: case-insensitive exact

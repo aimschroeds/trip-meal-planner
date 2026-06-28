@@ -136,18 +136,19 @@ export function MealsPage() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  /** Drop a natural-language-built meal into the composer for review. */
-  function buildFromText(draft: MealDraftMatch) {
-    setEditingId(null)
-    setDraft({
-      name: draft.name,
-      type: draft.type,
-      components: [
-        ...draft.components.map((c) => ({ itemId: c.itemId, grams: String(c.grams) })),
-        { itemId: '', grams: '' },
-      ],
-    })
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  /** Save a batch of natural-language-built meals to the library (each already
+   *  reviewed in the builder's preview). Unmatched foods are dropped; the user
+   *  adds them by hand via the row → edit. */
+  async function saveBuiltMeals(drafts: MealDraftMatch[]) {
+    const newMeals: Meal[] = drafts
+      .filter((d) => d.components.length > 0)
+      .map((d) => ({
+        id: crypto.randomUUID(),
+        name: d.name,
+        type: d.type,
+        components: d.components,
+      }))
+    if (newMeals.length > 0) await db.meals.bulkPut(newMeals)
   }
 
   /** Open a copy of a meal in the composer as a new (unsaved) meal. */
@@ -290,7 +291,7 @@ export function MealsPage() {
         </div>
       </form>
 
-      <MealTextBuilder items={items} onBuild={buildFromText} />
+      <MealTextBuilder items={items} onSave={(drafts) => void saveBuiltMeals(drafts)} />
 
       <div className="flex items-center gap-4 text-sm">
         <label className="flex items-center gap-1">

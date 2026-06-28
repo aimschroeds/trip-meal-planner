@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMealPrompt,
   matchMealDraft,
-  parseMealTextAnswer,
+  parseMealTextAnswers,
   type MealTextAnswer,
 } from '../../src/domain/mealText'
 import type { Item } from '../../src/domain/types'
 
-function item(id: string, name: string): Item {
+function item(id: string, name: string, inputWeightG = 50): Item {
   return {
     id,
     name,
     caloriesPerGram: 4,
     vegetarian: true,
     inputBasis: 'per_serving',
-    inputWeightG: 50,
+    inputWeightG,
     inputCalories: 200,
   }
 }
@@ -22,49 +22,87 @@ function item(id: string, name: string): Item {
 const library = [item('oats', 'Oatmeal'), item('chia', 'Chia seeds'), item('butter', '1/8 Butter Stick')]
 
 describe('buildMealPrompt', () => {
-  it('lists the library names for the model to match against', () => {
-    const prompt = buildMealPrompt('oatmeal + chia', ['Oatmeal', 'Chia seeds'])
+  it('lists the library names and serving sizes for the model to match against', () => {
+    const prompt = buildMealPrompt('oatmeal + chia', library)
     expect(prompt).toContain('- Oatmeal')
     expect(prompt).toContain('- Chia seeds')
+    expect(prompt).toContain('g per serving')
     expect(prompt).toContain('oatmeal + chia')
+  })
+
+  it('asks for a list of meals', () => {
+    const prompt = buildMealPrompt('breakfast and dinner', library)
+    expect(prompt).toContain('"meals"')
   })
 })
 
-describe('parseMealTextAnswer', () => {
-  it('accepts a valid answer', () => {
+describe('parseMealTextAnswers', () => {
+  it('accepts a { meals: [...] } answer', () => {
     const json = JSON.stringify({
-      name: 'Oatmeal breakfast',
-      type: 'brekkie',
-      components: [{ item: 'Oatmeal', grams: 80 }],
+      meals: [
+        { name: 'Oatmeal breakfast', type: 'brekkie', components: [{ item: 'Oatmeal', grams: 80 }] },
+      ],
     })
-    const result = parseMealTextAnswer(json)
+    const result = parseMealTextAnswers(json)
     expect(result).toEqual({
       ok: true,
-      answer: { name: 'Oatmeal breakfast', type: 'brekkie', components: [{ item: 'Oatmeal', grams: 80 }] },
+      meals: [
+        { name: 'Oatmeal breakfast', type: 'brekkie', components: [{ item: 'Oatmeal', grams: 80 }] },
+      ],
     })
   })
 
+  it('accepts several meals in one answer', () => {
+    const json = JSON.stringify({
+      meals: [
+        { name: 'Brekkie', type: 'brekkie', components: [{ item: 'Oatmeal', grams: 80 }] },
+        { name: 'Dinner', type: 'dinner', components: [{ item: 'Chia seeds', grams: 20 }] },
+      ],
+    })
+    const result = parseMealTextAnswers(json)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.meals).toHaveLength(2)
+      expect(result.meals[1].name).toBe('Dinner')
+    }
+  })
+
+  it('tolerates a bare array', () => {
+    const json = '[{"name":"X","type":"snack","components":[{"item":"Bar","grams":40}]}]'
+    const result = parseMealTextAnswers(json)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.meals).toHaveLength(1)
+  })
+
+  it('tolerates a single meal object', () => {
+    const json = '{"name":"X","type":"snack","components":[{"item":"Bar","grams":40}]}'
+    const result = parseMealTextAnswers(json)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.meals).toHaveLength(1)
+  })
+
   it('tolerates a fenced code block', () => {
-    const json = '```json\n{"name":"X","type":"snack","components":[{"item":"Bar","grams":40}]}\n```'
-    const result = parseMealTextAnswer(json)
+    const json =
+      '```json\n{"meals":[{"name":"X","type":"snack","components":[{"item":"Bar","grams":40}]}]}\n```'
+    const result = parseMealTextAnswers(json)
     expect(result.ok).toBe(true)
   })
 
   it('rejects a bad meal type', () => {
-    const json = '{"name":"X","type":"brunch","components":[{"item":"Bar","grams":40}]}'
-    const result = parseMealTextAnswer(json)
+    const json = '{"meals":[{"name":"X","type":"brunch","components":[{"item":"Bar","grams":40}]}]}'
+    const result = parseMealTextAnswers(json)
     expect(result).toMatchObject({ ok: false })
-    if (!result.ok) expect(result.error).toContain('type must be')
+    if (!result.ok) expect(result.error).toContain('invalid type')
   })
 
   it('rejects components with non-positive grams', () => {
-    const json = '{"name":"X","type":"snack","components":[{"item":"Bar","grams":0}]}'
-    const result = parseMealTextAnswer(json)
+    const json = '{"meals":[{"name":"X","type":"snack","components":[{"item":"Bar","grams":0}]}]}'
+    const result = parseMealTextAnswers(json)
     expect(result).toMatchObject({ ok: false })
   })
 
   it('rejects non-JSON', () => {
-    expect(parseMealTextAnswer('sorry, I cannot').ok).toBe(false)
+    expect(parseMealTextAnswers('sorry, I cannot').ok).toBe(false)
   })
 })
 

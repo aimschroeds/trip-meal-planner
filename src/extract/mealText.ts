@@ -7,23 +7,24 @@ import Anthropic from '@anthropic-ai/sdk'
 import {
   MEAL_TEXT_SCHEMA,
   buildMealPrompt,
-  parseMealTextAnswer,
+  parseMealTextAnswers,
   type MealTextAnswer,
 } from '../domain/mealText'
+import type { Item } from '../domain/types'
 import { EXTRACT_MODEL } from './config'
 
-export async function buildMealFromText(
+export async function buildMealsFromText(
   apiKey: string,
   text: string,
-  libraryNames: string[],
-): Promise<MealTextAnswer> {
+  items: Item[],
+): Promise<MealTextAnswer[]> {
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 1 })
 
   const response = await client.messages.create({
     model: EXTRACT_MODEL,
-    max_tokens: 1024,
+    max_tokens: 2048,
     output_config: { format: { type: 'json_schema', schema: MEAL_TEXT_SCHEMA } },
-    messages: [{ role: 'user', content: [{ type: 'text', text: buildMealPrompt(text, libraryNames) }] }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: buildMealPrompt(text, items) }] }],
   })
 
   if (response.stop_reason === 'refusal') {
@@ -33,9 +34,9 @@ export async function buildMealFromText(
     .filter((b) => b.type === 'text')
     .map((b) => b.text)
     .join('')
-  const result = parseMealTextAnswer(out)
+  const result = parseMealTextAnswers(out)
   if (!result.ok) throw new Error(`Could not build the meal: ${result.error}`)
-  return result.answer
+  return result.meals
 }
 
 // Reuse the photo-extract error mapping (same API failure modes).
