@@ -8,12 +8,15 @@ import type { Day } from '../types'
 import type { CsvIssue } from './items'
 
 export const ITINERARY_CSV_COLUMNS = ['day', 'distance_km', 'ascent_m'] as const
-// `name` is optional on import; emitted on export.
-export const ITINERARY_CSV_OPTIONAL_COLUMNS = ['name'] as const
+// All optional on import: a leg `name`, plus `start`/`end` locations that feed
+// the AI day description (Epic 19).
+export const ITINERARY_CSV_OPTIONAL_COLUMNS = ['name', 'start', 'end'] as const
 
 export interface ItineraryRow {
   dayIndex: number
   name?: string
+  start?: string
+  end?: string
   distanceKm: number
   ascentM: number
 }
@@ -58,7 +61,9 @@ export function parseItineraryCsv(text: string): { rows: ItineraryRow[]; issues:
       })
     }
     const name = raw.name?.trim() || undefined
-    rows.push({ dayIndex, name, distanceKm, ascentM })
+    const start = raw.start?.trim() || undefined
+    const end = raw.end?.trim() || undefined
+    rows.push({ dayIndex, name, start, end, distanceKm, ascentM })
   })
 
   return { rows, issues }
@@ -80,6 +85,8 @@ export function applyItinerary(
     return {
       ...d,
       name: r.name,
+      start: r.start,
+      end: r.end,
       distanceKm: r.distanceKm,
       ascentM: r.ascentM,
       type: classifyDayType(dayEffortKm(r.distanceKm, r.ascentM)),

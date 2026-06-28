@@ -51,6 +51,14 @@ describe('parseItineraryCsv', () => {
     expect(rows[1]).toEqual({ dayIndex: 2, name: undefined, distanceKm: 18, ascentM: 600 })
   })
 
+  it('parses optional start/end locations', () => {
+    const { rows, issues } = parseItineraryCsv(
+      ['day,distance_km,ascent_m,start,end', '1,10,500,Tuolumne Meadows,Sunrise Camp'].join('\n'),
+    )
+    expect(issues).toHaveLength(0)
+    expect(rows[0]).toMatchObject({ start: 'Tuolumne Meadows', end: 'Sunrise Camp' })
+  })
+
   it('reports bad rows with line numbers without blocking good ones', () => {
     const { rows, issues } = parseItineraryCsv(
       ['day,distance_km,ascent_m', '1,10,500', 'x,5,100', '3,-2,100'].join('\n'),
@@ -80,6 +88,13 @@ describe('applyItinerary', () => {
     expect(unmatched).toEqual([])
     expect(days.map((d) => d.type)).toEqual(['small', 'average', 'big'])
     expect(days[0]).toMatchObject({ name: 'Easy in', distanceKm: 8, ascentM: 200 })
+  })
+
+  it('sets start/end locations on matched days', () => {
+    const { days } = applyItinerary(trip.days, [
+      { dayIndex: 1, start: 'A', end: 'B', distanceKm: 8, ascentM: 200 },
+    ])
+    expect(days[0]).toMatchObject({ start: 'A', end: 'B' })
   })
 
   it('reports rows for days that are not in the trip', () => {

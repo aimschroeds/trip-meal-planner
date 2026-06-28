@@ -51,6 +51,14 @@ export interface Day {
   name?: string
   distanceKm?: number
   ascentM?: number
+  /** Start / end locations of the day's leg (Epic 19). Used to derive the
+   *  AI day description; fall back to `name` when absent. */
+  start?: string
+  end?: string
+  /** AI-generated 1–2 sentence summary of the day's eating strategy (lunch
+   *  stops, snack spots, or eat-on-the-go). Generated from the itinerary,
+   *  stored so it persists; editable/re-generatable. */
+  description?: string
 }
 
 export interface Trip {
