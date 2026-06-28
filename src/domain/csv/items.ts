@@ -11,6 +11,7 @@ export const ITEM_CSV_COLUMNS = ['name', 'weight_g', 'calories', 'vegetarian'] a
 /** Generation-bound and unit columns are optional on import (older exports
  *  lack them) but always emitted on export so round-trips stay lossless. */
 export const ITEM_CSV_OPTIONAL_COLUMNS = [
+  'brand',
   'min_grams',
   'max_grams',
   'unit_weight_g',
@@ -28,6 +29,7 @@ export interface CsvIssue {
 
 export interface ItemFields {
   name: string
+  brand?: string
   weightG: number
   calories: number
   vegetarian: boolean
@@ -69,6 +71,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
   parsed.data.forEach((raw, i) => {
     const line = i + 2
     const name = (raw.name ?? '').trim()
+    const brand = raw.brand?.trim() || undefined
     const weightG = Number(raw.weight_g)
     const calories = Number(raw.calories)
     const vegetarian = parseBool(raw.vegetarian ?? '')
@@ -141,6 +144,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
       line,
       fields: {
         name,
+        brand,
         weightG,
         calories,
         vegetarian,
@@ -223,6 +227,7 @@ export function itemsToCsv(items: Item[]): string {
   return Papa.unparse(
     items.map((i) => ({
       name: i.name,
+      brand: i.brand ?? '',
       weight_g: i.inputWeightG,
       calories: i.inputCalories,
       vegetarian: i.vegetarian,

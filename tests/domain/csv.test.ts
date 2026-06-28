@@ -92,6 +92,13 @@ describe('items CSV round-trip', () => {
     })
   })
 
+  it('round-trips the brand when set', () => {
+    const branded: Item = { ...butter, brand: 'Firepot' }
+    const { rows, issues } = parseItemsCsv(itemsToCsv([branded]))
+    expect(issues).toHaveLength(0)
+    expect(rows[0].fields.brand).toBe('Firepot')
+  })
+
   it('round-trips generation bounds when set (§6.3)', () => {
     const bounded: Item = { ...butter, minGrams: 5, maxGrams: 30 }
     const { rows, issues } = parseItemsCsv(itemsToCsv([bounded]))
