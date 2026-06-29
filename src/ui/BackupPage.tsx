@@ -10,6 +10,7 @@ import {
 } from '../domain/backup'
 import { downloadJson } from './download'
 import { fileInputClass } from './styles'
+import { SyncPanel } from './SyncPanel'
 
 const TABLE_LABELS: Record<(typeof BACKUP_TABLES)[number], string> = {
   trips: 'trips',
@@ -92,6 +93,8 @@ export function BackupPage() {
 
   return (
     <div className="max-w-xl space-y-6">
+      <SyncPanel />
+
       <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="font-semibold text-gray-800">Export backup</h2>
         <p className="text-sm text-gray-600">

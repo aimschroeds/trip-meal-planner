@@ -68,3 +68,13 @@ export function changedSince<T>(records: SyncRecord<T>[], sinceMs: number): Sync
 export function latestCursor(records: SyncRecord[], fallback = 0): number {
   return records.reduce((max, r) => (r.updatedAt > max ? r.updatedAt : max), fallback)
 }
+
+const WORKSPACE_TOKEN_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+/** Pull a workspace link token (a UUID) out of arbitrary input — a bare token,
+ *  a full share URL, or a `#join=…` fragment — so the connect field is
+ *  forgiving about what gets pasted. Returns null when there's no token. */
+export function extractWorkspaceToken(input: string): string | null {
+  const match = input.match(WORKSPACE_TOKEN_RE)
+  return match ? match[0].toLowerCase() : null
+}
