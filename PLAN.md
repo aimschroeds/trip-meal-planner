@@ -36,6 +36,12 @@ Choose this instead only if any of these become requirements:
 
 The architecture below keeps this door open: the **domain core is a pure TypeScript package with zero browser dependencies**, so it could later run in a Node API, or its logic could be ported behind a FastAPI service while the React app stays intact. A cheaper middle ground for multi-device is adding an optional sync layer (e.g., export-to-file or a tiny sync endpoint) later.
 
+> **Update:** real multi-user collaboration is now in scope. Rather than the
+> FastAPI rewrite above, we keep the app local-first and bolt on an optional
+> **sync layer over Supabase** — see **§10 (Backend & collaboration)** and
+> milestones M7–M9. IndexedDB stays the local source of truth; the backend is a
+> sync target, not the database the UI reads from.
+
 ---
 
 ## 2. Architecture
@@ -127,6 +133,9 @@ Each milestone ships something usable; order front-loads the riskiest pure logic
 | **M4** | **Manual planning + totals**: per-person day grid, slot assignment, off-trail slots, day/carry/trip summaries with target flagging | 5.1–5.3, 6.1–6.2, 7.1–7.4 |
 | **M5** | **CSV import/export** with validation preview and duplicate handling | 4.8–4.10 |
 | **M6** | **Plan generation**: generate day/carry, locking, regenerate, quantity scaling | 8.1–8.3 |
+| **M7** | **Cloud workspace + two-way sync** (foundation): Supabase project, anon auth, mirrored schema, per-row `updatedAt`/`deletedAt`, delta push/pull, "publish → share link" / "open link → connect". Delivers multi-device for one user. | §10 |
+| **M8** | **Realtime collaboration**: subscribe to workspace row changes and apply them live, last-write-wins on conflict, sync-status indicator. Where collaboration actually lights up. | §10 |
+| **M9** | **Sharing polish & safety**: link rotation/revoke, optional read-only link, presence, connect-time guardrails (export/confirm before overwrite), RLS hardening + tests. | §10 |
 
 Rationale for the order: M1 first because everything depends on the library and density math; M4 before generation because the manual planner *is* the UI generation writes into — generation (M6) then becomes "compute entries, insert them", reusing everything. CSV (M5) lands before M6 so you can seed a realistic library to exercise the generator against.
 
@@ -239,3 +248,122 @@ Remaining work after M0–M6, in priority order. One PR each.
     photo-extract key + lazy-loaded SDK. Result is always a draft for review;
     unmatched foods are reported. Composer speedups (duplicate, rapid
     keyboard entry, multi-add) ship alongside.
+
+---
+
+## 10. Backend & collaboration (M7–M9)
+
+The app shipped M0–M6 as a pure local-first SPA — "Why no backend?" (§1) held
+while every feature was single-user. It no longer does: the goal now is
+**multiple people collaborating on a trip**, which needs identity, shared
+storage, and a conflict story. This section is the design for adding that
+*without* discarding what makes the app good.
+
+### Guiding principle: stay local-first, add sync — don't move the source of truth
+
+The domain core is pure and Dexie owns local storage (§2). We keep that. The
+backend becomes a **sync target**, not the database the UI reads from:
+
+- **IndexedDB stays the local source of truth.** The app keeps working offline
+  exactly as today; edits write to Dexie first and sync in the background.
+- The sync engine push/pulls *rows*, reusing the merge intuition already in
+  `domain/backup.ts` (`mergeBackup` is a whole-file `bulkPut` union; sync is the
+  same idea made incremental and timestamped).
+- **The pure last-write-wins resolver lives in `domain/`** (testable: given two
+  versions of a row, newer `updatedAt` wins; a tombstone beats an older edit).
+  All Supabase I/O lives in a new networked module (`src/sync/`).
+
+### The three decisions (resolved)
+
+1. **Shared library per group.** Items and meals stop being a single global
+   pantry and become owned by a **workspace** (the group). Everyone in the
+   workspace sees and edits the same catalog, so fixing "Mountain House Chili"
+   helps everyone.
+2. **Share-link access (no accounts).** A workspace has a secret **link token**;
+   opening the link joins you to the workspace as an editor. No sign-up UI.
+3. **Near-real-time.** Supabase realtime pushes others' changes in ~1–2 s;
+   true conflicts resolve last-write-wins. **No CRDT** — see below for why
+   that's safe here.
+
+### The `workspace` is the unit of sharing
+
+Decisions 1 and 2 interact: because the library is *group*-shared, a trip can't
+be handed over cleanly without its library, and the library belongs to the
+group. So the link admits someone to the **whole workspace** — the shared
+pantry *and* all its trips — not a single trip. (Per-trip *read-only* links are
+a possible M9+ refinement; v1 shares the workspace.)
+
+A workspace owns all six existing tables' rows. Locally, the app has one active
+workspace: a brand-new install is a private **local-only** workspace (identical
+to today's behaviour, offline, nothing uploaded); "Publish" creates a cloud
+workspace and a link; "Open link" connects this device to that cloud workspace.
+
+### Why collaboration is cheap here: per-person plans
+
+The expensive part of collaboration is merge conflicts. They barely exist in
+this app because **plans are already fully individual per person** (story 5.3 —
+each person owns their own `planEntries` rows). Two hikers editing the same
+trip touch different rows; you edit your meals, I edit mine. The only genuinely
+shared, concurrently-editable rows are the library (items/meals) and trip
+setup, where collisions are rare and a lost edit is low-stakes. That is exactly
+the regime where **per-row last-write-wins is sufficient** — no operational
+transform, no CRDT.
+
+### Sync model
+
+- Every synced row gains `updatedAt` (epoch ms, set on every write) and a soft
+  **tombstone** `deletedAt?` so deletions propagate (a hard delete can't sync).
+  Dexie bumps to **v5** to index these; the JSON backup/restore path stamps
+  `updatedAt` on load so existing data and backups migrate cleanly.
+- Postgres mirrors the six tables, each with a `workspace_id` column. The client
+  keeps a `lastPulledAt` cursor per workspace: **push** local rows with
+  `updatedAt > lastPulledAt`, **pull** server rows with `updatedAt >
+  lastPulledAt`, merge both directions with the pure LWW resolver.
+- **Realtime** subscribes to the workspace's rows (Postgres-changes) and applies
+  incoming rows to Dexie through the same resolver, so a live edit and a
+  reconnect-and-pull use one code path.
+
+### Identity, access, and RLS (the hard part)
+
+Share-link-without-accounts is a **bearer capability**, which RLS doesn't model
+out of the box. The idiomatic Supabase path:
+
+- The app calls `signInAnonymously()` → a stable per-device anon user + JWT.
+- A `workspace_links` table holds secret tokens; the link redeems via an RPC
+  that inserts `(workspace_id, auth.uid())` into `workspace_members`.
+- **RLS** on every table: a row is visible/editable iff its `workspace_id` is in
+  the caller's `workspace_members`. Realtime authorizes through the same policy,
+  so no parallel auth plumbing.
+- This gives real **revocation** (rotate the link token; optionally prune
+  members) and a clean upgrade path to proper email accounts later (link the
+  anon user to an email) if the "accounts" model is ever wanted.
+
+### Security & privacy implications (call-outs)
+
+- **The Anthropic API key never syncs.** It stays in localStorage, never in
+  Dexie, never in a backup, and now explicitly **never in a workspace** (§
+  extract rule). It is per-device and is not collaboration state.
+- **The share link is a password.** Anyone with it can edit everything in the
+  workspace; treat it as a secret and rotate to revoke.
+- **The Supabase anon key is publishable** — safe to ship in the static GitHub
+  Pages bundle (it's not a secret; RLS is what protects data). It enters the
+  build via `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (GitHub Actions repo
+  variables; no secret needed).
+- **Data now leaves the device.** The original pitch was "nothing to secure, all
+  local." Publishing a workspace stores its data on Supabase; a local-only
+  workspace still uploads nothing. The choice is explicit and per-workspace.
+
+### Architecture-rule impact
+
+- `src/extract/` is no longer "the only networked code": add `src/sync/` for the
+  Supabase client, push/pull, and realtime. `domain/` stays pure (the LWW
+  resolver and any sync-planning logic are pure and tested there).
+- `CLAUDE.md` updates: networked code = `extract/` (Anthropic) **and** `sync/`
+  (Supabase); reaffirm the key never reaches Dexie/backups/workspaces.
+
+### Prerequisites before M7 implementation
+
+1. A **Supabase project** (free tier) — its project URL and anon (publishable)
+   key, wired as `VITE_SUPABASE_*` build variables.
+2. Acceptance that published-workspace data is stored on Supabase (local-only
+   workspaces remain fully offline).
