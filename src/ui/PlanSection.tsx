@@ -602,14 +602,13 @@ function SlotCell({
   mealsById: ReadonlyMap<string, Meal>
   itemsById: ReadonlyMap<string, Item>
 }) {
-  // Vegetarian people only see vegetarian meals/items (story 1.3).
+  // The manual picker offers everything — a deliberate pick shouldn't be
+  // blocked by diet (story 1.3's vegetarian filter applies to generation, not
+  // hand-picking). Non-veg options are flagged for a vegetarian person below.
   const eligibleMeals = meals
     .filter((m) => mealSlotTypes(m).includes(keyed.slot.type))
-    .filter((m) => !person.vegetarian || rollUpMeal(m, itemsById).vegetarian)
     .sort((a, b) => a.name.localeCompare(b.name))
-  const eligibleItems = [...itemsById.values()]
-    .filter((i) => !person.vegetarian || i.vegetarian)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const eligibleItems = [...itemsById.values()].sort((a, b) => a.name.localeCompare(b.name))
 
   const loc = {
     tripId: trip.id,
@@ -757,17 +756,22 @@ function SlotCell({
                 return {
                   value: `m:${m.id}`,
                   label: m.name,
+                  // Flag off-diet picks only for a vegetarian person.
+                  sublabel: person.vegetarian && !r.vegetarian ? 'non-veg' : undefined,
                   group: 'Meals',
                   hint: r.weightG > 0 ? fmtDensity(r.calories / r.weightG) : undefined,
                 }
               }),
-              ...eligibleItems.map((i) => ({
-                value: `i:${i.id}`,
-                label: i.name,
-                sublabel: i.brand,
-                group: 'Items',
-                hint: fmtDensity(i.caloriesPerGram),
-              })),
+              ...eligibleItems.map((i) => {
+                const nonVeg = person.vegetarian && !i.vegetarian
+                return {
+                  value: `i:${i.id}`,
+                  label: i.name,
+                  sublabel: [i.brand, nonVeg ? 'non-veg' : null].filter(Boolean).join(' · ') || undefined,
+                  group: 'Items',
+                  hint: fmtDensity(i.caloriesPerGram),
+                }
+              }),
             ]}
           />
         </>
