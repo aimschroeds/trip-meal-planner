@@ -7,6 +7,8 @@ import {
   defaultServingG,
   gramsForUnits,
   packagesForGrams,
+  purchaseQuantity,
+  tripShoppingList,
   unitsForGrams,
 } from '../../src/domain/units'
 import type { Item, Meal, PlanEntry } from '../../src/domain/types'
@@ -186,5 +188,52 @@ describe('carryShoppingList', () => {
       itemsById,
     })
     expect(list).toEqual([])
+  })
+
+  it('trip shopping list aggregates all carries into buy quantities, by name', () => {
+    const entriesByKey = byKey([entry('alice', 1), entry('bob', 1)])
+    const list = tripShoppingList({
+      carries: deriveCarries(trip, []),
+      personIds: ['alice', 'bob'],
+      entriesByKey,
+      mealsById,
+      itemsById,
+    })
+    // Sorted by name: Cheese before Tortillas.
+    expect(list.map((l) => l.item.id)).toEqual(['cheese', 'tortillas'])
+    // 2 wraps → 256 g of a 512 g bag → 1 pack; 100 g cheese → by weight.
+    expect(list.find((l) => l.item.id === 'tortillas')!.purchase).toEqual({
+      kind: 'pack',
+      count: 1,
+      eachG: 512,
+    })
+    expect(list.find((l) => l.item.id === 'cheese')!.purchase).toEqual({ kind: 'weight', grams: 100 })
+  })
+})
+
+describe('purchaseQuantity', () => {
+  it('buys per-package items in whole packs (you buy 2, not 248 g)', () => {
+    const bar: Item = { ...cheese, inputBasis: 'per_package', inputWeightG: 180 }
+    expect(purchaseQuantity(bar, 248)).toEqual({ kind: 'pack', count: 2, eachG: 180 })
+  })
+
+  it('buys piece items (unit weight) in whole pieces', () => {
+    const bar: Item = {
+      ...cheese,
+      inputBasis: 'per_serving',
+      inputWeightG: 55,
+      unitWeightG: 55,
+      unitName: 'bar',
+    }
+    expect(purchaseQuantity(bar, 130)).toEqual({ kind: 'piece', count: 3, unitName: 'bar' })
+  })
+
+  it('treats a per-serving item as whole single-serve packs', () => {
+    const meal: Item = { ...cheese, inputBasis: 'per_serving', inputWeightG: 148 }
+    expect(purchaseQuantity(meal, 296)).toEqual({ kind: 'pack', count: 2, eachG: 148 })
+  })
+
+  it('buys bulk (per-100g / per-gram) items by weight', () => {
+    expect(purchaseQuantity(cheese, 150)).toEqual({ kind: 'weight', grams: 150 })
   })
 })
