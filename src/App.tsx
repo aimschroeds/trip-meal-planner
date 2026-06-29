@@ -4,6 +4,7 @@ import { HelpPanel } from './ui/HelpPanel'
 import { ItemsPage } from './ui/ItemsPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
+import { readJoinToken } from './sync/workspace'
 
 const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
 type Tab = (typeof TABS)[number]
@@ -11,7 +12,9 @@ type Tab = (typeof TABS)[number]
 const HELP_DISMISSED = 'intro-dismissed'
 
 function App() {
-  const [tab, setTab] = useState<Tab>('Trips')
+  // Opening a share link (…#join=<token>) lands on Backup, where the sync
+  // panel offers to connect.
+  const [tab, setTab] = useState<Tab>(() => (readJoinToken() ? 'Backup' : 'Trips'))
   // Show the intro until dismissed once; re-openable via the Help button.
   const [showHelp, setShowHelp] = useState(() => localStorage.getItem(HELP_DISMISSED) === null)
 

@@ -16,10 +16,12 @@ export interface SyncMetaRow {
 }
 
 /** Singleton sync state: which cloud workspace this device is connected to
- *  (null = purely local). */
+ *  (null = purely local), plus the share link token to display. */
 export interface SyncStateRow {
   id: 'state'
   workspaceId: string | null
+  /** Edit-link token for the connected workspace, when known (for sharing). */
+  linkToken: string | null
   lastSyncedAt: number | null
 }
 

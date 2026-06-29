@@ -2,18 +2,26 @@
 // app is purely local. Kept tiny and separate from the engine so the UI can
 // read connection state without pulling in sync logic.
 
-import { db } from '../store/db'
+import { db, type SyncStateRow } from '../store/db'
+
+export async function getSyncState(): Promise<SyncStateRow | undefined> {
+  return db.syncState.get('state')
+}
 
 export async function getActiveWorkspace(): Promise<string | null> {
   const state = await db.syncState.get('state')
   return state?.workspaceId ?? null
 }
 
-export async function setActiveWorkspace(workspaceId: string | null): Promise<void> {
+export async function setActiveWorkspace(
+  workspaceId: string | null,
+  linkToken: string | null = null,
+): Promise<void> {
   const existing = await db.syncState.get('state')
   await db.syncState.put({
     id: 'state',
     workspaceId,
+    linkToken,
     lastSyncedAt: existing?.lastSyncedAt ?? null,
   })
 }
@@ -23,6 +31,7 @@ export async function markSynced(at = Date.now()): Promise<void> {
   await db.syncState.put({
     id: 'state',
     workspaceId: existing?.workspaceId ?? null,
+    linkToken: existing?.linkToken ?? null,
     lastSyncedAt: at,
   })
 }

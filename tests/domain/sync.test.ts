@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   changedSince,
+  extractWorkspaceToken,
   latestCursor,
   mergeRecords,
   pickWinner,
@@ -71,6 +72,23 @@ describe('mergeRecords', () => {
     const merged = mergeRecords(local, remote)
     expect(merged).toHaveLength(1)
     expect(merged[0].deleted).toBe(true)
+  })
+})
+
+describe('extractWorkspaceToken', () => {
+  const token = '0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d'
+
+  it('reads a bare token', () => {
+    expect(extractWorkspaceToken(token)).toBe(token)
+  })
+
+  it('pulls the token out of a full share link or join fragment', () => {
+    expect(extractWorkspaceToken(`https://x.dev/trip-meal-planner/#join=${token}`)).toBe(token)
+    expect(extractWorkspaceToken(`  #join=${token.toUpperCase()}  `)).toBe(token)
+  })
+
+  it('returns null when there is no token', () => {
+    expect(extractWorkspaceToken('not a link')).toBeNull()
   })
 })
 
