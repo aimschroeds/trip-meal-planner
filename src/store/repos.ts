@@ -230,6 +230,16 @@ export async function addPersonToTrip(
   return person.id
 }
 
+/** Edit a person's fields (e.g. nudge their baseline calories) without touching
+ *  their plan — daily targets are derived from baselineCalories, never stored,
+ *  so this just re-derives them. */
+export async function updatePerson(
+  personId: string,
+  patch: Partial<Omit<Person, 'id'>>,
+): Promise<void> {
+  await db.people.update(personId, patch)
+}
+
 export async function removePersonFromTrip(tripId: string, personId: string): Promise<void> {
   await db.transaction('rw', db.trips, db.people, db.planEntries, async () => {
     const trip = await db.trips.get(tripId)
