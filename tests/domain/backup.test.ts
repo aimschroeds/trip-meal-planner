@@ -9,20 +9,31 @@ import {
 import { makeTrip } from '../../src/domain/trip'
 import type { Item, Meal, Person, PlanEntry, Resupply } from '../../src/domain/types'
 
+// Carry every optional field so the round-trip test proves backups preserve
+// the newer ones (brand, meal types[], day start/end/description, unit/gen
+// metadata), not just the required core.
 const oatmeal: Item = {
   id: 'item-1',
   name: 'Oatmeal',
+  brand: 'Bob’s Red Mill',
   caloriesPerGram: 3.8,
   vegetarian: true,
   inputBasis: 'per_100g',
   inputWeightG: 100,
   inputCalories: 380,
+  minGrams: 60,
+  maxGrams: 120,
+  unitWeightG: 40,
+  unitName: 'sachet',
+  servingG: 80,
+  genMealTypes: ['brekkie'],
 }
 
 const porridge: Meal = {
   id: 'meal-1',
   name: 'Porridge',
   type: 'brekkie',
+  types: ['brekkie', 'lunch'],
   components: [{ itemId: 'item-1', grams: 80 }],
 }
 
@@ -51,8 +62,23 @@ const entry: PlanEntry = {
 }
 
 function fullData(): BackupData {
+  const trip = { ...makeTrip('trip-1', 'GR20', 5), peopleIds: ['person-1'] }
+  // Give day 1 the itinerary + AI-description fields so they round-trip too.
+  trip.days = trip.days.map((d) =>
+    d.index === 1
+      ? {
+          ...d,
+          name: 'Westside Rd → Klapatche',
+          start: 'Westside Rd',
+          end: 'Klapatche Park',
+          distanceKm: 15,
+          ascentM: 938,
+          description: 'Lunch at the lake midway; eat on the go up the final climb.',
+        }
+      : d,
+  )
   return {
-    trips: [{ ...makeTrip('trip-1', 'GR20', 5), peopleIds: ['person-1'] }],
+    trips: [trip],
     people: [alice],
     items: [oatmeal],
     meals: [porridge],
