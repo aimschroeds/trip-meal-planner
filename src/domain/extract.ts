@@ -70,15 +70,48 @@ function numberOrNull(v: unknown, field: string, min: number): string | Extracte
   return v
 }
 
-/** Validates the model's JSON answer. Tolerates a fenced code block around
- *  the JSON so a non-structured-output response still parses. */
+/** Pulls the first balanced top-level JSON object out of free text. The
+ *  web-fetch path can return the answer wrapped in prose or markdown (e.g.
+ *  "Here are the facts:\n```json\n{…}\n```"), so a plain JSON.parse of the
+ *  whole message fails; scan for the first `{` and its matching `}`, skipping
+ *  braces inside strings. */
+function firstJsonObject(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}' && --depth === 0) return text.slice(start, i + 1)
+  }
+  return null
+}
+
+/** Validates the model's JSON answer. Tolerates a fenced code block or
+ *  surrounding prose around the JSON so a non-structured-output response
+ *  (e.g. the web-fetch path) still parses. */
 export function parseExtractedItem(text: string): ParseExtractedResult {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
+  const fenced = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
   let raw: unknown
   try {
-    raw = JSON.parse(cleaned)
+    raw = JSON.parse(fenced)
   } catch {
-    return { ok: false, error: 'the model did not return valid JSON' }
+    const candidate = firstJsonObject(text)
+    if (candidate === null) return { ok: false, error: 'the model did not return valid JSON' }
+    try {
+      raw = JSON.parse(candidate)
+    } catch {
+      return { ok: false, error: 'the model did not return valid JSON' }
+    }
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return { ok: false, error: 'expected a JSON object' }
