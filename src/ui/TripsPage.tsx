@@ -10,6 +10,7 @@ import {
 } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, type SlotRef } from '../domain/carries'
 import { scaledDailyTarget } from '../domain/density'
+import { activeDayFraction } from '../domain/totals'
 import {
   hasMainSlot,
   snackCount,
@@ -361,9 +362,14 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
                   />
                 </td>
                 {people.map((p) => (
-                  <td key={p.id} className="py-1.5 pr-2 text-right tabular-nums">
+                  <td
+                    key={p.id}
+                    className="py-1.5 pr-2 text-right tabular-nums"
+                    title="On-trail target = baseline × day factor × the share of meals checked on trail this day. Unchecked meals (eaten off trail) are discounted."
+                  >
                     {fmtCalories(
-                      scaledDailyTarget(p.baselineCalories, trip.dayTypeFactors[day.type]),
+                      scaledDailyTarget(p.baselineCalories, trip.dayTypeFactors[day.type]) *
+                        activeDayFraction(day),
                     )}
                   </td>
                 ))}
@@ -724,7 +730,8 @@ function FactorsSection({
         ))}
       </div>
       <p className="mt-2 text-xs text-gray-500">
-        A person's daily target = baseline × factor for the day's effort.
+        A person's daily target = baseline × factor for the day's effort, then discounted to the
+        meals checked on trail that day (unchecked meals are eaten off trail).
       </p>
     </section>
   )
