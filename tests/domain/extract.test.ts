@@ -56,6 +56,31 @@ describe('parseExtractedItem', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('extracts the JSON object out of surrounding prose (web-fetch path)', () => {
+    const result = parseExtractedItem(
+      `I fetched the page. Here are the facts for the whole package:\n${valid}\nLet me know if you need anything else.`,
+    )
+    expect(result).toEqual({
+      ok: true,
+      item: { name: "Firepot Mac'n'Greens", brand: null, weightG: 200, calories: 850, vegetarian: true },
+    })
+  })
+
+  it('handles prose around a fenced block with braces in string values', () => {
+    const answer = JSON.stringify({
+      name: 'Mac & cheese {deluxe}',
+      brand: 'Firepot',
+      weight_grams: 200,
+      calories_per_package: 850,
+      vegetarian: true,
+    })
+    const result = parseExtractedItem('Sure! Here you go:\n```json\n' + answer + '\n```\nHope that helps.')
+    expect(result).toEqual({
+      ok: true,
+      item: { name: 'Mac & cheese {deluxe}', brand: 'Firepot', weightG: 200, calories: 850, vegetarian: true },
+    })
+  })
+
   it('rejects non-JSON', () => {
     expect(parseExtractedItem('I could not read the label')).toEqual({
       ok: false,
