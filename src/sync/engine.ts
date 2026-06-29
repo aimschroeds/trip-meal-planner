@@ -40,6 +40,7 @@ const TABLE_NAME: Record<SyncKind, string> = {
   meal: 'meals',
   resupply: 'resupplies',
   planEntry: 'planEntries',
+  mark: 'marks',
 }
 
 // db.table(name) is typed Table<any, any>; the engine only uses id-keyed

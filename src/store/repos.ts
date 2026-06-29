@@ -2,7 +2,7 @@
 // Resolved decision: deleting an in-use item is BLOCKED, with the list of
 // dependents reported so the user can untangle them first.
 
-import { db } from './db'
+import { db, type MarkRow } from './db'
 import { calorieDensity } from '../domain/density'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
@@ -197,6 +197,25 @@ export async function commitMealImport(plan: MealImportPlan): Promise<void> {
   })
 }
 
+function markId(tripId: string, scope: MarkRow['scope'], ref: string): string {
+  return `${tripId}|${scope}|${ref}`
+}
+
+/** Toggle a shopping ('buy') or packing ('pack') tick-off. Each tick is its own
+ *  row (added/removed), so two people checking off different items at the same
+ *  time never overwrite each other when synced. */
+export async function toggleMark(
+  tripId: string,
+  scope: MarkRow['scope'],
+  ref: string,
+): Promise<void> {
+  const id = markId(tripId, scope, ref)
+  await db.transaction('rw', db.marks, async () => {
+    if (await db.marks.get(id)) await db.marks.delete(id)
+    else await db.marks.put({ id, tripId, scope, ref })
+  })
+}
+
 export async function createTrip(name: string, numDays: number): Promise<string> {
   const trip = makeTrip(crypto.randomUUID(), name, numDays)
   await db.trips.add(trip)
@@ -206,12 +225,13 @@ export async function createTrip(name: string, numDays: number): Promise<string>
 /** People belong to exactly one trip (plans are fully individual, story 5.3),
  *  so deleting a trip deletes its people, resupplies, and plan entries. */
 export async function deleteTrip(id: string): Promise<void> {
-  await db.transaction('rw', db.trips, db.people, db.resupplies, db.planEntries, async () => {
+  await db.transaction('rw', [db.trips, db.people, db.resupplies, db.planEntries, db.marks], async () => {
     const trip = await db.trips.get(id)
     if (!trip) return
     await db.people.bulkDelete(trip.peopleIds)
     await db.resupplies.where('tripId').equals(id).delete()
     await db.planEntries.where('tripId').equals(id).delete()
+    await db.marks.where('tripId').equals(id).delete()
     await db.trips.delete(id)
   })
 }
