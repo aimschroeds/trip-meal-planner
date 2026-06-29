@@ -44,6 +44,9 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
   // Ticked-off items while shopping. Ephemeral — a single shopping session,
   // not persisted (reloading clears it).
   const [bought, setBought] = useState<Set<string>>(new Set())
+  // Ticked-off lines while packing each carry box (keyed `carry:item`). Also
+  // ephemeral.
+  const [packed, setPacked] = useState<Set<string>>(new Set())
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
   const resupplies = useLiveQuery(
@@ -303,7 +306,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
             🎒 Packing list — per resupply carry
           </summary>
-          <div className="mt-2 space-y-3">
+          <div className="mt-2 space-y-4">
             {carries.map((carry, i) => {
               const lines = carryShoppingList({
                 carry,
@@ -313,29 +316,65 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
                 itemsById,
               })
               const { from, to } = endpoints[i]
+              const togglePacked = (key: string) =>
+                setPacked((s) => {
+                  const n = new Set(s)
+                  if (n.has(key)) n.delete(key)
+                  else n.add(key)
+                  return n
+                })
               return (
-                <div key={carry.index} className="text-sm">
-                  <span className="font-medium">
-                    Carry {carry.index}
-                    {(from || to) && ` (${from ?? 'start'} → ${to ?? 'finish'})`}
-                  </span>
+                <div key={carry.index}>
+                  <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
+                    <span className="font-medium text-gray-800">
+                      Carry {carry.index}
+                      {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
+                    </span>
+                    <span className="ml-auto shrink-0 text-xs tabular-nums text-gray-500">
+                      {fmtGrams(perCarry[i].group.weightG)} total
+                    </span>
+                  </div>
                   {lines.length === 0 ? (
-                    <span className="text-gray-500"> — nothing planned yet</span>
+                    <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
                   ) : (
-                    <ul className="mt-1 space-y-0.5">
-                      {lines.map((l) => (
-                        <li key={l.item.id} className="text-gray-700">
-                          {l.item.brand && <span className="text-gray-400">{l.item.brand} · </span>}
-                          {l.item.name} — {fmtGrams(l.grams)}
-                          {l.units !== null && (
-                            <span className="text-gray-500">
-                              {' '}
-                              · {Math.round(l.units * 10) / 10}{' '}
-                              {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                    <ul className="mt-1 space-y-0.5 text-sm">
+                      {lines.map((l) => {
+                        const key = `${carry.index}:${l.item.id}`
+                        const isPacked = packed.has(key)
+                        return (
+                          <li key={l.item.id}>
+                            <label className="flex cursor-pointer items-baseline gap-2">
+                              <input
+                                type="checkbox"
+                                className="shrink-0"
+                                checked={isPacked}
+                                onChange={() => togglePacked(key)}
+                              />
+                              <span
+                                className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                              >
+                                {l.item.brand && (
+                                  <span className="text-gray-400">{l.item.brand} · </span>
+                                )}
+                                {l.item.name}
+                              </span>
+                              {l.units !== null && (
+                                <span
+                                  className={`shrink-0 text-xs ${isPacked ? 'text-gray-400' : 'text-gray-500'}`}
+                                >
+                                  {Math.round(l.units * 10) / 10}{' '}
+                                  {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
+                                </span>
+                              )}
+                              <span
+                                className={`w-16 shrink-0 text-right tabular-nums ${isPacked ? 'text-gray-400 line-through' : 'font-medium text-emerald-800'}`}
+                              >
+                                {fmtGrams(l.grams)}
+                              </span>
+                            </label>
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </div>
@@ -343,7 +382,8 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
             })}
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            What to put in each carry's resupply box — whole-group totals, scaling included.
+            What to put in each carry's resupply box — whole-group totals, scaling included. Tick
+            items as you pack; tick-offs reset on reload.
           </p>
         </details>
       </section>
