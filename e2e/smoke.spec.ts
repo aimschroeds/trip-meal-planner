@@ -94,7 +94,8 @@ test('plan a day end to end', async ({ page }) => {
   const day1 = page.locator('section', { hasText: 'Day 1' }).first()
   await expect(day1.getByRole('listitem').filter({ hasText: 'Porridge' })).toBeVisible()
 
-  // The carries table aggregates the generated day into real weight/calories.
+  // The carries table (now its own tab) aggregates the day into weight/calories.
+  await page.getByRole('button', { name: 'carries', exact: true }).click()
   const tripRow = page.getByRole('row').filter({ hasText: 'Trip' })
   await expect(tripRow).toContainText(/\d{3,} cal/)
   await expect(tripRow).toContainText(/\d{3,} g/)

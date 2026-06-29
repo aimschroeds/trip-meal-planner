@@ -8,7 +8,6 @@ import {
   removePersonFromTrip,
   updatePerson,
 } from '../store/repos'
-import { carryEnd, carryEndpoints, carryStart, deriveCarries, type SlotRef } from '../domain/carries'
 import { scaledDailyTarget } from '../domain/density'
 import { activeDayFraction } from '../domain/totals'
 import {
@@ -25,7 +24,7 @@ import { hasItinerary } from '../domain/dayDescription'
 import { getApiKey } from '../extract/apiKey'
 import type { CsvIssue } from '../domain/csv/items'
 import type { Day, DayType, Person, Resupply, ResupplyTiming, Trip } from '../domain/types'
-import { fmtCalories, fmtSlot, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
+import { fmtCalories, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
 import { PlanSection } from './PlanSection'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
@@ -120,7 +119,7 @@ export function TripsPage() {
 }
 
 function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
-  const [view, setView] = useState<'setup' | 'plan'>('setup')
+  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'carries'>('setup')
   const [descBusy, setDescBusy] = useState(false)
   const [descNote, setDescNote] = useState<string | null>(null)
   const people = useLiveQuery(
@@ -188,7 +187,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </button>
         <h2 className="text-xl font-bold text-gray-800">{trip.name}</h2>
         <nav className="flex gap-2">
-          {(['setup', 'plan'] as const).map((v) => (
+          {(['setup', 'days', 'plan', 'carries'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -202,7 +201,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
             </button>
           ))}
         </nav>
-        {view === 'setup' && (
+        {view === 'days' && (
           <label className="ml-auto flex items-center gap-2 text-sm text-gray-600">
             days
             <input
@@ -218,23 +217,26 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         )}
       </div>
 
-      {view === 'setup' ? (
+      {view === 'setup' && (
         <>
           <PeopleSection trip={trip} people={people} />
           <FactorsSection trip={trip} onUpdate={update} />
           <ResuppliesSection trip={trip} />
-          <CarriesSection trip={trip} />
         </>
-      ) : (
+      )}
+
+      {(view === 'plan' || view === 'carries') && (
         <PlanSection
           trip={trip}
           people={people}
+          section={view}
           onDescribeDays={describeDays}
           descBusy={descBusy}
           descNote={descNote}
         />
       )}
 
+      {view === 'days' && (
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-2 flex flex-wrap items-center gap-3">
           <h3 className="font-semibold text-gray-800">Days</h3>
@@ -388,6 +390,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
           snack only if you want it tracked separately.
         </p>
       </section>
+      )}
     </div>
   )
 }
@@ -637,64 +640,6 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
           Add resupply
         </button>
       </form>
-    </section>
-  )
-}
-
-const SLOT_ABBREV: Record<string, string> = {
-  brekkie: 'B',
-  snack: 'S',
-  lunch: 'L',
-  dinner: 'D',
-}
-
-function CarriesSection({ trip }: { trip: Trip }) {
-  const resupplies = useLiveQuery(
-    () => db.resupplies.where('tripId').equals(trip.id).toArray(),
-    [trip.id],
-    [] as Resupply[],
-  )
-  const carries = deriveCarries(trip, resupplies)
-  const endpoints = carryEndpoints(carries, resupplies)
-
-  const fmtRef = (ref: SlotRef) => `day ${ref.dayIndex} ${fmtSlot(ref.slot)}`
-
-  return (
-    <section className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-2 font-semibold text-gray-800">Carries</h3>
-      <p className="mb-3 text-xs text-gray-500">
-        Derived from resupplies — every slot belongs to exactly one carry. Check the
-        boundaries before packing.
-      </p>
-      <ul className="space-y-3">
-        {carries.map((carry, i) => {
-          const { from, to } = endpoints[i]
-          const byDay = new Map<number, string[]>()
-          for (const { dayIndex, slot } of carry.slots) {
-            byDay.set(dayIndex, [...(byDay.get(dayIndex) ?? []), SLOT_ABBREV[slot.type]])
-          }
-          return (
-            <li key={carry.index} className="text-sm">
-              <span className="font-medium">
-                Carry {carry.index}
-                {(from || to) && ` (${from ?? 'start'} → ${to ?? 'finish'})`}:
-              </span>{' '}
-              {fmtRef(carryStart(carry))} → {fmtRef(carryEnd(carry))}
-              <span className="text-gray-500"> · {carry.slots.length} slots</span>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {[...byDay.entries()].map(([dayIndex, abbrevs]) => (
-                  <span
-                    key={dayIndex}
-                    className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-900"
-                  >
-                    d{dayIndex}: {abbrevs.join(' ')}
-                  </span>
-                ))}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
     </section>
   )
 }
