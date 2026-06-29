@@ -226,23 +226,22 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
       )}
 
       {(view === 'plan' || view === 'carries') && (
-        <PlanSection
-          trip={trip}
-          people={people}
-          section={view}
-          onDescribeDays={describeDays}
-          descBusy={descBusy}
-          descNote={descNote}
-        />
+        <PlanSection trip={trip} people={people} section={view} />
       )}
 
       {view === 'days' && (
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-2 flex flex-wrap items-center gap-3">
           <h3 className="font-semibold text-gray-800">Days</h3>
-          {/* Auto-describe runs after a CSV import; its result shows here. The
-              manual "describe days" button lives on the Plan view, next to
-              "generate all days" — that's where the notes appear. */}
+          <button
+            className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
+            disabled={descBusy || !trip.days.some(hasItinerary)}
+            onClick={() => void describeDays(trip.days)}
+            title="Generate an AI eating note (lunch stops, passes, scenic highlights) for every day with a route"
+          >
+            {descBusy ? 'describing…' : '✨ describe days'}
+          </button>
+          {/* descNote reports the result of describe (manual or auto-on-import). */}
           {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
         </div>
         <ItineraryUpload
