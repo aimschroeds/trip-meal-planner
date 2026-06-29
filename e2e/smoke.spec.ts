@@ -78,7 +78,8 @@ test('plan a day end to end', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Alice')
   await page.getByLabel('Baseline cal/day').fill('2500')
   await page.getByRole('button', { name: 'Add person' }).click()
-  await expect(page.getByText('Alice')).toBeVisible()
+  // exact: the person row span, not the "Alice target" column header.
+  await expect(page.getByText('Alice', { exact: true })).toBeVisible()
   // Baseline is now an editable field (commits on blur) showing the value.
   await expect(page.getByLabel('cal/day baseline')).toHaveValue('2500')
 
