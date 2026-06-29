@@ -93,8 +93,13 @@ export function PlanSection({
     carryTotals({ carry, personIds, entriesByKey, mealsById, itemsById }),
   )
   const tripGroup = combineTotals(perCarry.map((c) => c.group))
-  const tripPerson = combineTotals(
-    perCarry.map((c) => c.perPerson.get(person.id) ?? { weightG: 0, calories: 0, density: 0 }),
+  const zeroTotals = { weightG: 0, calories: 0, density: 0 }
+  // Trip-wide totals for every person, for the Carries table's per-person columns.
+  const tripPerPerson = new Map(
+    personIds.map((pid) => [
+      pid,
+      combineTotals(perCarry.map((c) => c.perPerson.get(pid) ?? zeroTotals)),
+    ]),
   )
 
   // Generation fills unlocked, on-trail slots around manual picks; tapping
@@ -143,22 +148,26 @@ export function PlanSection({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {people.length > 1 &&
-          people.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPersonId(p.id)}
-              className={
-                p.id === person.id
-                  ? 'rounded bg-emerald-700 px-3 py-1 text-sm font-medium text-white'
-                  : 'rounded border border-gray-300 px-3 py-1 text-sm text-gray-600'
-              }
-            >
-              {p.name}
-            </button>
-          ))}
-        {section === 'plan' && (
+      {/* The person selector only governs the per-person meal grid, so it lives
+          on the Plan tab. The Carries tab is a whole-group view (every person's
+          carry weight is a column) — no toggle, to avoid implying it scopes the
+          shopping/packing lists, which are shared. */}
+      {section === 'plan' && (
+        <div className="flex flex-wrap items-center gap-2">
+          {people.length > 1 &&
+            people.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPersonId(p.id)}
+                className={
+                  p.id === person.id
+                    ? 'rounded bg-emerald-700 px-3 py-1 text-sm font-medium text-white'
+                    : 'rounded border border-gray-300 px-3 py-1 text-sm text-gray-600'
+                }
+              >
+                {p.name}
+              </button>
+            ))}
           <button
             className="ml-auto rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
             disabled={meals.length === 0}
@@ -167,8 +176,8 @@ export function PlanSection({
           >
             ✨ generate all days
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {section === 'plan' && (
         <div className="space-y-4">
@@ -201,59 +210,61 @@ export function PlanSection({
             export this trip's meals + items CSV
           </button>
         </div>
+        <p className="mb-2 text-xs text-gray-500">
+          What each person carries between resupplies (weight on top, calories below). The shopping
+          and packing lists below cover the whole group.
+        </p>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
               <th className="py-1 pr-2">Carry</th>
               <th className="py-1 pr-2">Boundary</th>
-              <th className="py-1 pr-2 text-right">{person.name} weight</th>
-              <th className="py-1 pr-2 text-right">{person.name} cal</th>
+              {people.map((p) => (
+                <th key={p.id} className="py-1 pr-2 text-right">
+                  {p.name}
+                </th>
+              ))}
+              {people.length > 1 && <th className="py-1 pr-2 text-right">Group</th>}
               <th className="py-1 pr-2 text-right">Density</th>
-              <th className="py-1 pr-2 text-right">Group weight</th>
             </tr>
           </thead>
           <tbody>
-            {carries.map((carry, i) => {
-              const mine = perCarry[i].perPerson.get(person.id)!
-              return (
-                <tr key={carry.index} className="border-b border-gray-100">
-                  <td className="py-1.5 pr-2 font-medium">{carry.index}</td>
-                  <td className="py-1.5 pr-2 text-gray-600">
-                    {(endpoints[i].from || endpoints[i].to) && (
-                      <span className="font-medium text-gray-800">
-                        {endpoints[i].from ?? 'start'} → {endpoints[i].to ?? 'finish'}
-                        <br />
-                      </span>
-                    )}
-                    d{carryStart(carry).dayIndex} {fmtSlot(carryStart(carry).slot)} → d
-                    {carryEnd(carry).dayIndex} {fmtSlot(carryEnd(carry).slot)}
-                  </td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(mine.weightG)}</td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">
-                    {fmtCalories(mine.calories)}
-                  </td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">
-                    {fmtDensity(mine.density)}
-                  </td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums">
-                    {fmtGrams(perCarry[i].group.weightG)}
-                  </td>
-                </tr>
-              )
-            })}
+            {carries.map((carry, i) => (
+              <tr key={carry.index} className="border-b border-gray-100">
+                <td className="py-1.5 pr-2 font-medium">{carry.index}</td>
+                <td className="py-1.5 pr-2 text-gray-600">
+                  {(endpoints[i].from || endpoints[i].to) && (
+                    <span className="font-medium text-gray-800">
+                      {endpoints[i].from ?? 'start'} → {endpoints[i].to ?? 'finish'}
+                      <br />
+                    </span>
+                  )}
+                  d{carryStart(carry).dayIndex} {fmtSlot(carryStart(carry).slot)} → d
+                  {carryEnd(carry).dayIndex} {fmtSlot(carryEnd(carry).slot)}
+                </td>
+                {people.map((p) => {
+                  const t = perCarry[i].perPerson.get(p.id) ?? zeroTotals
+                  return <WeightCalCell key={p.id} weightG={t.weightG} calories={t.calories} />
+                })}
+                {people.length > 1 && (
+                  <WeightCalCell weightG={perCarry[i].group.weightG} calories={perCarry[i].group.calories} />
+                )}
+                <td className="py-1.5 pr-2 text-right tabular-nums">
+                  {fmtDensity(perCarry[i].group.density)}
+                </td>
+              </tr>
+            ))}
             <tr className="font-medium">
               <td className="py-1.5 pr-2">Trip</td>
               <td className="py-1.5 pr-2" />
-              <td className="py-1.5 pr-2 text-right tabular-nums">
-                {fmtGrams(tripPerson.weightG)}
-              </td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">
-                {fmtCalories(tripPerson.calories)}
-              </td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">
-                {fmtDensity(tripPerson.density)}
-              </td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(tripGroup.weightG)}</td>
+              {people.map((p) => {
+                const t = tripPerPerson.get(p.id) ?? zeroTotals
+                return <WeightCalCell key={p.id} weightG={t.weightG} calories={t.calories} />
+              })}
+              {people.length > 1 && (
+                <WeightCalCell weightG={tripGroup.weightG} calories={tripGroup.calories} />
+              )}
+              <td className="py-1.5 pr-2 text-right tabular-nums">{fmtDensity(tripGroup.density)}</td>
             </tr>
           </tbody>
         </table>
@@ -318,7 +329,7 @@ export function PlanSection({
 
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
-            🎒 Packing list — per resupply carry
+            🎒 Packing list — per resupply carry, whole group
           </summary>
           <div className="mt-2 space-y-4">
             {carries.map((carry, i) => {
@@ -397,6 +408,16 @@ export function PlanSection({
       </section>
       )}
     </div>
+  )
+}
+
+/** A carries-table cell: carry weight on top, calories beneath. */
+function WeightCalCell({ weightG, calories }: { weightG: number; calories: number }) {
+  return (
+    <td className="py-1.5 pr-2 text-right tabular-nums">
+      <div>{fmtGrams(weightG)}</div>
+      <div className="text-xs font-normal text-gray-500">{fmtCalories(calories)}</div>
+    </td>
   )
 }
 
