@@ -1,5 +1,27 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { Item, Meal, Person, PlanEntry, Resupply, Trip } from '../domain/types'
+import type { SyncKind } from '../domain/sync'
+
+/** Per-row sync bookkeeping (M7). One entry per synced domain object, keyed
+ *  `${kind}:${id}`. `snapshot` is the locally-serialized payload as last
+ *  reconciled; the sync engine compares it against the live row to detect local
+ *  edits without touching domain types or every write site (PLAN.md §10). */
+export interface SyncMetaRow {
+  key: string
+  kind: SyncKind
+  id: string
+  updatedAt: number
+  deleted: boolean
+  snapshot: string
+}
+
+/** Singleton sync state: which cloud workspace this device is connected to
+ *  (null = purely local). */
+export interface SyncStateRow {
+  id: 'state'
+  workspaceId: string | null
+  lastSyncedAt: number | null
+}
 
 // Dexie versioned schema — bump version() and add an upgrade() when the
 // shape changes. Only indexed fields are listed in stores().
@@ -10,6 +32,8 @@ export const db = new Dexie('hiking-meal-planner') as Dexie & {
   meals: EntityTable<Meal, 'id'>
   resupplies: EntityTable<Resupply, 'id'>
   planEntries: EntityTable<PlanEntry, 'id'>
+  syncMeta: EntityTable<SyncMetaRow, 'key'>
+  syncState: EntityTable<SyncStateRow, 'id'>
 }
 
 db.version(1).stores({
@@ -50,3 +74,11 @@ db.version(4)
         delete e.quantityScale
       }),
   )
+
+// M7: cloud sync. Two new local-only tables for sync bookkeeping; existing
+// data is untouched, so on first connect every current row reads as a local
+// change and uploads to the workspace.
+db.version(5).stores({
+  syncMeta: 'key, kind',
+  syncState: 'id',
+})
