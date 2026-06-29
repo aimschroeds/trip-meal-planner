@@ -42,6 +42,7 @@ beforeEach(async () => {
     db.meals.clear(),
     db.resupplies.clear(),
     db.planEntries.clear(),
+    db.marks.clear(),
     db.syncMeta.clear(),
     db.syncState.clear(),
   ])
@@ -137,6 +138,33 @@ describe('reconcile', () => {
 
     const result = await reconcile(t, 9000)
     expect(result).toEqual({ applied: 0, pushed: 0 })
+  })
+})
+
+describe('marks (shopping/packing tick-offs)', () => {
+  it('uploads a local tick and pulls a remote one', async () => {
+    await db.marks.add({ id: 't1|buy|i1', tripId: 't1', scope: 'buy', ref: 'i1' })
+    const t = memoryTransport([
+      { kind: 'mark', id: 't1|pack|0:i2', payload: { id: 't1|pack|0:i2', tripId: 't1', scope: 'pack', ref: '0:i2' }, updatedAt: 500, deleted: false },
+    ])
+
+    await reconcile(t, 1000)
+
+    // local tick went up…
+    expect(t.store.get('mark:t1|buy|i1')).toMatchObject({ payload: { ref: 'i1' } })
+    // …and the remote tick landed locally.
+    expect(await db.marks.get('t1|pack|0:i2')).toMatchObject({ scope: 'pack', ref: '0:i2' })
+  })
+
+  it('removes a tick when the cloud has a newer tombstone (un-tick)', async () => {
+    await db.marks.add({ id: 't1|buy|i1', tripId: 't1', scope: 'buy', ref: 'i1' })
+    const t = memoryTransport()
+    await reconcile(t, 1000)
+
+    t.store.set('mark:t1|buy|i1', { kind: 'mark', id: 't1|buy|i1', payload: null, updatedAt: 2000, deleted: true })
+    await reconcile(t, 1500)
+
+    expect(await db.marks.get('t1|buy|i1')).toBeUndefined()
   })
 })
 

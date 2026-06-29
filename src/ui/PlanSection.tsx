@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../store/db'
-import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
+import { db, type MarkRow } from '../store/db'
+import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot, toggleMark } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
 import { dayLegLabel, hasItinerary } from '../domain/dayDescription'
@@ -56,12 +56,16 @@ export function PlanSection({
   descNote: string | null
 }) {
   const [personId, setPersonId] = useState<string | null>(null)
-  // Ticked-off items while shopping. Ephemeral — a single shopping session,
-  // not persisted (reloading clears it).
-  const [bought, setBought] = useState<Set<string>>(new Set())
-  // Ticked-off lines while packing each carry box (keyed `carry:item`). Also
-  // ephemeral.
-  const [packed, setPacked] = useState<Set<string>>(new Set())
+  // Shopping/packing tick-offs are persisted as `mark` rows and synced, so the
+  // checklist is shared live with collaborators. `buy` marks key on item id;
+  // `pack` marks key on `${carryIndex}:${itemId}`.
+  const marks = useLiveQuery(
+    () => db.marks.where('tripId').equals(trip.id).toArray(),
+    [trip.id],
+    [] as MarkRow[],
+  )
+  const bought = new Set(marks.filter((m) => m.scope === 'buy').map((m) => m.ref))
+  const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
   const resupplies = useLiveQuery(
@@ -276,13 +280,7 @@ export function PlanSection({
               mealsById,
               itemsById,
             })
-            const toggle = (id: string) =>
-              setBought((s) => {
-                const n = new Set(s)
-                if (n.has(id)) n.delete(id)
-                else n.add(id)
-                return n
-              })
+            const toggle = (id: string) => void toggleMark(trip.id, 'buy', id)
             return shopping.length === 0 ? (
               <p className="mt-2 text-sm text-gray-500">Nothing planned yet.</p>
             ) : (
@@ -321,7 +319,7 @@ export function PlanSection({
                 <p className="mt-2 text-xs text-gray-500">
                   Whole-trip totals for everyone, scaling included. Items entered per package or
                   with a piece weight show whole packs/pieces; the rest show weight (buy a bag).
-                  Tick-offs reset on reload.
+                  Tick-offs are saved and shared live with anyone you've synced with.
                 </p>
               </>
             )
@@ -342,13 +340,7 @@ export function PlanSection({
                 itemsById,
               })
               const { from, to } = endpoints[i]
-              const togglePacked = (key: string) =>
-                setPacked((s) => {
-                  const n = new Set(s)
-                  if (n.has(key)) n.delete(key)
-                  else n.add(key)
-                  return n
-                })
+              const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
               return (
                 <div key={carry.index}>
                   <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">

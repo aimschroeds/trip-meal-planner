@@ -15,6 +15,18 @@ export interface SyncMetaRow {
   snapshot: string
 }
 
+/** A shopping/packing tick-off (M7.1). One row per ticked item means two
+ *  people checking off different items at once never clobber each other. The
+ *  row's existence is the tick; un-ticking deletes it. */
+export interface MarkRow {
+  /** `${tripId}|${scope}|${ref}` — stable and unique. */
+  id: string
+  tripId: string
+  scope: 'buy' | 'pack'
+  /** What was ticked: an item id (buy) or `${carryIndex}:${itemId}` (pack). */
+  ref: string
+}
+
 /** Singleton sync state: which cloud workspace this device is connected to
  *  (null = purely local), plus the share link token to display. */
 export interface SyncStateRow {
@@ -34,6 +46,7 @@ export const db = new Dexie('hiking-meal-planner') as Dexie & {
   meals: EntityTable<Meal, 'id'>
   resupplies: EntityTable<Resupply, 'id'>
   planEntries: EntityTable<PlanEntry, 'id'>
+  marks: EntityTable<MarkRow, 'id'>
   syncMeta: EntityTable<SyncMetaRow, 'key'>
   syncState: EntityTable<SyncStateRow, 'id'>
 }
@@ -83,4 +96,10 @@ db.version(4)
 db.version(5).stores({
   syncMeta: 'key, kind',
   syncState: 'id',
+})
+
+// M7.1: shopping/packing tick-offs, synced like any other table so a checklist
+// is shared live between collaborators.
+db.version(6).stores({
+  marks: 'id, tripId',
 })
