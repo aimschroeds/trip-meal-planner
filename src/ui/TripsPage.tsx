@@ -94,19 +94,19 @@ export function TripsPage() {
           {trips.map((trip) => (
             <li
               key={trip.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3"
+              className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-3"
             >
               <button
-                className="font-medium text-emerald-800 underline"
+                className="min-w-0 flex-1 truncate text-left font-medium text-emerald-800 underline"
                 onClick={() => setSelectedId(trip.id)}
               >
                 {trip.name}
               </button>
-              <span className="text-sm text-gray-500">
+              <span className="shrink-0 text-sm text-gray-500">
                 {trip.days.length} days · {trip.peopleIds.length} people
               </span>
               <button
-                className="text-sm text-red-700 underline"
+                className="shrink-0 text-sm text-red-700 underline"
                 onClick={() => void deleteTrip(trip.id)}
               >
                 delete
@@ -226,21 +226,21 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
           <CarriesSection trip={trip} />
         </>
       ) : (
-        <PlanSection trip={trip} people={people} />
+        <PlanSection
+          trip={trip}
+          people={people}
+          onDescribeDays={describeDays}
+          descBusy={descBusy}
+          descNote={descNote}
+        />
       )}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-2 flex flex-wrap items-center gap-3">
           <h3 className="font-semibold text-gray-800">Days</h3>
-          <button
-            type="button"
-            className="rounded border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-800 disabled:opacity-40"
-            disabled={descBusy || !trip.days.some(hasItinerary)}
-            onClick={() => void describeDays(trip.days)}
-            title="Generate an AI eating note (lunch stops, passes, snacks) for every day with a route"
-          >
-            {descBusy ? 'describing…' : '✨ describe days'}
-          </button>
+          {/* Auto-describe runs after a CSV import; its result shows here. The
+              manual "describe days" button lives on the Plan view, next to
+              "generate all days" — that's where the notes appear. */}
           {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
         </div>
         <ItineraryUpload
