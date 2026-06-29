@@ -29,7 +29,13 @@ jobs:
           cache: npm
       - run: npm ci
       # Project pages are served from /<repo>/, so the asset base must match.
+      # Supabase sync vars are repository *variables* (not secrets): the
+      # publishable anon key is safe to ship and is protected by RLS. Without
+      # them the build is purely local (the sync UI stays hidden).
       - run: npm run build -- --base=/trip-meal-planner/
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       # Pages source must be set to "GitHub Actions" in repo settings; the
       # default workflow token cannot enable it (proven by run #1).
       - uses: actions/configure-pages@v5

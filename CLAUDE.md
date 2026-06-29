@@ -22,9 +22,13 @@ npm run e2e        # Playwright smoke test (needs `npx playwright install chromi
 - `src/store/` owns Dexie (IndexedDB). Schema changes bump `db.version()`
   in `db.ts`. Writes with integrity rules (delete-blocking, cascades) go
   through `repos.ts`, not raw table access.
-- `src/extract/` is the only networked code (photo → item via the Anthropic
-  API, user-supplied key). The key stays in localStorage — never Dexie, so
-  JSON backups can't contain it. Import the SDK client dynamically.
+- Networked code lives only in `src/extract/` and `src/sync/`; both load their
+  SDK dynamically to keep the main bundle lean. `src/extract/` is photo/URL →
+  item via the Anthropic API (user-supplied key). `src/sync/` is the optional
+  cloud sync/sharing layer over Supabase (M7+, PLAN.md §10) — IndexedDB stays
+  the local source of truth; it only pushes/pulls `SyncRecord`s (LWW resolver
+  in `src/domain/sync.ts`). The Anthropic key stays in localStorage — never
+  Dexie, a JSON backup, or a synced workspace.
 - Every acceptance criterion from the user stories maps to a unit test in
   `tests/` (mirrors `src/`). The story 3.2 carry example is the canonical
   carries fixture.

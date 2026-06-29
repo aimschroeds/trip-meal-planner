@@ -1,0 +1,3 @@
+# Minimal Supabase config so the GitHub integration / CLI can link this repo to
+# the project and apply migrations in supabase/migrations/ on push to main.
+project_id = "exwczdwqvjvaivnijsht"
