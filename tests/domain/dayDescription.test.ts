@@ -40,9 +40,12 @@ describe('buildDayDescriptionsPrompt', () => {
     expect(prompt).toContain('"days"')
   })
 
-  it('asks the model to name any passes crossed', () => {
+  it('asks for passes, scenic highlights, and the time of day they are reached', () => {
     const prompt = buildDayDescriptionsPrompt([day({ index: 1, start: 'A', end: 'B' })])
-    expect(prompt.toLowerCase()).toContain('pass')
+    const lower = prompt.toLowerCase()
+    expect(lower).toContain('pass')
+    expect(lower).toContain('scenic')
+    expect(lower).toContain('time of day')
   })
 })
 

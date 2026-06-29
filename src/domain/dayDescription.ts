@@ -31,18 +31,18 @@ export function buildDayDescriptionsPrompt(days: Day[]): string {
     bits.push(d.type)
     return `Day ${d.index}: ${bits.join(', ')}`
   })
-  return `You are advising a hiker on where to eat along each day of a multi-day hike. Assume a roughly even pace through the day.
+  return `You are advising a hiker on where to eat along each day of a multi-day hike. Assume a normal morning start and a roughly even pace through the day, so you can estimate roughly when (morning / midday / afternoon / late) they reach a given point along the leg.
 
 Itinerary (in order):
 ${lines.join('\n')}
 
-For each day write ONE to TWO sentences on the day's eating strategy:
-- Is there a natural lunch stop roughly midway (name the place only if you are reasonably confident it is on or near this route); or is it better to eat on the go (e.g. a long climb, exposed ridge, or a short day)?
-- Mention a likely snack-break spot if one stands out.
-- If the day's route crosses any named mountain pass(es) or saddle(s), name them and say to eat/snack before or after the climb as appropriate — only when you are reasonably confident the pass is actually on this leg.
-Keep it practical and specific to the terrain and distance. If you are not confident about exact place names, describe the spot by its terrain ("a shaded creek crossing about midway") rather than inventing a name. Do not repeat the distance/ascent numbers back.
+For each day write TWO to THREE sentences on the day's eating strategy:
+- Call out the day's major scenic highlights — named lakes, summits, viewpoints, named mountain passes or saddles crossed — and roughly what time of day the hiker is likely to reach each. Only name a place when you are reasonably confident it is actually on or near this leg.
+- Use that timing to advise: if a beautiful spot (a lake, a pass with a view, a meadow) falls near a mealtime or snack time, suggest stopping to enjoy a proper meal/snack there; if the scenic stretch is a long climb or exposed ridge with nowhere good to linger, suggest eating on the go and saving the proper stop for the next good spot.
+- Note a natural lunch stop roughly midway, or say it's better to eat on the go (e.g. a long climb, exposed ridge, or a short day).
+Keep it practical and specific to the terrain, distance, and timing. If you are not confident about exact place names, describe the spot by its terrain ("a shaded creek crossing about midway", "the ridge before the final descent") rather than inventing a name. Do not just repeat the distance/ascent numbers back.
 
-Return JSON: { "days": [ { "day": <day number>, "description": "<1–2 sentences>" } ] } with one entry per day above.`
+Return JSON: { "days": [ { "day": <day number>, "description": "<2–3 sentences>" } ] } with one entry per day above.`
 }
 
 const DAY_DESC_ITEM = {

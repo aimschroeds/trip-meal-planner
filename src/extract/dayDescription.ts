@@ -19,7 +19,8 @@ export async function describeDays(apiKey: string, days: Day[]): Promise<Map<num
 
   const response = await client.messages.create({
     model: EXTRACT_MODEL,
-    max_tokens: 2048,
+    // 2–3 sentences per day, across a whole itinerary — give it room.
+    max_tokens: 4096,
     output_config: { format: { type: 'json_schema', schema: DAY_DESCRIPTIONS_SCHEMA } },
     messages: [
       { role: 'user', content: [{ type: 'text', text: buildDayDescriptionsPrompt(days) }] },
