@@ -42,12 +42,17 @@ const STATUS_LABELS: Record<DayStatus, string> = {
 export function PlanSection({
   trip,
   people,
+  section,
   onDescribeDays,
   descBusy,
   descNote,
 }: {
   trip: Trip
   people: Person[]
+  /** Which slice to show: the per-person meal grid ('plan') or the carry
+   *  boundaries + shopping/packing lists ('carries'). Both share this
+   *  component's derived totals; the person selector shows in either. */
+  section: 'plan' | 'carries'
   /** Generate AI day notes (lunch stops, passes, highlights). Lifted from
    *  TripDetail so the button can sit by "generate all days" — the notes show
    *  on the day cards below. */
@@ -162,44 +167,49 @@ export function PlanSection({
               {p.name}
             </button>
           ))}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
-          <button
-            className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
-            disabled={descBusy || !trip.days.some(hasItinerary)}
-            onClick={() => void onDescribeDays(trip.days)}
-            title="Generate an AI eating note (lunch stops, passes, scenic highlights) for every day with a route"
-          >
-            {descBusy ? 'describing…' : '✨ describe days'}
-          </button>
-          <button
-            className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
-            disabled={meals.length === 0}
-            onClick={() => void generateAll()}
-            title="Fill unlocked slots on every day; locked picks and off-trail slots are kept"
-          >
-            ✨ generate all days
-          </button>
+        {section === 'plan' && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
+            <button
+              className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
+              disabled={descBusy || !trip.days.some(hasItinerary)}
+              onClick={() => void onDescribeDays(trip.days)}
+              title="Generate an AI eating note (lunch stops, passes, scenic highlights) for every day with a route"
+            >
+              {descBusy ? 'describing…' : '✨ describe days'}
+            </button>
+            <button
+              className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
+              disabled={meals.length === 0}
+              onClick={() => void generateAll()}
+              title="Fill unlocked slots on every day; locked picks and off-trail slots are kept"
+            >
+              ✨ generate all days
+            </button>
+          </div>
+        )}
+      </div>
+
+      {section === 'plan' && (
+        <div className="space-y-4">
+          {trip.days.map((day) => (
+            <DayCard
+              key={day.index}
+              trip={trip}
+              day={day}
+              person={person}
+              entriesByKey={entriesByKey}
+              dayResupplies={resupplies.filter((r) => r.dayIndex === day.index)}
+              meals={meals}
+              mealsById={mealsById}
+              itemsById={itemsById}
+              onGenerate={() => void generateForDay(day)}
+            />
+          ))}
         </div>
-      </div>
+      )}
 
-      <div className="space-y-4">
-        {trip.days.map((day) => (
-          <DayCard
-            key={day.index}
-            trip={trip}
-            day={day}
-            person={person}
-            entriesByKey={entriesByKey}
-            dayResupplies={resupplies.filter((r) => r.dayIndex === day.index)}
-            meals={meals}
-            mealsById={mealsById}
-            itemsById={itemsById}
-            onGenerate={() => void generateForDay(day)}
-          />
-        ))}
-      </div>
-
+      {section === 'carries' && (
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <div className="mb-2 flex items-center">
           <h3 className="font-semibold text-gray-800">Carries</h3>
@@ -405,6 +415,7 @@ export function PlanSection({
           </p>
         </details>
       </section>
+      )}
     </div>
   )
 }
