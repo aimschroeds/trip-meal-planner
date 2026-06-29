@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { addPersonToTrip, createTrip, deleteTrip, removePersonFromTrip } from '../store/repos'
+import {
+  addPersonToTrip,
+  createTrip,
+  deleteTrip,
+  removePersonFromTrip,
+  updatePerson,
+} from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, type SlotRef } from '../domain/carries'
 import { scaledDailyTarget } from '../domain/density'
 import {
@@ -461,7 +467,22 @@ function PeopleSection({ trip, people }: { trip: Trip; people: Person[] }) {
           {people.map((p) => (
             <li key={p.id} className="flex items-center gap-3 text-sm">
               <span className="font-medium">{p.name}</span>
-              <span className="text-gray-500">{fmtCalories(p.baselineCalories)}/day baseline</span>
+              <label className="flex items-center gap-1 text-gray-500" title="Edit this person's baseline — daily targets re-derive; the plan is untouched">
+                <input
+                  className="w-20 rounded border border-gray-300 px-2 py-0.5 text-right tabular-nums"
+                  inputMode="numeric"
+                  defaultValue={p.baselineCalories}
+                  onBlur={(e) => {
+                    const n = Number(e.target.value)
+                    if (Number.isFinite(n) && n > 0 && n !== p.baselineCalories) {
+                      void updatePerson(p.id, { baselineCalories: n })
+                    } else {
+                      e.target.value = String(p.baselineCalories)
+                    }
+                  }}
+                />
+                cal/day baseline
+              </label>
               <VegBadge vegetarian={p.vegetarian} />
               <button
                 className="text-red-700 underline"
