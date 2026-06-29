@@ -4,7 +4,7 @@ import { db } from '../store/db'
 import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot } from '../store/repos'
 import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
-import { dayLegLabel } from '../domain/dayDescription'
+import { dayLegLabel, hasItinerary } from '../domain/dayDescription'
 import { generateDayPlan } from '../domain/generate'
 import { mealSlotTypes, rollUpMeal } from '../domain/rollups'
 import {
@@ -39,7 +39,22 @@ const STATUS_LABELS: Record<DayStatus, string> = {
   partial: 'partially estimated',
 }
 
-export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) {
+export function PlanSection({
+  trip,
+  people,
+  onDescribeDays,
+  descBusy,
+  descNote,
+}: {
+  trip: Trip
+  people: Person[]
+  /** Generate AI day notes (lunch stops, passes, highlights). Lifted from
+   *  TripDetail so the button can sit by "generate all days" — the notes show
+   *  on the day cards below. */
+  onDescribeDays: (days: Day[]) => void | Promise<void>
+  descBusy: boolean
+  descNote: string | null
+}) {
   const [personId, setPersonId] = useState<string | null>(null)
   // Ticked-off items while shopping. Ephemeral — a single shopping session,
   // not persisted (reloading clears it).
@@ -125,7 +140,7 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {people.length > 1 &&
           people.map((p) => (
             <button
@@ -140,14 +155,25 @@ export function PlanSection({ trip, people }: { trip: Trip; people: Person[] }) 
               {p.name}
             </button>
           ))}
-        <button
-          className="ml-auto rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
-          disabled={meals.length === 0}
-          onClick={() => void generateAll()}
-          title="Fill unlocked slots on every day; locked picks and off-trail slots are kept"
-        >
-          ✨ generate all days
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {descNote && <span className="text-xs text-gray-600">{descNote}</span>}
+          <button
+            className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
+            disabled={descBusy || !trip.days.some(hasItinerary)}
+            onClick={() => void onDescribeDays(trip.days)}
+            title="Generate an AI eating note (lunch stops, passes, scenic highlights) for every day with a route"
+          >
+            {descBusy ? 'describing…' : '✨ describe days'}
+          </button>
+          <button
+            className="rounded border border-emerald-700 px-3 py-1 text-sm font-medium text-emerald-800 disabled:opacity-40"
+            disabled={meals.length === 0}
+            onClick={() => void generateAll()}
+            title="Fill unlocked slots on every day; locked picks and off-trail slots are kept"
+          >
+            ✨ generate all days
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">
