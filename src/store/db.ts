@@ -22,8 +22,10 @@ export interface MarkRow {
   /** `${tripId}|${scope}|${ref}` — stable and unique. */
   id: string
   tripId: string
-  scope: 'buy' | 'pack'
-  /** What was ticked: an item id (buy) or `${carryIndex}:${itemId}` (pack). */
+  scope: 'buy' | 'pack' | 'prep'
+  /** What was ticked: an item id (buy), `${carryIndex}:${itemId}` (pack,
+   *  flat) or `${carryIndex}:${dayIndex}:${slotKey}:${personId}:${itemId}`
+   *  (pack, nested), or `${carryIndex}:${prepGroupKey}` (prep). */
   ref: string
 }
 

@@ -3,8 +3,10 @@ import { deriveCarries } from '../../src/domain/carries'
 import { makeTrip } from '../../src/domain/trip'
 import { planKey } from '../../src/domain/totals'
 import {
+  carryPrepList,
   carryShoppingList,
   defaultServingG,
+  entryItemLines,
   gramsForUnits,
   packagesForGrams,
   purchaseQuantity,
@@ -235,5 +237,224 @@ describe('purchaseQuantity', () => {
 
   it('buys bulk (per-100g / per-gram) items by weight', () => {
     expect(purchaseQuantity(cheese, 150)).toEqual({ kind: 'weight', grams: 150 })
+  })
+})
+
+describe('carryPrepList', () => {
+  const oats: Item = {
+    id: 'oats',
+    name: 'Oatmeal',
+    caloriesPerGram: 4,
+    vegetarian: true,
+    inputBasis: 'per_100g',
+    inputWeightG: 100,
+    inputCalories: 400,
+  }
+  const chia: Item = { ...oats, id: 'chia', name: 'Chia Seeds' }
+  const pb: Item = {
+    ...oats,
+    id: 'pb',
+    name: "Justin's Peanut Butter",
+    inputBasis: 'per_package',
+    unitWeightG: 32,
+    unitName: 'sachet',
+  }
+  const apricots: Item = { ...oats, id: 'apricots', name: 'Apricots' }
+  const itemsById = new Map([oats, chia, pb, apricots].map((i) => [i.id, i]))
+
+  const oatChia: Meal = {
+    id: 'oatChia',
+    name: 'Oatmeal + chia',
+    type: 'brekkie',
+    components: [
+      { itemId: 'oats', grams: 80 },
+      { itemId: 'chia', grams: 80 },
+    ],
+  }
+  const oatPbApricot: Meal = {
+    id: 'oatPbApricot',
+    name: 'Oatmeal + PB + apricots',
+    type: 'brekkie',
+    components: [
+      { itemId: 'oats', grams: 80 },
+      { itemId: 'pb', grams: 32 },
+      { itemId: 'apricots', grams: 30 },
+    ],
+  }
+  const mealsById = new Map([oatChia, oatPbApricot].map((m) => [m.id, m]))
+
+  const trip = makeTrip('t1', 'Trip', 2)
+  const [carry] = deriveCarries(trip, [])
+
+  const entry = (personId: string, dayIndex: number, mealId: string): PlanEntry => ({
+    id: `${personId}|${dayIndex}`,
+    tripId: 't1',
+    personId,
+    dayIndex,
+    slotKey: 'brekkie:morning',
+    kind: 'planned',
+    parts: [{ kind: 'meal', mealId }],
+  })
+
+  it('collapses identical recipes across people and days into one group with a count', () => {
+    const entriesByKey = new Map(
+      [
+        entry('alice', 1, 'oatChia'), // 1x oat+chia
+        entry('bob', 1, 'oatPbApricot'), // 3x oat+pb+apricot
+        entry('carol', 1, 'oatPbApricot'),
+        entry('alice', 2, 'oatPbApricot'),
+      ].map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),
+    )
+
+    const groups = carryPrepList({
+      carry,
+      personIds: ['alice', 'bob', 'carol'],
+      entriesByKey,
+      mealsById,
+      itemsById,
+    })
+
+    expect(groups).toHaveLength(2)
+    // Sorted by meal type, then by count descending — the 3x recipe first.
+    expect(groups[0].count).toBe(3)
+    expect(groups[0].mealType).toBe('brekkie')
+    expect(groups[0].lines.map((l) => `${l.item.id}:${l.grams}`)).toEqual([
+      'oats:80',
+      'pb:32',
+      'apricots:30',
+    ])
+    expect(groups[0].lines.find((l) => l.item.id === 'pb')!.units).toBe(1) // 32g = 1 sachet
+
+    expect(groups[1].count).toBe(1)
+    expect(groups[1].lines.map((l) => `${l.item.id}:${l.grams}`)).toEqual(['oats:80', 'chia:80'])
+  })
+
+  it('keeps two recipes with the same items but different grams separate', () => {
+    const smallPortion: Meal = {
+      id: 'oatChiaSmall',
+      name: 'Oatmeal + chia (small)',
+      type: 'brekkie',
+      components: [
+        { itemId: 'oats', grams: 60 },
+        { itemId: 'chia', grams: 80 },
+      ],
+    }
+    const mealsWithSmall = new Map([...mealsById, [smallPortion.id, smallPortion]])
+    const entriesByKey = new Map(
+      [entry('alice', 1, 'oatChia'), entry('bob', 1, 'oatChiaSmall')].map((e) => [
+        planKey(e.personId, e.dayIndex, e.slotKey),
+        e,
+      ]),
+    )
+    const groups = carryPrepList({
+      carry,
+      personIds: ['alice', 'bob'],
+      entriesByKey,
+      mealsById: mealsWithSmall,
+      itemsById,
+    })
+    expect(groups).toHaveLength(2)
+    expect(groups.every((g) => g.count === 1)).toBe(true)
+  })
+
+  it('ignores off-trail and empty slots', () => {
+    const entriesByKey = new Map<string, PlanEntry>([
+      [
+        planKey('alice', 1, 'brekkie:morning'),
+        {
+          id: 'a1',
+          tripId: 't1',
+          personId: 'alice',
+          dayIndex: 1,
+          slotKey: 'brekkie:morning',
+          kind: 'offTrail',
+          offTrailCalories: 400,
+        },
+      ],
+    ])
+    const groups = carryPrepList({ carry, personIds: ['alice'], entriesByKey, mealsById, itemsById })
+    expect(groups).toEqual([])
+  })
+})
+
+describe('entryItemLines', () => {
+  const itemsById = new Map([tortillas, cheese].map((i) => [i.id, i]))
+  const wrap: Meal = {
+    id: 'wrap',
+    name: 'Wrap',
+    type: 'lunch',
+    components: [
+      { itemId: 'tortillas', grams: 128 },
+      { itemId: 'cheese', grams: 50 },
+    ],
+  }
+  const mealsById = new Map([[wrap.id, wrap]])
+
+  it('resolves a meal entry into item lines, heaviest first', () => {
+    const entry: PlanEntry = {
+      id: 'e1',
+      tripId: 't1',
+      personId: 'alice',
+      dayIndex: 1,
+      slotKey: 'lunch:midday',
+      kind: 'planned',
+      parts: [{ kind: 'meal', mealId: 'wrap' }],
+    }
+    expect(entryItemLines(entry, mealsById, itemsById)).toEqual([
+      { item: tortillas, grams: 128 },
+      { item: cheese, grams: 50 },
+    ])
+  })
+
+  it('merges a loose item with the same item from a meal', () => {
+    const entry: PlanEntry = {
+      id: 'e2',
+      tripId: 't1',
+      personId: 'alice',
+      dayIndex: 1,
+      slotKey: 'lunch:midday',
+      kind: 'planned',
+      parts: [
+        { kind: 'meal', mealId: 'wrap' },
+        { kind: 'item', itemId: 'cheese', grams: 20 },
+      ],
+    }
+    expect(entryItemLines(entry, mealsById, itemsById).find((l) => l.item.id === 'cheese')).toEqual(
+      { item: cheese, grams: 70 },
+    )
+  })
+
+  it('returns nothing for off-trail, missing, or empty entries', () => {
+    expect(entryItemLines(undefined, mealsById, itemsById)).toEqual([])
+    expect(
+      entryItemLines(
+        {
+          id: 'e3',
+          tripId: 't1',
+          personId: 'alice',
+          dayIndex: 1,
+          slotKey: 'lunch:midday',
+          kind: 'offTrail',
+          offTrailCalories: 600,
+        },
+        mealsById,
+        itemsById,
+      ),
+    ).toEqual([])
+    expect(
+      entryItemLines(
+        {
+          id: 'e4',
+          tripId: 't1',
+          personId: 'alice',
+          dayIndex: 1,
+          slotKey: 'lunch:midday',
+          kind: 'planned',
+          parts: [],
+        },
+        mealsById,
+        itemsById,
+      ),
+    ).toEqual([])
   })
 })

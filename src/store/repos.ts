@@ -201,9 +201,9 @@ function markId(tripId: string, scope: MarkRow['scope'], ref: string): string {
   return `${tripId}|${scope}|${ref}`
 }
 
-/** Toggle a shopping ('buy') or packing ('pack') tick-off. Each tick is its own
- *  row (added/removed), so two people checking off different items at the same
- *  time never overwrite each other when synced. */
+/** Toggle a shopping ('buy'), packing ('pack'), or prep ('prep') tick-off.
+ *  Each tick is its own row (added/removed), so two people checking off
+ *  different items at the same time never overwrite each other when synced. */
 export async function toggleMark(
   tripId: string,
   scope: MarkRow['scope'],

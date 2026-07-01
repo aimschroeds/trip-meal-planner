@@ -2,7 +2,15 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type MarkRow } from '../store/db'
 import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot, toggleMark } from '../store/repos'
-import { carryEnd, carryEndpoints, carryStart, deriveCarries, keyedSlots, type KeyedSlot } from '../domain/carries'
+import {
+  carryEnd,
+  carryEndpoints,
+  carryStart,
+  deriveCarries,
+  keyedSlots,
+  type KeyedSlot,
+  type SlotRef,
+} from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
 import { dayLegLabel } from '../domain/dayDescription'
 import { generateDayPlan } from '../domain/generate'
@@ -12,15 +20,25 @@ import {
   combineTotals,
   dayTotals,
   entryTotals,
+  findMissingSlots,
   planKey,
   type DayStatus,
 } from '../domain/totals'
-import { carryShoppingList, defaultServingG, tripShoppingList } from '../domain/units'
+import { carryPrepList, carryShoppingList, defaultServingG, entryItemLines, tripShoppingList } from '../domain/units'
 import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
-import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from '../domain/types'
+import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Slot, Trip } from '../domain/types'
 import { downloadCsv } from './download'
-import { fmtCalories, fmtDensity, fmtGrams, fmtPurchase, fmtSlot, resupplyTimingLabel } from './format'
+import {
+  fmtCalories,
+  fmtDensity,
+  fmtGrams,
+  fmtPrepIngredient,
+  fmtPurchase,
+  fmtSlot,
+  MEAL_TYPE_LABEL,
+  resupplyTimingLabel,
+} from './format'
 import { GroupedCombobox } from './GroupedCombobox'
 
 const OFF_TRAIL = '@offtrail'
@@ -52,6 +70,7 @@ export function PlanSection({
   section: 'plan' | 'carries'
 }) {
   const [personId, setPersonId] = useState<string | null>(null)
+  const [packingView, setPackingView] = useState<'flat' | 'nested'>('flat')
   // Shopping/packing tick-offs are persisted as `mark` rows and synced, so the
   // checklist is shared live with collaborators. `buy` marks key on item id;
   // `pack` marks key on `${carryIndex}:${itemId}`.
@@ -62,6 +81,7 @@ export function PlanSection({
   )
   const bought = new Set(marks.filter((m) => m.scope === 'buy').map((m) => m.ref))
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
+  const prepped = new Set(marks.filter((m) => m.scope === 'prep').map((m) => m.ref))
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
   const resupplies = useLiveQuery(
@@ -82,6 +102,7 @@ export function PlanSection({
 
   const itemsById = new Map(items.map((i) => [i.id, i]))
   const mealsById = new Map(meals.map((m) => [m.id, m]))
+  const peopleById = new Map(people.map((p) => [p.id, p]))
   const entriesByKey = new Map(
     allEntries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),
   )
@@ -327,21 +348,16 @@ export function PlanSection({
           })()}
         </details>
 
-        <details className="mt-3">
+        <details className="mt-3" open>
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
-            🎒 Packing list — per resupply carry, whole group
+            🥣 Prep list — measure this out, per resupply carry
           </summary>
           <div className="mt-2 space-y-4">
             {carries.map((carry, i) => {
-              const lines = carryShoppingList({
-                carry,
-                personIds,
-                entriesByKey,
-                mealsById,
-                itemsById,
-              })
+              const groups = carryPrepList({ carry, personIds, entriesByKey, mealsById, itemsById })
               const { from, to } = endpoints[i]
-              const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
+              const togglePrepped = (key: string) => void toggleMark(trip.id, 'prep', key)
+              let lastMealType: string | null = null
               return (
                 <div key={carry.index}>
                   <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
@@ -349,62 +365,299 @@ export function PlanSection({
                       Carry {carry.index}
                       {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
                     </span>
-                    <span className="ml-auto shrink-0 text-xs tabular-nums text-gray-500">
-                      {fmtGrams(perCarry[i].group.weightG)} total
-                    </span>
                   </div>
-                  {lines.length === 0 ? (
+                  {groups.length === 0 ? (
                     <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
                   ) : (
-                    <ul className="mt-1 space-y-0.5 text-sm">
-                      {lines.map((l) => {
-                        const key = `${carry.index}:${l.item.id}`
-                        const isPacked = packed.has(key)
-                        return (
-                          <li key={l.item.id}>
-                            <label className="flex cursor-pointer items-baseline gap-2">
-                              <input
-                                type="checkbox"
-                                className="shrink-0"
-                                checked={isPacked}
-                                onChange={() => togglePacked(key)}
-                              />
-                              <span
-                                className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
-                              >
-                                {l.item.brand && (
-                                  <span className="text-gray-400">{l.item.brand} · </span>
-                                )}
-                                {l.item.name}
-                              </span>
-                              {l.units !== null && (
-                                <span
-                                  className={`shrink-0 text-xs ${isPacked ? 'text-gray-400' : 'text-gray-500'}`}
-                                >
-                                  {Math.round(l.units * 10) / 10}{' '}
-                                  {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
-                                </span>
-                              )}
-                              <span
-                                className={`w-16 shrink-0 text-right tabular-nums ${isPacked ? 'text-gray-400 line-through' : 'font-medium text-emerald-800'}`}
-                              >
-                                {fmtGrams(l.grams)}
-                              </span>
-                            </label>
-                          </li>
-                        )
-                      })}
-                    </ul>
+                    groups.map((g) => {
+                      const showHeader = g.mealType !== lastMealType
+                      lastMealType = g.mealType
+                      const key = `${carry.index}:${g.key}`
+                      const isPrepped = prepped.has(key)
+                      return (
+                        <div key={g.key}>
+                          {showHeader && (
+                            <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              {MEAL_TYPE_LABEL[g.mealType]}
+                            </div>
+                          )}
+                          <label className="mt-0.5 flex cursor-pointer items-baseline gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="shrink-0"
+                              checked={isPrepped}
+                              onChange={() => togglePrepped(key)}
+                            />
+                            <span
+                              className={`min-w-0 flex-1 ${isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                            >
+                              <span className="font-medium text-emerald-800">{g.count}×</span>{' '}
+                              {g.lines.map((l) => fmtPrepIngredient(l)).join(' + ')}
+                            </span>
+                          </label>
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               )
             })}
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            What to put in each carry's resupply box — whole-group totals, scaling included. Tick
-            items as you pack; tick-offs reset on reload.
+            What to physically measure out before packing. Identical meals — the same person
+            eating it twice, or different people eating the same thing — are grouped into one
+            recipe with a count, so you batch-prep instead of weighing each portion separately.
+            Tick off each recipe as you prep it.
           </p>
         </details>
+
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700">
+            🎒 Packing list — per resupply carry
+          </summary>
+
+          <div className="mt-2 flex gap-1">
+            <button
+              onClick={() => setPackingView('flat')}
+              className={
+                packingView === 'flat'
+                  ? 'rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white'
+                  : 'rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600'
+              }
+            >
+              Flat (combined)
+            </button>
+            <button
+              onClick={() => setPackingView('nested')}
+              className={
+                packingView === 'nested'
+                  ? 'rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white'
+                  : 'rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600'
+              }
+            >
+              By day / meal / hiker
+            </button>
+          </div>
+
+          {packingView === 'flat' ? (
+            <div className="mt-2 space-y-4">
+              {carries.map((carry, i) => {
+                const lines = carryShoppingList({
+                  carry,
+                  personIds,
+                  entriesByKey,
+                  mealsById,
+                  itemsById,
+                })
+                const { from, to } = endpoints[i]
+                const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
+                return (
+                  <div key={carry.index}>
+                    <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
+                      <span className="font-medium text-gray-800">
+                        Carry {carry.index}
+                        {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs tabular-nums text-gray-500">
+                        {fmtGrams(perCarry[i].group.weightG)} total
+                      </span>
+                    </div>
+                    {lines.length === 0 ? (
+                      <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
+                    ) : (
+                      <ul className="mt-1 space-y-0.5 text-sm">
+                        {lines.map((l) => {
+                          const key = `${carry.index}:${l.item.id}`
+                          const isPacked = packed.has(key)
+                          return (
+                            <li key={l.item.id}>
+                              <label className="flex cursor-pointer items-baseline gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="shrink-0"
+                                  checked={isPacked}
+                                  onChange={() => togglePacked(key)}
+                                />
+                                <span
+                                  className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                                >
+                                  {l.item.brand && (
+                                    <span className="text-gray-400">{l.item.brand} · </span>
+                                  )}
+                                  {l.item.name}
+                                </span>
+                                {l.units !== null && (
+                                  <span
+                                    className={`shrink-0 text-xs ${isPacked ? 'text-gray-400' : 'text-gray-500'}`}
+                                  >
+                                    {Math.round(l.units * 10) / 10}{' '}
+                                    {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
+                                  </span>
+                                )}
+                                <span
+                                  className={`w-16 shrink-0 text-right tabular-nums ${isPacked ? 'text-gray-400 line-through' : 'font-medium text-emerald-800'}`}
+                                >
+                                  {fmtGrams(l.grams)}
+                                </span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mt-2 space-y-4">
+              {carries.map((carry, i) => {
+                const { from, to } = endpoints[i]
+                const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
+                // Carry.slots is already chronological (day, then slot within the
+                // day), so grouping by consecutive dayIndex keeps that order.
+                const dayGroups: { dayIndex: number; slots: SlotRef[] }[] = []
+                for (const ref of carry.slots) {
+                  const last = dayGroups[dayGroups.length - 1]
+                  if (last && last.dayIndex === ref.dayIndex) last.slots.push(ref)
+                  else dayGroups.push({ dayIndex: ref.dayIndex, slots: [ref] })
+                }
+                return (
+                  <div key={carry.index}>
+                    <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
+                      <span className="font-medium text-gray-800">
+                        Carry {carry.index}
+                        {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs tabular-nums text-gray-500">
+                        {fmtGrams(perCarry[i].group.weightG)} total
+                      </span>
+                    </div>
+                    {dayGroups.map(({ dayIndex, slots }) => {
+                      const day = trip.days.find((d) => d.index === dayIndex)
+                      return (
+                        <div key={dayIndex} className="mt-2">
+                          <div className="text-sm font-medium text-gray-700">
+                            {day ? dayLegLabel(day) : `Day ${dayIndex}`}
+                          </div>
+                          {slots.map((ref) => {
+                            const perPersonLines = personIds
+                              .map((pid) => ({
+                                pid,
+                                lines: entryItemLines(
+                                  entriesByKey.get(planKey(pid, ref.dayIndex, ref.key)),
+                                  mealsById,
+                                  itemsById,
+                                ),
+                              }))
+                              .filter((x) => x.lines.length > 0)
+                            if (perPersonLines.length === 0) return null
+                            return (
+                              <div key={ref.key} className="mt-1 pl-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                  {fmtSlot(ref.slot)}
+                                </div>
+                                <ul className="mt-0.5 space-y-0.5 text-sm">
+                                  {perPersonLines.flatMap(({ pid, lines }) =>
+                                    lines.map((l) => {
+                                      const key = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}`
+                                      const isPacked = packed.has(key)
+                                      return (
+                                        <li key={key}>
+                                          <label className="flex cursor-pointer items-baseline gap-2 pl-2">
+                                            <input
+                                              type="checkbox"
+                                              className="shrink-0"
+                                              checked={isPacked}
+                                              onChange={() => togglePacked(key)}
+                                            />
+                                            <span className="w-16 shrink-0 truncate text-xs font-medium text-gray-500">
+                                              {peopleById.get(pid)?.name ?? pid}
+                                            </span>
+                                            <span
+                                              className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                                            >
+                                              {l.item.brand && (
+                                                <span className="text-gray-400">{l.item.brand} · </span>
+                                              )}
+                                              {l.item.name}
+                                            </span>
+                                            <span
+                                              className={`w-16 shrink-0 text-right tabular-nums ${isPacked ? 'text-gray-400 line-through' : 'font-medium text-emerald-800'}`}
+                                            >
+                                              {fmtGrams(l.grams)}
+                                            </span>
+                                          </label>
+                                        </li>
+                                      )
+                                    }),
+                                  )}
+                                </ul>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <p className="mt-2 text-xs text-gray-500">
+            What to put in each carry's resupply box. "Flat" combines everyone's food into one
+            line per item, for buying/packing efficiently. "By day / meal / hiker" breaks it out
+            per person, for checking the plan itself. Tick-offs are saved and shared live; the two
+            views track separate tick-offs.
+          </p>
+        </details>
+
+        {(() => {
+          const missing = findMissingSlots({ days: trip.days, personIds, entriesByKey })
+          if (missing.length === 0) return null
+          const grouped = new Map<
+            string,
+            { dayIndex: number; slot: Slot; slotKey: string; names: string[] }
+          >()
+          for (const m of missing) {
+            const gKey = `${m.dayIndex}:${m.slotKey}`
+            const name = peopleById.get(m.personId)?.name ?? m.personId
+            const existing = grouped.get(gKey)
+            if (existing) existing.names.push(name)
+            else grouped.set(gKey, { dayIndex: m.dayIndex, slot: m.slot, slotKey: m.slotKey, names: [name] })
+          }
+          const rows = [...grouped.values()].sort(
+            (a, b) => a.dayIndex - b.dayIndex || a.slotKey.localeCompare(b.slotKey),
+          )
+          return (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-sm font-medium text-amber-800">
+                ⚠️ Missing — {missing.length} unplanned meal{missing.length === 1 ? '' : 's'}
+              </summary>
+              <ul className="mt-2 space-y-0.5 text-sm">
+                {rows.map((r) => {
+                  const day = trip.days.find((d) => d.index === r.dayIndex)
+                  return (
+                    <li key={`${r.dayIndex}:${r.slotKey}`} className="text-gray-700">
+                      <span className="font-medium text-gray-800">
+                        {day ? dayLegLabel(day) : `Day ${r.dayIndex}`}
+                      </span>
+                      {' · '}
+                      {fmtSlot(r.slot)}
+                      {' — '}
+                      <span className="text-amber-800">{r.names.join(', ')}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <p className="mt-2 text-xs text-gray-500">
+                Meal slots nobody has assigned any food to yet — add something in the Plan tab, or
+                mark it off-trail if it's intentionally not carried.
+              </p>
+            </details>
+          )
+        })()}
       </section>
       )}
     </div>
