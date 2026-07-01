@@ -24,7 +24,14 @@ import {
   planKey,
   type DayStatus,
 } from '../domain/totals'
-import { carryPrepList, carryShoppingList, defaultServingG, entryItemLines, tripShoppingList } from '../domain/units'
+import {
+  carryPrepIngredientTotals,
+  carryPrepList,
+  carryShoppingList,
+  defaultServingG,
+  entryItemLines,
+  tripShoppingList,
+} from '../domain/units'
 import { itemsToCsv } from '../domain/csv/items'
 import { mealsToCsv } from '../domain/csv/meals'
 import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Slot, Trip } from '../domain/types'
@@ -34,6 +41,7 @@ import {
   fmtDensity,
   fmtGrams,
   fmtPrepIngredient,
+  fmtPrepPortion,
   fmtPurchase,
   fmtSlot,
   MEAL_TYPE_LABEL,
@@ -71,6 +79,7 @@ export function PlanSection({
 }) {
   const [personId, setPersonId] = useState<string | null>(null)
   const [packingView, setPackingView] = useState<'flat' | 'nested'>('flat')
+  const [prepView, setPrepView] = useState<'recipe' | 'ingredient'>('recipe')
   // Shopping/packing tick-offs are persisted as `mark` rows and synced, so the
   // checklist is shared live with collaborators. `buy` marks key on item id;
   // `pack` marks key on `${carryIndex}:${itemId}`.
@@ -352,62 +361,153 @@ export function PlanSection({
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
             🥣 Prep list — measure this out, per resupply carry
           </summary>
-          <div className="mt-2 space-y-4">
-            {carries.map((carry, i) => {
-              const groups = carryPrepList({ carry, personIds, entriesByKey, mealsById, itemsById })
-              const { from, to } = endpoints[i]
-              const togglePrepped = (key: string) => void toggleMark(trip.id, 'prep', key)
-              let lastMealType: string | null = null
-              return (
-                <div key={carry.index}>
-                  <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
-                    <span className="font-medium text-gray-800">
-                      Carry {carry.index}
-                      {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
-                    </span>
-                  </div>
-                  {groups.length === 0 ? (
-                    <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
-                  ) : (
-                    groups.map((g) => {
-                      const showHeader = g.mealType !== lastMealType
-                      lastMealType = g.mealType
-                      const key = `${carry.index}:${g.key}`
-                      const isPrepped = prepped.has(key)
-                      return (
-                        <div key={g.key}>
-                          {showHeader && (
-                            <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              {MEAL_TYPE_LABEL[g.mealType]}
-                            </div>
-                          )}
-                          <label className="mt-0.5 flex cursor-pointer items-baseline gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              className="shrink-0"
-                              checked={isPrepped}
-                              onChange={() => togglePrepped(key)}
-                            />
-                            <span
-                              className={`min-w-0 flex-1 ${isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}`}
-                            >
-                              <span className="font-medium text-emerald-800">{g.count}×</span>{' '}
-                              {g.lines.map((l) => fmtPrepIngredient(l)).join(' + ')}
-                            </span>
-                          </label>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              )
-            })}
+
+          <div className="mt-2 flex gap-1">
+            <button
+              onClick={() => setPrepView('recipe')}
+              className={
+                prepView === 'recipe'
+                  ? 'rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white'
+                  : 'rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600'
+              }
+            >
+              By recipe
+            </button>
+            <button
+              onClick={() => setPrepView('ingredient')}
+              className={
+                prepView === 'ingredient'
+                  ? 'rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white'
+                  : 'rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600'
+              }
+            >
+              By ingredient
+            </button>
           </div>
+
+          {prepView === 'recipe' ? (
+            <div className="mt-2 space-y-4">
+              {carries.map((carry, i) => {
+                const groups = carryPrepList({ carry, personIds, entriesByKey, mealsById, itemsById })
+                const { from, to } = endpoints[i]
+                const togglePrepped = (key: string) => void toggleMark(trip.id, 'prep', key)
+                let lastMealType: string | null = null
+                return (
+                  <div key={carry.index}>
+                    <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
+                      <span className="font-medium text-gray-800">
+                        Carry {carry.index}
+                        {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
+                      </span>
+                    </div>
+                    {groups.length === 0 ? (
+                      <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
+                    ) : (
+                      groups.map((g) => {
+                        const showHeader = g.mealType !== lastMealType
+                        lastMealType = g.mealType
+                        const key = `${carry.index}:${g.key}`
+                        const isPrepped = prepped.has(key)
+                        return (
+                          <div key={g.key}>
+                            {showHeader && (
+                              <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                {MEAL_TYPE_LABEL[g.mealType]}
+                              </div>
+                            )}
+                            <label className="mt-0.5 flex cursor-pointer items-baseline gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="shrink-0"
+                                checked={isPrepped}
+                                onChange={() => togglePrepped(key)}
+                              />
+                              <span
+                                className={`min-w-0 flex-1 ${isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}`}
+                              >
+                                <span className="font-medium text-emerald-800">{g.count}×</span>{' '}
+                                {g.lines.map((l) => fmtPrepIngredient(l)).join(' + ')}
+                              </span>
+                            </label>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mt-2 space-y-4">
+              {carries.map((carry, i) => {
+                const groups = carryPrepList({ carry, personIds, entriesByKey, mealsById, itemsById })
+                const totals = carryPrepIngredientTotals(groups)
+                const { from, to } = endpoints[i]
+                const togglePrepped = (key: string) => void toggleMark(trip.id, 'prep', key)
+                return (
+                  <div key={carry.index}>
+                    <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
+                      <span className="font-medium text-gray-800">
+                        Carry {carry.index}
+                        {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
+                      </span>
+                    </div>
+                    {totals.length === 0 ? (
+                      <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
+                    ) : (
+                      totals.map((t) => (
+                        <div key={t.item.id} className="mt-2">
+                          <div className="flex items-baseline gap-2 text-sm">
+                            <span className="font-medium text-gray-800">
+                              {t.item.brand && <span className="text-gray-400">{t.item.brand} · </span>}
+                              {t.item.name}
+                            </span>
+                            {t.portions.length > 1 && (
+                              <span className="text-xs tabular-nums text-gray-500">
+                                {fmtGrams(t.totalGrams)} total
+                              </span>
+                            )}
+                          </div>
+                          <ul className="mt-0.5 space-y-0.5 text-sm">
+                            {t.portions.map((p) => {
+                              const key = `${carry.index}:ing:${t.item.id}:${p.grams}`
+                              const isPrepped = prepped.has(key)
+                              return (
+                                <li key={key}>
+                                  <label className="flex cursor-pointer items-baseline gap-2 pl-2">
+                                    <input
+                                      type="checkbox"
+                                      className="shrink-0"
+                                      checked={isPrepped}
+                                      onChange={() => togglePrepped(key)}
+                                    />
+                                    <span
+                                      className={isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}
+                                    >
+                                      {fmtPrepPortion(t.item, p)}
+                                    </span>
+                                  </label>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-gray-500">
-            What to physically measure out before packing. Identical meals — the same person
-            eating it twice, or different people eating the same thing — are grouped into one
+            What to physically measure out before packing. "By recipe" groups identical meals —
+            the same person eating it twice, or different people eating the same thing — into one
             recipe with a count, so you batch-prep instead of weighing each portion separately.
-            Tick off each recipe as you prep it.
+            "By ingredient" pivots the same recipes around each ingredient instead, so you can
+            measure out a shared item like oatmeal once for every recipe that needs it, then
+            divide it into the recipes. Tick-offs are saved and shared live; the two views track
+            separate tick-offs.
           </p>
         </details>
 
