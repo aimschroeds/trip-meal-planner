@@ -3,6 +3,7 @@ import { deriveCarries } from '../../src/domain/carries'
 import { makeTrip } from '../../src/domain/trip'
 import { planKey } from '../../src/domain/totals'
 import {
+  carryPrepIngredientTotals,
   carryPrepList,
   carryShoppingList,
   defaultServingG,
@@ -12,8 +13,10 @@ import {
   purchaseQuantity,
   tripShoppingList,
   unitsForGrams,
+  type PrepGroup,
+  type ShoppingLine,
 } from '../../src/domain/units'
-import type { Item, Meal, PlanEntry } from '../../src/domain/types'
+import type { Item, Meal, MealType, PlanEntry } from '../../src/domain/types'
 
 const tortillas: Item = {
   id: 'tortillas',
@@ -374,6 +377,73 @@ describe('carryPrepList', () => {
     ])
     const groups = carryPrepList({ carry, personIds: ['alice'], entriesByKey, mealsById, itemsById })
     expect(groups).toEqual([])
+  })
+})
+
+describe('carryPrepIngredientTotals', () => {
+  const oats: Item = {
+    id: 'oats',
+    name: 'Oatmeal',
+    caloriesPerGram: 4,
+    vegetarian: true,
+    inputBasis: 'per_100g',
+    inputWeightG: 100,
+    inputCalories: 400,
+  }
+  const honey: Item = { ...oats, id: 'honey', name: 'Honey' }
+  const apricots: Item = { ...oats, id: 'apricots', name: 'Apricots' }
+
+  const group = (mealType: MealType, count: number, lines: ShoppingLine[]): PrepGroup => ({
+    mealType,
+    key: `${mealType}:${lines.map((l) => `${l.item.id}:${l.grams}`).join('|')}`,
+    count,
+    lines,
+  })
+  const line = (item: Item, grams: number): ShoppingLine => ({ item, grams, units: null, packages: null })
+
+  it('sums the count for the same item at the same portion size across different recipes', () => {
+    const groups = [
+      group('brekkie', 4, [line(oats, 50), line(honey, 21)]),
+      group('brekkie', 2, [line(oats, 50)]),
+    ]
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    const oatsTotal = brekkie.totals.find((t) => t.item.id === 'oats')!
+    expect(oatsTotal.portions).toEqual([{ grams: 50, units: null, count: 6 }])
+    expect(oatsTotal.totalGrams).toBe(300)
+  })
+
+  it('keeps different portion sizes of the same item separate, most-repeated first', () => {
+    const groups = [
+      group('brekkie', 4, [line(oats, 50)]),
+      group('brekkie', 1, [line(oats, 75), line(apricots, 30)]),
+    ]
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    const oatsTotal = brekkie.totals.find((t) => t.item.id === 'oats')!
+    expect(oatsTotal.portions).toEqual([
+      { grams: 50, units: null, count: 4 },
+      { grams: 75, units: null, count: 1 },
+    ])
+    expect(oatsTotal.totalGrams).toBe(50 * 4 + 75)
+  })
+
+  it('sorts items within a meal time by total grams contributed, heaviest first', () => {
+    const groups = [
+      group('brekkie', 4, [line(oats, 50), line(honey, 21)]),
+      group('brekkie', 1, [line(oats, 75), line(apricots, 30)]),
+    ]
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    expect(brekkie.totals.map((t) => t.item.id)).toEqual(['oats', 'honey', 'apricots'])
+  })
+
+  it('keeps the same item separate across different meal times, ordered brekkie/lunch/dinner/snack', () => {
+    const groups = [
+      group('dinner', 1, [line(oats, 100)]),
+      group('brekkie', 3, [line(oats, 50)]),
+    ]
+    const mealTotals = carryPrepIngredientTotals(groups)
+    expect(mealTotals.map((m) => m.mealType)).toEqual(['brekkie', 'dinner'])
+    expect(mealTotals[0].totals[0].totalGrams).toBe(150) // brekkie: 3x50g
+    expect(mealTotals[1].totals[0].totalGrams).toBe(100) // dinner: 1x100g, not combined with brekkie
   })
 })
 
