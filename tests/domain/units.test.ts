@@ -406,8 +406,8 @@ describe('carryPrepIngredientTotals', () => {
       group('brekkie', 4, [line(oats, 50), line(honey, 21)]),
       group('brekkie', 2, [line(oats, 50)]),
     ]
-    const totals = carryPrepIngredientTotals(groups)
-    const oatsTotal = totals.find((t) => t.item.id === 'oats')!
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    const oatsTotal = brekkie.totals.find((t) => t.item.id === 'oats')!
     expect(oatsTotal.portions).toEqual([{ grams: 50, units: null, count: 6 }])
     expect(oatsTotal.totalGrams).toBe(300)
   })
@@ -417,8 +417,8 @@ describe('carryPrepIngredientTotals', () => {
       group('brekkie', 4, [line(oats, 50)]),
       group('brekkie', 1, [line(oats, 75), line(apricots, 30)]),
     ]
-    const totals = carryPrepIngredientTotals(groups)
-    const oatsTotal = totals.find((t) => t.item.id === 'oats')!
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    const oatsTotal = brekkie.totals.find((t) => t.item.id === 'oats')!
     expect(oatsTotal.portions).toEqual([
       { grams: 50, units: null, count: 4 },
       { grams: 75, units: null, count: 1 },
@@ -426,13 +426,24 @@ describe('carryPrepIngredientTotals', () => {
     expect(oatsTotal.totalGrams).toBe(50 * 4 + 75)
   })
 
-  it('sorts items by total grams contributed, heaviest first', () => {
+  it('sorts items within a meal time by total grams contributed, heaviest first', () => {
     const groups = [
       group('brekkie', 4, [line(oats, 50), line(honey, 21)]),
       group('brekkie', 1, [line(oats, 75), line(apricots, 30)]),
     ]
-    const totals = carryPrepIngredientTotals(groups)
-    expect(totals.map((t) => t.item.id)).toEqual(['oats', 'honey', 'apricots'])
+    const [brekkie] = carryPrepIngredientTotals(groups)
+    expect(brekkie.totals.map((t) => t.item.id)).toEqual(['oats', 'honey', 'apricots'])
+  })
+
+  it('keeps the same item separate across different meal times, ordered brekkie/lunch/dinner/snack', () => {
+    const groups = [
+      group('dinner', 1, [line(oats, 100)]),
+      group('brekkie', 3, [line(oats, 50)]),
+    ]
+    const mealTotals = carryPrepIngredientTotals(groups)
+    expect(mealTotals.map((m) => m.mealType)).toEqual(['brekkie', 'dinner'])
+    expect(mealTotals[0].totals[0].totalGrams).toBe(150) // brekkie: 3x50g
+    expect(mealTotals[1].totals[0].totalGrams).toBe(100) // dinner: 1x100g, not combined with brekkie
   })
 })
 

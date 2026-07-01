@@ -192,12 +192,7 @@ export interface PrepIngredientTotal {
   totalGrams: number
 }
 
-/** Pivots a carry's prep recipes (grouped by composition) into per-ingredient
- *  totals (grouped by item), for measuring out a shared ingredient in bulk
- *  before dividing it up into individual recipes — e.g. "5× 50 g oatmeal"
- *  measured once, rather than re-measuring 50 g five separate times. Sorted
- *  by total grams contributed to the carry, heaviest first. */
-export function carryPrepIngredientTotals(groups: PrepGroup[]): PrepIngredientTotal[] {
+function ingredientTotals(groups: PrepGroup[]): PrepIngredientTotal[] {
   const byItem = new Map<string, { item: Item; portions: Map<number, PrepPortion> }>()
   for (const group of groups) {
     for (const line of group.lines) {
@@ -218,6 +213,35 @@ export function carryPrepIngredientTotals(groups: PrepGroup[]): PrepIngredientTo
       return { item, portions: sorted, totalGrams }
     })
     .sort((a, b) => b.totalGrams - a.totalGrams)
+}
+
+export interface MealPrepIngredientTotals {
+  mealType: MealType
+  /** Per-ingredient totals within this meal time only — a shared item used
+   *  at both breakfast and dinner is counted separately in each, since
+   *  they're packed/eaten at different times. */
+  totals: PrepIngredientTotal[]
+}
+
+/** Pivots a carry's prep recipes (grouped by composition) into per-ingredient
+ *  totals within each meal time, for measuring out a shared ingredient in
+ *  bulk before dividing it up into individual recipes — e.g. "5× 50 g
+ *  oatmeal" measured once across every breakfast that needs it, rather than
+ *  re-measuring 50 g five separate times. Meal times are kept separate
+ *  (breakfast oatmeal isn't combined with a dinner that also uses oatmeal)
+ *  since they're prepped and packed at different times. Sorted by meal type
+ *  (brekkie, lunch, dinner, snack), then within each by total grams
+ *  contributed, heaviest first. */
+export function carryPrepIngredientTotals(groups: PrepGroup[]): MealPrepIngredientTotals[] {
+  const byMealType = new Map<MealType, PrepGroup[]>()
+  for (const group of groups) {
+    const list = byMealType.get(group.mealType)
+    if (list) list.push(group)
+    else byMealType.set(group.mealType, [group])
+  }
+  return [...byMealType.entries()]
+    .map(([mealType, mealGroups]) => ({ mealType, totals: ingredientTotals(mealGroups) }))
+    .sort((a, b) => PREP_MEAL_ORDER[a.mealType] - PREP_MEAL_ORDER[b.mealType])
 }
 
 /** What to PACK in one carry's resupply box: per-item gram totals across every

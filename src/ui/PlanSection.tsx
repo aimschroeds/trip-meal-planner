@@ -441,7 +441,7 @@ export function PlanSection({
             <div className="mt-2 space-y-4">
               {carries.map((carry, i) => {
                 const groups = carryPrepList({ carry, personIds, entriesByKey, mealsById, itemsById })
-                const totals = carryPrepIngredientTotals(groups)
+                const mealTotals = carryPrepIngredientTotals(groups)
                 const { from, to } = endpoints[i]
                 const togglePrepped = (key: string) => void toggleMark(trip.id, 'prep', key)
                 return (
@@ -452,45 +452,54 @@ export function PlanSection({
                         {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`}
                       </span>
                     </div>
-                    {totals.length === 0 ? (
+                    {mealTotals.length === 0 ? (
                       <p className="mt-1 text-sm text-gray-500">Nothing planned yet.</p>
                     ) : (
-                      totals.map((t) => (
-                        <div key={t.item.id} className="mt-2">
-                          <div className="flex items-baseline gap-2 text-sm">
-                            <span className="font-medium text-gray-800">
-                              {t.item.brand && <span className="text-gray-400">{t.item.brand} · </span>}
-                              {t.item.name}
-                            </span>
-                            {t.portions.length > 1 && (
-                              <span className="text-xs tabular-nums text-gray-500">
-                                {fmtGrams(t.totalGrams)} total
-                              </span>
-                            )}
+                      mealTotals.map(({ mealType, totals }) => (
+                        <div key={mealType} className="mt-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            {MEAL_TYPE_LABEL[mealType]}
                           </div>
-                          <ul className="mt-0.5 space-y-0.5 text-sm">
-                            {t.portions.map((p) => {
-                              const key = `${carry.index}:ing:${t.item.id}:${p.grams}`
-                              const isPrepped = prepped.has(key)
-                              return (
-                                <li key={key}>
-                                  <label className="flex cursor-pointer items-baseline gap-2 pl-2">
-                                    <input
-                                      type="checkbox"
-                                      className="shrink-0"
-                                      checked={isPrepped}
-                                      onChange={() => togglePrepped(key)}
-                                    />
-                                    <span
-                                      className={isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}
-                                    >
-                                      {fmtPrepPortion(t.item, p)}
-                                    </span>
-                                  </label>
-                                </li>
-                              )
-                            })}
-                          </ul>
+                          {totals.map((t) => (
+                            <div key={t.item.id} className="mt-1 pl-2">
+                              <div className="flex items-baseline gap-2 text-sm">
+                                <span className="font-medium text-gray-800">
+                                  {t.item.brand && (
+                                    <span className="text-gray-400">{t.item.brand} · </span>
+                                  )}
+                                  {t.item.name}
+                                </span>
+                                {t.portions.length > 1 && (
+                                  <span className="text-xs tabular-nums text-gray-500">
+                                    {fmtGrams(t.totalGrams)} total
+                                  </span>
+                                )}
+                              </div>
+                              <ul className="mt-0.5 space-y-0.5 text-sm">
+                                {t.portions.map((p) => {
+                                  const key = `${carry.index}:ing:${mealType}:${t.item.id}:${p.grams}`
+                                  const isPrepped = prepped.has(key)
+                                  return (
+                                    <li key={key}>
+                                      <label className="flex cursor-pointer items-baseline gap-2 pl-2">
+                                        <input
+                                          type="checkbox"
+                                          className="shrink-0"
+                                          checked={isPrepped}
+                                          onChange={() => togglePrepped(key)}
+                                        />
+                                        <span
+                                          className={isPrepped ? 'text-gray-400 line-through' : 'text-gray-800'}
+                                        >
+                                          {fmtPrepPortion(t.item, p)}
+                                        </span>
+                                      </label>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            </div>
+                          ))}
                         </div>
                       ))
                     )}
@@ -504,10 +513,10 @@ export function PlanSection({
             What to physically measure out before packing. "By recipe" groups identical meals —
             the same person eating it twice, or different people eating the same thing — into one
             recipe with a count, so you batch-prep instead of weighing each portion separately.
-            "By ingredient" pivots the same recipes around each ingredient instead, so you can
-            measure out a shared item like oatmeal once for every recipe that needs it, then
-            divide it into the recipes. Tick-offs are saved and shared live; the two views track
-            separate tick-offs.
+            "By ingredient" pivots the same recipes around each ingredient within each meal time
+            instead, so you can measure out a shared item like oatmeal once for every breakfast
+            that needs it, then divide it into the recipes. Tick-offs are saved and shared live;
+            the two views track separate tick-offs.
           </p>
         </details>
 
