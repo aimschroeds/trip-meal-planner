@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { deriveCarries } from '../../src/domain/carries'
-import { carryTotals, dayTotals, entryTotals, planKey } from '../../src/domain/totals'
+import { carryTotals, dayTotals, entryTotals, findMissingSlots, planKey } from '../../src/domain/totals'
 import { makeTrip } from '../../src/domain/trip'
 import type { Item, Meal, Person, PlanEntry } from '../../src/domain/types'
 
@@ -230,5 +230,49 @@ describe('carryTotals', () => {
 
     expect(totals.group.weightG).toBe(250)
     expect(totals.group.calories).toBe(1850)
+  })
+})
+
+describe('findMissingSlots', () => {
+  const trip = makeTrip('t', 'Trip', 1) // 1 day: brekkie, lunch, dinner, 2 snacks
+
+  it('flags every slot for a person with no entries at all', () => {
+    const missing = findMissingSlots({
+      days: trip.days,
+      personIds: ['p1'],
+      entriesByKey: new Map(),
+    })
+    expect(missing).toHaveLength(5)
+    expect(missing[0]).toEqual({
+      dayIndex: 1,
+      slot: { type: 'brekkie', timing: 'morning' },
+      slotKey: 'brekkie:morning',
+      personId: 'p1',
+    })
+  })
+
+  it('does not flag a filled slot, an off-trail slot, or other people', () => {
+    const entries = [
+      mealEntry('brekkie:morning', 'porridge'), // p1
+      entry({ slotKey: 'lunch:midday', kind: 'offTrail', offTrailCalories: 700 }), // p1
+      mealEntry('brekkie:morning', 'porridge', { personId: 'p2', id: 'x1' }),
+    ]
+    const entriesByKey = new Map(
+      entries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),
+    )
+    const missing = findMissingSlots({ days: trip.days, personIds: ['p1', 'p2'], entriesByKey })
+
+    expect(missing.some((m) => m.personId === 'p1' && m.slotKey === 'brekkie:morning')).toBe(false)
+    expect(missing.some((m) => m.personId === 'p1' && m.slotKey === 'lunch:midday')).toBe(false)
+    expect(missing.filter((m) => m.personId === 'p2')).toHaveLength(4) // everything but brekkie
+  })
+
+  it('flags a planned entry with no parts as missing', () => {
+    const entries = [entry({ slotKey: 'dinner:evening', kind: 'planned', parts: [] })]
+    const entriesByKey = new Map(
+      entries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]),
+    )
+    const missing = findMissingSlots({ days: trip.days, personIds: ['p1'], entriesByKey })
+    expect(missing.some((m) => m.slotKey === 'dinner:evening')).toBe(true)
   })
 })

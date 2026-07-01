@@ -3,7 +3,7 @@
 
 import { rollUpMeal } from './rollups'
 import { scaledDailyTarget } from './density'
-import type { Carry } from './carries'
+import { keyedSlots, type Carry } from './carries'
 import type { Day, DayType, Item, Meal, Person, PlanEntry } from './types'
 
 export const DEFAULT_TOLERANCE = 0.05
@@ -156,6 +156,37 @@ export function combineTotals(totals: MassTotals[]): MassTotals {
   const weightG = totals.reduce((n, t) => n + t.weightG, 0)
   const calories = totals.reduce((n, t) => n + t.calories, 0)
   return withDensity(weightG, calories)
+}
+
+export interface MissingSlot {
+  dayIndex: number
+  slot: Day['activeSlots'][number]
+  slotKey: string
+  personId: string
+}
+
+/** Every on-trail slot with no plan entry at all, or an empty planned entry
+ *  (kind 'planned' with no parts) — i.e. meals nobody has assigned food to
+ *  yet. Off-trail entries are an intentional choice, not a gap, so they're
+ *  excluded. Ordered by day, then slot, then person (input order). */
+export function findMissingSlots(args: {
+  days: Day[]
+  personIds: string[]
+  entriesByKey: ReadonlyMap<string, PlanEntry>
+}): MissingSlot[] {
+  const { days, personIds, entriesByKey } = args
+  const missing: MissingSlot[] = []
+  for (const day of [...days].sort((a, b) => a.index - b.index)) {
+    for (const { slot, key } of keyedSlots(day)) {
+      for (const personId of personIds) {
+        const entry = entriesByKey.get(planKey(personId, day.index, key))
+        const isEmpty =
+          !entry || (entry.kind === 'planned' && (!entry.parts || entry.parts.length === 0))
+        if (isEmpty) missing.push({ dayIndex: day.index, slot, slotKey: key, personId })
+      }
+    }
+  }
+  return missing
 }
 
 export interface CarryTotals {

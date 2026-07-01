@@ -5,7 +5,7 @@
 import { scaledGrams } from './rollups'
 import type { Carry, SlotRef } from './carries'
 import { planKey } from './totals'
-import type { Item, Meal, PlanEntry } from './types'
+import type { Item, Meal, MealType, PlanEntry } from './types'
 
 export function gramsForUnits(item: Item, units: number): number | null {
   if (item.unitWeightG === undefined || !Number.isFinite(units) || units < 0) return null
@@ -54,20 +54,8 @@ function gramsBySlots(
   for (const personId of personIds) {
     for (const ref of slots) {
       const entry = entriesByKey.get(planKey(personId, ref.dayIndex, ref.key))
-      if (!entry || entry.kind !== 'planned') continue
-      for (const part of entry.parts ?? []) {
-        if (part.kind === 'item') {
-          add(part.itemId, part.grams)
-          continue
-        }
-        const meal = mealsById.get(part.mealId)
-        if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${part.mealId}`)
-        const scale = part.quantityScale ?? 1
-        for (const c of meal.components) {
-          const item = itemsById.get(c.itemId)
-          if (!item) throw new Error(`Meal "${meal.name}" references missing item ${c.itemId}`)
-          add(c.itemId, scale === 1 ? c.grams : scaledGrams(c.grams, item, scale))
-        }
+      for (const line of entryItemLines(entry, mealsById, itemsById)) {
+        add(line.item.id, line.grams)
       }
     }
   }
@@ -82,6 +70,108 @@ export interface ShoppingLine {
   units: number | null
   /** Whole packages to buy; null unless the item was entered per package. */
   packages: number | null
+}
+
+export interface ItemLine {
+  item: Item
+  grams: number
+}
+
+/** Item-level breakdown of a single plan entry (a meal plus any loose items),
+ *  merging duplicate items within the entry, heaviest first. Off-trail
+ *  entries and missing/empty entries carry nothing. */
+export function entryItemLines(
+  entry: PlanEntry | undefined,
+  mealsById: ReadonlyMap<string, Meal>,
+  itemsById: ReadonlyMap<string, Item>,
+): ItemLine[] {
+  if (!entry || entry.kind !== 'planned') return []
+  const gramsByItem = new Map<string, number>()
+  const add = (itemId: string, grams: number) =>
+    gramsByItem.set(itemId, (gramsByItem.get(itemId) ?? 0) + grams)
+  for (const part of entry.parts ?? []) {
+    if (part.kind === 'item') {
+      add(part.itemId, part.grams)
+      continue
+    }
+    const meal = mealsById.get(part.mealId)
+    if (!meal) throw new Error(`Plan entry ${entry.id} references missing meal ${part.mealId}`)
+    const scale = part.quantityScale ?? 1
+    for (const c of meal.components) {
+      const item = itemsById.get(c.itemId)
+      if (!item) throw new Error(`Meal "${meal.name}" references missing item ${c.itemId}`)
+      add(c.itemId, scale === 1 ? c.grams : scaledGrams(c.grams, item, scale))
+    }
+  }
+  return [...gramsByItem.entries()]
+    .map(([itemId, grams]) => ({ item: itemsById.get(itemId)!, grams }))
+    .sort((a, b) => b.grams - a.grams)
+}
+
+export interface PrepGroup {
+  mealType: MealType
+  /** Stable identifier for this recipe within the carry (meal type + exact
+   *  composition) — usable as a tick-off reference across re-renders. */
+  key: string
+  /** The exact composition to measure out — items and grams, heaviest first. */
+  lines: ShoppingLine[]
+  /** How many separate on-trail meals (across people and days, within this
+   *  carry) share this exact composition — how many times to repeat it. */
+  count: number
+}
+
+const PREP_MEAL_ORDER: Record<MealType, number> = { brekkie: 0, lunch: 1, dinner: 2, snack: 3 }
+
+/** Groups every on-trail entry in a carry by meal type and exact food
+ *  composition, so a person weighing out ingredients knows what to measure
+ *  and how many times to repeat it, before anything gets packed. Two people
+ *  eating an identical breakfast, or one person eating it on two different
+ *  days, collapse into a single recipe with count 2 rather than two separate
+ *  lines. Sorted by meal type (brekkie, lunch, dinner, snack), then by how
+ *  many times each recipe repeats. */
+export function carryPrepList(args: {
+  carry: Carry
+  personIds: string[]
+  entriesByKey: ReadonlyMap<string, PlanEntry>
+  mealsById: ReadonlyMap<string, Meal>
+  itemsById: ReadonlyMap<string, Item>
+}): PrepGroup[] {
+  const { carry, personIds, entriesByKey, mealsById, itemsById } = args
+  const groups = new Map<string, PrepGroup>()
+
+  for (const personId of personIds) {
+    for (const ref of carry.slots) {
+      const entry = entriesByKey.get(planKey(personId, ref.dayIndex, ref.key))
+      const itemLines = entryItemLines(entry, mealsById, itemsById)
+      if (itemLines.length === 0) continue
+
+      // The composition signature ignores who/which day — identical recipes
+      // collapse together regardless of who's eating them or when.
+      const signature = itemLines.map((l) => `${l.item.id}:${l.grams}`).join('|')
+      const key = `${ref.slot.type}::${signature}`
+
+      const existing = groups.get(key)
+      if (existing) {
+        existing.count += 1
+        continue
+      }
+      groups.set(key, {
+        mealType: ref.slot.type,
+        key,
+        count: 1,
+        lines: itemLines.map((l) => ({
+          item: l.item,
+          grams: l.grams,
+          units: unitsForGrams(l.item, l.grams),
+          packages: null, // prep is a per-portion measure-out, not a whole-package buy
+        })),
+      })
+    }
+  }
+
+  return [...groups.values()].sort(
+    (a, b) => PREP_MEAL_ORDER[a.mealType] - PREP_MEAL_ORDER[b.mealType] || b.count - a.count,
+  )
 }
 
 /** What to PACK in one carry's resupply box: per-item gram totals across every
