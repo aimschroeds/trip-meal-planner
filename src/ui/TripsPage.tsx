@@ -32,15 +32,20 @@ import { VegBadge } from './VegBadge'
 const DAY_TYPES: DayType[] = ['small', 'average', 'big', 'huge']
 const MAINS: MainMealType[] = ['brekkie', 'lunch', 'dinner']
 
-export function TripsPage() {
+export function TripsPage({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+}) {
   const trips = useLiveQuery(() => db.trips.toArray(), [], [] as Trip[])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [numDays, setNumDays] = useState('7')
 
   const selected = trips.find((t) => t.id === selectedId)
   if (selected) {
-    return <TripDetail trip={selected} onBack={() => setSelectedId(null)} />
+    return <TripDetail trip={selected} onBack={() => onSelect(null)} />
   }
 
   const days = Number(numDays)
@@ -52,7 +57,7 @@ export function TripsPage() {
         className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
         onSubmit={(e) => {
           e.preventDefault()
-          void createTrip(name.trim(), days).then(setSelectedId)
+          void createTrip(name.trim(), days).then(onSelect)
           setName('')
         }}
       >
@@ -97,7 +102,7 @@ export function TripsPage() {
             >
               <button
                 className="min-w-0 flex-1 truncate text-left font-medium text-emerald-800 underline"
-                onClick={() => setSelectedId(trip.id)}
+                onClick={() => onSelect(trip.id)}
               >
                 {trip.name}
               </button>

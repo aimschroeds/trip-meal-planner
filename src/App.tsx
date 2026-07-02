@@ -15,6 +15,9 @@ function App() {
   // Opening a share link (…#join=<token>) lands on Backup, where the sync
   // panel offers to connect.
   const [tab, setTab] = useState<Tab>(() => (readJoinToken() ? 'Backup' : 'Trips'))
+  // Which trip is open, lifted here so clicking the "Trips" nav returns to the
+  // trip list even from inside a trip's Setup/Days/Plan/Carries views.
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   // Show the intro until dismissed once; re-openable via the Help button.
   const [showHelp, setShowHelp] = useState(() => localStorage.getItem(HELP_DISMISSED) === null)
 
@@ -27,7 +30,11 @@ function App() {
             {TABS.map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t)
+                  // Clicking "Trips" always returns to the trip list.
+                  if (t === 'Trips') setSelectedTripId(null)
+                }}
                 className={
                   t === tab
                     ? 'border-b-2 border-emerald-700 font-medium text-emerald-800'
@@ -55,7 +62,9 @@ function App() {
             }}
           />
         )}
-        {tab === 'Trips' && <TripsPage />}
+        {tab === 'Trips' && (
+          <TripsPage selectedId={selectedTripId} onSelect={setSelectedTripId} />
+        )}
         {tab === 'Items' && <ItemsPage />}
         {tab === 'Meals' && <MealsPage />}
         {tab === 'Backup' && <BackupPage />}
