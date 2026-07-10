@@ -27,6 +27,7 @@ import type { Day, DayType, Person, Resupply, ResupplyTiming, Trip } from '../do
 import { fmtCalories, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
 import { PlanSection } from './PlanSection'
 import { GearSection } from './GearSection'
+import { PackBreakdown } from './PackBreakdown'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
@@ -237,6 +238,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         <>
           <PlanSection trip={trip} people={people} section="carries" />
           <GearSection trip={trip} people={people} />
+          <PackBreakdown trip={trip} people={people} />
         </>
       )}
 

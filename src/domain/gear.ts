@@ -112,6 +112,13 @@ export function personGearTotals(
   return totals
 }
 
+/** Full pack weight for one carry: the constant gear (base + its consumable,
+ *  e.g. fuel) plus that carry's food (also consumable). Worn weight is on the
+ *  body, not in the pack, so it's excluded. */
+export function carryPackWeightG(gear: GearTotals, carryFoodG: number): number {
+  return gear.baseG + gear.consumableG + carryFoodG
+}
+
 /** Base-weight-by-category for a person — the LighterPack-style breakdown.
  *  Keyed by category; each value is the base/worn/consumable split so the view
  *  can show, e.g., Big-3 base weight. */
