@@ -5,6 +5,7 @@ import { ItemsPage } from './ui/ItemsPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
 import { ReloadPrompt } from './ui/ReloadPrompt'
+import { PwaInstallButton } from './ui/PwaInstallButton'
 import { readJoinToken } from './sync/workspace'
 
 const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
@@ -46,12 +47,15 @@ function App() {
               </button>
             ))}
           </nav>
-          <button
-            className="ml-auto text-sm text-gray-500 hover:text-gray-800"
-            onClick={() => setShowHelp(true)}
-          >
-            Help
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <PwaInstallButton />
+            <button
+              className="text-sm text-gray-500 hover:text-gray-800"
+              onClick={() => setShowHelp(true)}
+            >
+              Help
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-4xl space-y-6 px-6 py-6">
