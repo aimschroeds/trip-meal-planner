@@ -62,6 +62,28 @@ function gramsBySlots(
   return gramsByItem
 }
 
+/** Base-weight food packaging over the given slots for the given people: for
+ *  each per-package food item, the whole packages carried × its packaging
+ *  weight. Items without a package basis or a packaging weight contribute
+ *  nothing. Food itself is consumable; only the wrappers count as base. */
+export function packagingBaseG(
+  slots: readonly SlotRef[],
+  personIds: string[],
+  entriesByKey: ReadonlyMap<string, PlanEntry>,
+  mealsById: ReadonlyMap<string, Meal>,
+  itemsById: ReadonlyMap<string, Item>,
+): number {
+  const gramsByItem = gramsBySlots(slots, personIds, entriesByKey, mealsById, itemsById)
+  let base = 0
+  for (const [itemId, grams] of gramsByItem) {
+    const item = itemsById.get(itemId)
+    if (!item?.packagingG) continue
+    const packages = packagesForGrams(item, grams)
+    if (packages != null) base += packages * item.packagingG
+  }
+  return base
+}
+
 export interface ShoppingLine {
   item: Item
   /** Total grams of this item across the carry, all people, scaled. */

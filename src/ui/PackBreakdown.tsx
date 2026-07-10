@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { deriveCarries } from '../domain/carries'
 import { carryTotals, planKey } from '../domain/totals'
+import { packagingBaseG } from '../domain/units'
 import {
   carryPackWeightG,
   categoryLabel,
@@ -59,9 +60,16 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   // Per-person derived numbers.
   const rows = people.map((p) => {
     const gearT = personGearTotals(assignments, gearById, p.id)
-    const foodByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.weightG ?? 0)
-    const packByCarry = foodByCarry.map((foodG) => carryPackWeightG(gearT, foodG))
-    return { person: p, gearT, packByCarry, heaviest: packByCarry.length ? Math.max(...packByCarry) : gearT.baseG + gearT.consumableG }
+    const packByCarry = perCarry.map((c, i) => {
+      const foodG = c.perPerson.get(p.id)?.weightG ?? 0
+      // Food is consumable; its packaging is base weight — count it in the pack.
+      const packagingG = packagingBaseG(carries[i].slots, [p.id], entriesByKey, mealsById, itemsById)
+      return carryPackWeightG(gearT, foodG) + packagingG
+    })
+    const heaviest = packByCarry.length
+      ? Math.max(...packByCarry)
+      : gearT.baseG + gearT.consumableG
+    return { person: p, gearT, packByCarry, heaviest }
   })
 
   const nothing =
@@ -200,8 +208,8 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
         </div>
       )}
       <p className="text-xs text-gray-500">
-        Pack weight = gear base + gear consumables (fuel) + that carry’s food. Food packaging will
-        add to base weight in a later update.
+        Pack weight = gear base + gear consumables (fuel) + that carry’s food + its packaging
+        (base). Set a per-item packaging weight on the Items tab to include wrappers.
       </p>
     </section>
   )

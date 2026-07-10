@@ -41,6 +41,8 @@ interface Draft {
   unitName: string
   /** Optional default serving the composer prefills; blank = derive it. */
   servingG: string
+  /** Optional packaging (wrapper) weight per package; counts as base weight. */
+  packagingG: string
   /** Slot types generation may auto-place this item into; empty = never. */
   genMealTypes: MealType[]
 }
@@ -59,6 +61,7 @@ const emptyDraft: Draft = {
   unitWeightG: '',
   unitName: '',
   servingG: '',
+  packagingG: '',
   genMealTypes: [],
 }
 
@@ -91,6 +94,14 @@ function draftServing(draft: Draft): { servingG?: number } | null {
   const n = Number(draft.servingG)
   if (!Number.isFinite(n) || n <= 0) return null
   return { servingG: n }
+}
+
+/** Blank → no packaging weight; otherwise a non-negative grams value. */
+function draftPackaging(draft: Draft): { packagingG?: number } | null {
+  if (draft.packagingG.trim() === '') return {}
+  const n = Number(draft.packagingG)
+  if (!Number.isFinite(n) || n < 0) return null
+  return { packagingG: n || undefined }
 }
 
 function fmtBounds(item: Item): string {
@@ -127,15 +138,18 @@ export function ItemsPage() {
   const bounds = draftBounds(draft)
   const unit = draftUnit(draft)
   const serving = draftServing(draft)
+  const packaging = draftPackaging(draft)
   const canSave =
     draft.name.trim() !== '' &&
     density !== null &&
     bounds !== null &&
     unit !== null &&
-    serving !== null
+    serving !== null &&
+    packaging !== null
 
   async function save() {
-    if (density === null || bounds === null || unit === null || serving === null) return
+    if (density === null || bounds === null || unit === null || serving === null || packaging === null)
+      return
     const item: Item = {
       id: editingId ?? crypto.randomUUID(),
       name: draft.name.trim(),
@@ -150,6 +164,7 @@ export function ItemsPage() {
       unitWeightG: unit.unitWeightG,
       unitName: unit.unitName,
       servingG: serving.servingG,
+      packagingG: packaging.packagingG,
       genMealTypes: draft.genMealTypes.length > 0 ? draft.genMealTypes : undefined,
     }
     await db.items.put(item)
@@ -172,6 +187,7 @@ export function ItemsPage() {
       unitWeightG: item.unitWeightG !== undefined ? String(item.unitWeightG) : '',
       unitName: item.unitName ?? '',
       servingG: item.servingG !== undefined ? String(item.servingG) : '',
+      packagingG: item.packagingG !== undefined ? String(item.packagingG) : '',
       genMealTypes: item.genMealTypes ?? [],
     })
     setError(null)
@@ -196,6 +212,7 @@ export function ItemsPage() {
       unitWeightG: '',
       unitName: '',
       servingG: '',
+      packagingG: '',
       genMealTypes: [],
     })
     setError(null)
@@ -318,6 +335,19 @@ export function ItemsPage() {
               placeholder="—"
               value={draft.servingG}
               onChange={(e) => setDraft({ ...draft, servingG: e.target.value })}
+            />
+          </label>
+          <label
+            className="block"
+            title="Wrapper/pouch weight per package — counts as base weight in the trip's pack breakdown (food is consumable, its packaging isn't). Applies to per-package items."
+          >
+            <span className="block text-sm text-gray-600">Packaging (g)</span>
+            <input
+              className="mt-1 w-20 rounded border border-gray-300 px-2 py-1"
+              inputMode="decimal"
+              placeholder="—"
+              value={draft.packagingG}
+              onChange={(e) => setDraft({ ...draft, packagingG: e.target.value })}
             />
           </label>
           <label className="block" title="Weight of one piece, so meals can be composed in pieces (e.g. one tortilla = 64 g)">

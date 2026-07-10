@@ -17,6 +17,7 @@ export const ITEM_CSV_OPTIONAL_COLUMNS = [
   'unit_weight_g',
   'unit_name',
   'serving_g',
+  'packaging_g',
   'gen_meal_types',
 ] as const
 
@@ -43,6 +44,7 @@ export interface ItemFields {
   unitWeightG?: number
   unitName?: string
   servingG?: number
+  packagingG?: number
   genMealTypes?: MealType[]
 }
 
@@ -132,6 +134,16 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
       servingG = n
     }
 
+    const packagingCell = raw.packaging_g?.trim()
+    let packagingG: number | undefined
+    if (packagingCell !== undefined && packagingCell !== '') {
+      const n = Number(packagingCell)
+      if (!Number.isFinite(n) || n < 0) {
+        return issues.push({ line, reason: `packaging_g must be a non-negative number, got "${raw.packaging_g}"` })
+      }
+      packagingG = n || undefined
+    }
+
     const genCell = raw.gen_meal_types?.trim()
     let genMealTypes: MealType[] | undefined
     if (genCell !== undefined && genCell !== '') {
@@ -160,6 +172,7 @@ export function parseItemsCsv(text: string): { rows: ParsedItemRow[]; issues: Cs
         unitWeightG,
         unitName,
         servingG,
+        packagingG,
         genMealTypes,
       },
     })
@@ -243,6 +256,7 @@ export function itemsToCsv(items: Item[]): string {
       unit_weight_g: i.unitWeightG ?? '',
       unit_name: i.unitName ?? '',
       serving_g: i.servingG ?? '',
+      packaging_g: i.packagingG ?? '',
       gen_meal_types: (i.genMealTypes ?? []).join(' '),
     })),
     { columns: [...ITEM_CSV_COLUMNS, ...ITEM_CSV_OPTIONAL_COLUMNS] },

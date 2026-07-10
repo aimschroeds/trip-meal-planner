@@ -113,6 +113,11 @@ export interface Item {
    *  or undefined = never auto-generated as a loose item (still usable by
    *  hand). One serving (defaultServingG) is the generated quantity. */
   genMealTypes?: MealType[]
+  /** Weight of one package's wrapper/pouch in grams (Gear epic G2c). Food is a
+   *  consumable, but its packaging is base weight — counted per whole package
+   *  carried on each carry. Applies to per-package items (where package counts
+   *  are well-defined); ignored otherwise. */
+  packagingG?: number
 }
 
 /** A piece of gear a hiker owns and might pack (Gear epic). Weight splits into
