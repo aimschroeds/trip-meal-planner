@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSync } from './useSync'
+import { useOfflineReady } from './usePwa'
 import { clearJoinToken, readJoinToken } from '../sync/workspace'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -11,6 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function SyncPanel() {
   const sync = useSync()
+  const offlineReady = useOfflineReady()
   const [tokenInput, setTokenInput] = useState('')
   const [copied, setCopied] = useState(false)
   // A join token in the URL means this page was opened from a share link;
@@ -57,6 +59,14 @@ export function SyncPanel() {
           </span>
         )}
       </div>
+
+      {offlineReady && (
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-emerald-700">
+          <span aria-hidden>✓</span>
+          Saved on this device — opens offline, no signal needed
+          {sync.connected ? ' (including this shared plan).' : '.'}
+        </p>
+      )}
 
       {!sync.connected && (
         <>
