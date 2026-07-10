@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveCarries } from '../../src/domain/carries'
+import { deriveCarries, type SlotRef } from '../../src/domain/carries'
 import { makeTrip } from '../../src/domain/trip'
 import { planKey } from '../../src/domain/totals'
 import {
@@ -10,13 +10,14 @@ import {
   entryItemLines,
   gramsForUnits,
   packagesForGrams,
+  packagingBaseG,
   purchaseQuantity,
   tripShoppingList,
   unitsForGrams,
   type PrepGroup,
   type ShoppingLine,
 } from '../../src/domain/units'
-import type { Item, Meal, MealType, PlanEntry } from '../../src/domain/types'
+import type { Item, Meal, MealType, PlanEntry, Slot } from '../../src/domain/types'
 
 const tortillas: Item = {
   id: 'tortillas',
@@ -526,5 +527,51 @@ describe('entryItemLines', () => {
         itemsById,
       ),
     ).toEqual([])
+  })
+})
+
+describe('packagingBaseG', () => {
+  const pouch: Item = {
+    id: 'pouch',
+    name: 'Chili mac',
+    caloriesPerGram: 4,
+    vegetarian: false,
+    inputBasis: 'per_package',
+    inputWeightG: 100, // food grams per pouch
+    inputCalories: 400,
+    packagingG: 20, // pouch wrapper
+  }
+  const slot: Slot = { type: 'dinner', timing: 'evening' }
+  const slots: SlotRef[] = [{ dayIndex: 1, slot, key: 'dinner-0' }]
+
+  function entriesFor(itemId: string, grams: number) {
+    const entry: PlanEntry = {
+      id: 'e',
+      tripId: 't',
+      personId: 'a',
+      dayIndex: 1,
+      slotKey: 'dinner-0',
+      kind: 'planned',
+      parts: [{ kind: 'item', itemId, grams }],
+    }
+    return new Map([[planKey('a', 1, 'dinner-0'), entry]])
+  }
+
+  it('counts whole packages carried × packaging weight', () => {
+    const itemsById = new Map([['pouch', pouch]])
+    // 150 g of a 100 g pouch → 2 pouches → 2 × 20 g packaging.
+    expect(packagingBaseG(slots, ['a'], entriesFor('pouch', 150), new Map(), itemsById)).toBe(40)
+  })
+
+  it('is zero when the item has no packaging weight', () => {
+    const bare = { ...pouch, packagingG: undefined }
+    const itemsById = new Map([['pouch', bare]])
+    expect(packagingBaseG(slots, ['a'], entriesFor('pouch', 150), new Map(), itemsById)).toBe(0)
+  })
+
+  it('ignores packaging on non-package items (package count undefined)', () => {
+    const bulk: Item = { ...pouch, inputBasis: 'per_100g', packagingG: 20 }
+    const itemsById = new Map([['pouch', bulk]])
+    expect(packagingBaseG(slots, ['a'], entriesFor('pouch', 150), new Map(), itemsById)).toBe(0)
   })
 })
