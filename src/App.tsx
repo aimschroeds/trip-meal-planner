@@ -4,6 +4,7 @@ import { HelpPanel } from './ui/HelpPanel'
 import { ItemsPage } from './ui/ItemsPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
+import { ReloadPrompt } from './ui/ReloadPrompt'
 import { readJoinToken } from './sync/workspace'
 
 const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
@@ -69,6 +70,7 @@ function App() {
         {tab === 'Meals' && <MealsPage />}
         {tab === 'Backup' && <BackupPage />}
       </main>
+      <ReloadPrompt />
     </div>
   )
 }
