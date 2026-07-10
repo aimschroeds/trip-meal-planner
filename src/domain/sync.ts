@@ -4,10 +4,19 @@
 // are individual per person (story 5.3), genuine conflicts are rare and per-row
 // last-write-wins is sufficient — no CRDT (see PLAN.md §10).
 
-export type SyncKind = 'trip' | 'person' | 'item' | 'meal' | 'resupply' | 'planEntry' | 'mark'
+export type SyncKind =
+  | 'trip'
+  | 'person'
+  | 'item'
+  | 'meal'
+  | 'resupply'
+  | 'planEntry'
+  | 'mark'
+  | 'gearItem'
 
 /** The synced tables, in a stable order. `mark` holds shopping/packing
- *  tick-offs (one row per ticked item) so a checklist is shared live. */
+ *  tick-offs (one row per ticked item) so a checklist is shared live;
+ *  `gearItem` is the gear library. */
 export const SYNC_KINDS: readonly SyncKind[] = [
   'trip',
   'person',
@@ -16,6 +25,7 @@ export const SYNC_KINDS: readonly SyncKind[] = [
   'resupply',
   'planEntry',
   'mark',
+  'gearItem',
 ]
 
 export interface SyncRecord<T = unknown> {

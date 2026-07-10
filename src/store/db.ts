@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Item, Meal, Person, PlanEntry, Resupply, Trip } from '../domain/types'
+import type { GearItem, Item, Meal, Person, PlanEntry, Resupply, Trip } from '../domain/types'
 import type { SyncKind } from '../domain/sync'
 
 /** Per-row sync bookkeeping (M7). One entry per synced domain object, keyed
@@ -48,6 +48,7 @@ export const db = new Dexie('hiking-meal-planner') as Dexie & {
   meals: EntityTable<Meal, 'id'>
   resupplies: EntityTable<Resupply, 'id'>
   planEntries: EntityTable<PlanEntry, 'id'>
+  gear: EntityTable<GearItem, 'id'>
   marks: EntityTable<MarkRow, 'id'>
   syncMeta: EntityTable<SyncMetaRow, 'key'>
   syncState: EntityTable<SyncStateRow, 'id'>
@@ -104,4 +105,9 @@ db.version(5).stores({
 // is shared live between collaborators.
 db.version(6).stores({
   marks: 'id, tripId',
+})
+
+// Gear epic: a library of gear the hiker owns, alongside the food items table.
+db.version(7).stores({
+  gear: 'id, name, category',
 })

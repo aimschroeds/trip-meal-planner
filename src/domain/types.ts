@@ -115,6 +115,27 @@ export interface Item {
   genMealTypes?: MealType[]
 }
 
+/** A piece of gear a hiker owns and might pack (Gear epic). Weight splits into
+ *  worn (on the body, not in the pack), consumable (depletes on trail — fuel
+ *  gas, soap), and the remaining base weight; see baseWeightG() in
+ *  domain/gear.ts. Category drives the pack breakdown (Big 3 vs clothing…). */
+export interface GearItem {
+  id: string
+  name: string
+  brand?: string
+  /** A curated category (see GEAR_CATEGORIES) or a custom string. */
+  category: string
+  /** Total weight of the item in grams. */
+  weightG: number
+  /** Portion worn on the body rather than carried in the pack (0 = all packed). */
+  wornWeightG?: number
+  /** Portion that depletes over the trip (e.g. fuel gas in a canister). */
+  consumableWeightG?: number
+  /** Group gear one person carries for everyone (tent, pot) vs personal kit
+   *  each hiker packs their own (clothing). Drives assignment UI. */
+  shared?: boolean
+}
+
 export interface MealComponent {
   itemId: string
   grams: number

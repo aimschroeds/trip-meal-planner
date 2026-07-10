@@ -3,7 +3,7 @@
 // envelope and entity shapes all-or-nothing — a backup either restores in
 // full or is rejected with the first problem found.
 
-import type { Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from './types'
+import type { GearItem, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Trip } from './types'
 
 export const BACKUP_FORMAT = 'hiking-meal-planner-backup'
 export const BACKUP_VERSION = 1
@@ -16,6 +16,7 @@ export interface BackupData {
   meals: Meal[]
   resupplies: Resupply[]
   planEntries: PlanEntry[]
+  gear: GearItem[]
 }
 
 export interface BackupFile {
@@ -32,7 +33,12 @@ export const BACKUP_TABLES = [
   'meals',
   'resupplies',
   'planEntries',
+  'gear',
 ] as const
+
+/** Tables added after v1; a backup taken before they existed simply omits
+ *  them, so parse treats a missing one as empty rather than an error. */
+const OPTIONAL_BACKUP_TABLES = new Set<string>(['gear'])
 
 export function serializeBackup(data: BackupData, exportedAt: Date): string {
   const file: BackupFile = {
@@ -108,6 +114,9 @@ const checkPlanEntry: EntityCheck = (e) =>
     str(e, 'kind'),
   )
 
+const checkGear: EntityCheck = (e) =>
+  firstError(str(e, 'id'), str(e, 'name'), str(e, 'category'), num(e, 'weightG'))
+
 const ENTITY_CHECKS: Record<(typeof BACKUP_TABLES)[number], EntityCheck> = {
   trips: checkTrip,
   people: checkPerson,
@@ -115,6 +124,7 @@ const ENTITY_CHECKS: Record<(typeof BACKUP_TABLES)[number], EntityCheck> = {
   meals: checkMeal,
   resupplies: checkResupply,
   planEntries: checkPlanEntry,
+  gear: checkGear,
 }
 
 /** Migrate a plan entry from the pre-Epic-13 shape (one meal per slot, via
@@ -165,6 +175,10 @@ export function parseBackup(text: string): ParseBackupResult {
   if (!isRecord(raw.data)) return { ok: false, error: 'missing data section' }
 
   for (const table of BACKUP_TABLES) {
+    if (raw.data[table] === undefined && OPTIONAL_BACKUP_TABLES.has(table)) {
+      raw.data[table] = [] // pre-existing backup without this newer table
+      continue
+    }
     const rows = raw.data[table]
     if (!Array.isArray(rows)) return { ok: false, error: `data.${table} must be an array` }
     const check = ENTITY_CHECKS[table]

@@ -7,7 +7,15 @@ import {
   type BackupData,
 } from '../../src/domain/backup'
 import { makeTrip } from '../../src/domain/trip'
-import type { Item, Meal, Person, PlanEntry, Resupply } from '../../src/domain/types'
+import type { GearItem, Item, Meal, Person, PlanEntry, Resupply } from '../../src/domain/types'
+
+const tent: GearItem = {
+  id: 'gear-1',
+  name: 'Duplex',
+  category: 'shelter',
+  weightG: 540,
+  shared: true,
+}
 
 // Carry every optional field so the round-trip test proves backups preserve
 // the newer ones (brand, meal types[], day start/end/description, unit/gen
@@ -84,6 +92,7 @@ function fullData(): BackupData {
     meals: [porridge],
     resupplies: [resupply],
     planEntries: [entry],
+    gear: [tent],
   }
 }
 
@@ -94,6 +103,7 @@ const emptyData: BackupData = {
   meals: [],
   resupplies: [],
   planEntries: [],
+  gear: [],
 }
 
 describe('serializeBackup', () => {
@@ -136,6 +146,14 @@ describe('parseBackup', () => {
     delete file.data.meals
     const result = parseBackup(JSON.stringify(file))
     expect(result).toEqual({ ok: false, error: 'data.meals must be an array' })
+  })
+
+  it('defaults a missing newer table (gear) to empty so older backups still load', () => {
+    const file = JSON.parse(serializeBackup(emptyData, new Date()))
+    delete file.data.gear
+    const result = parseBackup(JSON.stringify(file))
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.backup.data.gear).toEqual([])
   })
 
   it('rejects a malformed entity with its location and field', () => {

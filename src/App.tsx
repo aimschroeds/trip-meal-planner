@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { BackupPage } from './ui/BackupPage'
 import { HelpPanel } from './ui/HelpPanel'
 import { ItemsPage } from './ui/ItemsPage'
+import { GearPage } from './ui/GearPage'
 import { MealsPage } from './ui/MealsPage'
 import { TripsPage } from './ui/TripsPage'
 import { ReloadPrompt } from './ui/ReloadPrompt'
 import { PwaInstallButton } from './ui/PwaInstallButton'
 import { readJoinToken } from './sync/workspace'
 
-const TABS = ['Trips', 'Items', 'Meals', 'Backup'] as const
+const TABS = ['Trips', 'Items', 'Meals', 'Gear', 'Backup'] as const
 type Tab = (typeof TABS)[number]
 
 const HELP_DISMISSED = 'intro-dismissed'
@@ -72,6 +73,7 @@ function App() {
         )}
         {tab === 'Items' && <ItemsPage />}
         {tab === 'Meals' && <MealsPage />}
+        {tab === 'Gear' && <GearPage />}
         {tab === 'Backup' && <BackupPage />}
       </main>
       <ReloadPrompt />

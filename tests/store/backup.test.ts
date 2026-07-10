@@ -4,7 +4,7 @@ import { db } from '../../src/store/db'
 import { exportBackup, mergeBackup, restoreBackup } from '../../src/store/backup'
 import { makeTrip } from '../../src/domain/trip'
 import type { BackupData } from '../../src/domain/backup'
-import type { Item, Person, PlanEntry } from '../../src/domain/types'
+import type { GearItem, Item, Person, PlanEntry } from '../../src/domain/types'
 
 const oatmeal: Item = {
   id: 'item-1',
@@ -41,12 +41,21 @@ function fullData(): BackupData {
         parts: [{ kind: 'meal', mealId: 'meal-1' }],
       },
     ],
+    gear: [gaz],
   }
+}
+
+const gaz: GearItem = {
+  id: 'gear-1',
+  name: 'Fuel canister',
+  category: 'cooking',
+  weightG: 220,
+  consumableWeightG: 100,
 }
 
 async function clearAll() {
   await Promise.all(
-    [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries].map((t) =>
+    [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries, db.gear].map((t) =>
       t.clear(),
     ),
   )
@@ -70,6 +79,7 @@ describe('backup store', () => {
       meals: [],
       resupplies: [],
       planEntries: [],
+      gear: [],
     })
   })
 
@@ -114,6 +124,7 @@ describe('backup store', () => {
       meals: [],
       resupplies: [],
       planEntries: [],
+      gear: [],
     })
     expect(await db.items.count()).toBe(0)
     expect(await db.trips.count()).toBe(0)
