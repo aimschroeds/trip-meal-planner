@@ -5,7 +5,7 @@
 import { db } from './db'
 import { normalizePlanEntry, type BackupData } from '../domain/backup'
 
-const ALL_TABLES = [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries]
+const ALL_TABLES = [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries, db.gear]
 
 export async function exportBackup(): Promise<BackupData> {
   return db.transaction('r', ALL_TABLES, async () => ({
@@ -15,6 +15,7 @@ export async function exportBackup(): Promise<BackupData> {
     meals: await db.meals.toArray(),
     resupplies: await db.resupplies.toArray(),
     planEntries: await db.planEntries.toArray(),
+    gear: await db.gear.toArray(),
   }))
 }
 
@@ -32,6 +33,7 @@ export async function mergeBackup(data: BackupData): Promise<void> {
     await db.meals.bulkPut(data.meals)
     await db.resupplies.bulkPut(data.resupplies)
     await db.planEntries.bulkPut(data.planEntries.map(normalizePlanEntry))
+    await db.gear.bulkPut(data.gear ?? [])
   })
 }
 
@@ -46,5 +48,6 @@ export async function restoreBackup(data: BackupData): Promise<void> {
     // Legacy backups (pre-Epic-13) carry one-meal-per-slot entries; fold them
     // into the parts model on the way in so old exports restore cleanly.
     await db.planEntries.bulkAdd(data.planEntries.map(normalizePlanEntry))
+    await db.gear.bulkAdd(data.gear ?? [])
   })
 }
