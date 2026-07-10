@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   baseWeightG,
+  carryPackWeightG,
   categoryLabel,
   gearWeightSplit,
   isBigThree,
@@ -92,6 +93,13 @@ describe('personGearTotals', () => {
       wornG: 0,
       consumableG: 0,
     })
+  })
+})
+
+describe('carryPackWeightG', () => {
+  it('is gear base + gear consumable + that carry’s food (worn excluded)', () => {
+    const gear = { baseG: 660, wornG: 200, consumableG: 100 }
+    expect(carryPackWeightG(gear, 2000)).toBe(2760) // 660 + 100 + 2000; worn 200 not counted
   })
 })
 
