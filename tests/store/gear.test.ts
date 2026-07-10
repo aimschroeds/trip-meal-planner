@@ -1,0 +1,50 @@
+import 'fake-indexeddb/auto'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { db } from '../../src/store/db'
+import {
+  createTrip,
+  deleteGear,
+  deleteTrip,
+  GearInUseError,
+  toggleGearAssignment,
+} from '../../src/store/repos'
+import type { GearItem } from '../../src/domain/types'
+
+const tent: GearItem = { id: 'tent', name: 'Duplex', category: 'shelter', weightG: 540, shared: true }
+
+beforeEach(async () => {
+  await Promise.all([db.gear.clear(), db.gearAssignments.clear(), db.trips.clear()])
+  await db.gear.add(tent)
+})
+
+describe('toggleGearAssignment', () => {
+  it('adds then removes an assignment idempotently', async () => {
+    await toggleGearAssignment('trip-1', 'alice', 'tent')
+    expect(await db.gearAssignments.get('trip-1|alice|tent')).toMatchObject({ personId: 'alice' })
+    await toggleGearAssignment('trip-1', 'alice', 'tent')
+    expect(await db.gearAssignments.get('trip-1|alice|tent')).toBeUndefined()
+  })
+})
+
+describe('deleteGear', () => {
+  it('blocks deleting gear that is assigned on a trip', async () => {
+    await toggleGearAssignment('trip-1', 'alice', 'tent')
+    const err = await deleteGear('tent').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(GearInUseError)
+    expect(await db.gear.get('tent')).toBeDefined()
+  })
+
+  it('deletes unused gear', async () => {
+    await deleteGear('tent')
+    expect(await db.gear.get('tent')).toBeUndefined()
+  })
+})
+
+describe('deleteTrip', () => {
+  it('cascades gear assignments', async () => {
+    const tripId = await createTrip('GR20', 3)
+    await toggleGearAssignment(tripId, 'alice', 'tent')
+    await deleteTrip(tripId)
+    expect(await db.gearAssignments.where('tripId').equals(tripId).count()).toBe(0)
+  })
+})

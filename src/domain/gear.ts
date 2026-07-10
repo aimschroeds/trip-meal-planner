@@ -2,7 +2,7 @@
 // stored — mirrors how food roll-ups and carries work. The trip-level roll-ups
 // (per person, per carry, food + gear combined) build on baseWeightG.
 
-import type { GearItem } from './types'
+import type { GearAssignment, GearItem } from './types'
 
 /** Curated categories offered in the picker; custom strings are also allowed.
  *  Order roughly heaviest-first / Big-3-first for a sensible default listing. */
@@ -74,4 +74,59 @@ export function baseWeightG(
   item: Pick<GearItem, 'weightG' | 'wornWeightG' | 'consumableWeightG'>,
 ): number {
   return gearWeightSplit(item).baseG
+}
+
+export interface GearTotals {
+  baseG: number
+  wornG: number
+  consumableG: number
+}
+
+export const ZERO_GEAR_TOTALS: GearTotals = { baseG: 0, wornG: 0, consumableG: 0 }
+
+export function addGearTotals(a: GearTotals, b: GearTotals): GearTotals {
+  return {
+    baseG: a.baseG + b.baseG,
+    wornG: a.wornG + b.wornG,
+    consumableG: a.consumableG + b.consumableG,
+  }
+}
+
+export function gearTotalG(t: GearTotals): number {
+  return t.baseG + t.wornG + t.consumableG
+}
+
+/** The base/worn/consumable a person carries from their gear assignments.
+ *  Assignments referencing a missing gear item (e.g. deleted) are skipped. */
+export function personGearTotals(
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
+  gearById: ReadonlyMap<string, GearItem>,
+  personId: string,
+): GearTotals {
+  let totals = ZERO_GEAR_TOTALS
+  for (const a of assignments) {
+    if (a.personId !== personId) continue
+    const item = gearById.get(a.gearItemId)
+    if (item) totals = addGearTotals(totals, gearWeightSplit(item))
+  }
+  return totals
+}
+
+/** Base-weight-by-category for a person — the LighterPack-style breakdown.
+ *  Keyed by category; each value is the base/worn/consumable split so the view
+ *  can show, e.g., Big-3 base weight. */
+export function personGearByCategory(
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
+  gearById: ReadonlyMap<string, GearItem>,
+  personId: string,
+): Map<string, GearTotals> {
+  const byCategory = new Map<string, GearTotals>()
+  for (const a of assignments) {
+    if (a.personId !== personId) continue
+    const item = gearById.get(a.gearItemId)
+    if (!item) continue
+    const prev = byCategory.get(item.category) ?? ZERO_GEAR_TOTALS
+    byCategory.set(item.category, addGearTotals(prev, gearWeightSplit(item)))
+  }
+  return byCategory
 }

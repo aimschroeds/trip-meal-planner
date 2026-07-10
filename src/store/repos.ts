@@ -7,7 +7,15 @@ import { calorieDensity } from '../domain/density'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
 import type { MealFields, MealImportPlan } from '../domain/csv/meals'
-import type { Item, Meal, MealComponent, Person, PlanEntry, PlanPart } from '../domain/types'
+import type {
+  GearItem,
+  Item,
+  Meal,
+  MealComponent,
+  Person,
+  PlanEntry,
+  PlanPart,
+} from '../domain/types'
 
 export class ItemInUseError extends Error {
   readonly item: Item
@@ -216,6 +224,51 @@ export async function toggleMark(
   })
 }
 
+function gearAssignmentId(tripId: string, personId: string, gearItemId: string): string {
+  return `${tripId}|${personId}|${gearItemId}`
+}
+
+/** Toggle whether a person carries a gear item on a trip. Deterministic id so
+ *  assigning is idempotent; each (person, item) is its own row so shared and
+ *  personal gear are modelled uniformly. */
+export async function toggleGearAssignment(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    if (await db.gearAssignments.get(id)) await db.gearAssignments.delete(id)
+    else await db.gearAssignments.put({ id, tripId, personId, gearItemId })
+  })
+}
+
+export class GearInUseError extends Error {
+  readonly gear: GearItem
+  readonly tripCount: number
+  constructor(gear: GearItem, tripCount: number) {
+    super(
+      `"${gear.name}" is packed on ${tripCount} trip${tripCount === 1 ? '' : 's'} — ` +
+        'remove it there first',
+    )
+    this.name = 'GearInUseError'
+    this.gear = gear
+    this.tripCount = tripCount
+  }
+}
+
+/** Delete a gear item, blocked (like items/meals) if it's assigned on any trip. */
+export async function deleteGear(id: string): Promise<void> {
+  await db.transaction('rw', db.gear, db.gearAssignments, async () => {
+    const gear = await db.gear.get(id)
+    if (!gear) return
+    const assignments = await db.gearAssignments.where('gearItemId').equals(id).toArray()
+    const tripIds = new Set(assignments.map((a) => a.tripId))
+    if (tripIds.size > 0) throw new GearInUseError(gear, tripIds.size)
+    await db.gear.delete(id)
+  })
+}
+
 export async function createTrip(name: string, numDays: number): Promise<string> {
   const trip = makeTrip(crypto.randomUUID(), name, numDays)
   await db.trips.add(trip)
@@ -225,15 +278,20 @@ export async function createTrip(name: string, numDays: number): Promise<string>
 /** People belong to exactly one trip (plans are fully individual, story 5.3),
  *  so deleting a trip deletes its people, resupplies, and plan entries. */
 export async function deleteTrip(id: string): Promise<void> {
-  await db.transaction('rw', [db.trips, db.people, db.resupplies, db.planEntries, db.marks], async () => {
-    const trip = await db.trips.get(id)
-    if (!trip) return
-    await db.people.bulkDelete(trip.peopleIds)
-    await db.resupplies.where('tripId').equals(id).delete()
-    await db.planEntries.where('tripId').equals(id).delete()
-    await db.marks.where('tripId').equals(id).delete()
-    await db.trips.delete(id)
-  })
+  await db.transaction(
+    'rw',
+    [db.trips, db.people, db.resupplies, db.planEntries, db.marks, db.gearAssignments],
+    async () => {
+      const trip = await db.trips.get(id)
+      if (!trip) return
+      await db.people.bulkDelete(trip.peopleIds)
+      await db.resupplies.where('tripId').equals(id).delete()
+      await db.planEntries.where('tripId').equals(id).delete()
+      await db.marks.where('tripId').equals(id).delete()
+      await db.gearAssignments.where('tripId').equals(id).delete()
+      await db.trips.delete(id)
+    },
+  )
 }
 
 export async function addPersonToTrip(
@@ -261,15 +319,20 @@ export async function updatePerson(
 }
 
 export async function removePersonFromTrip(tripId: string, personId: string): Promise<void> {
-  await db.transaction('rw', db.trips, db.people, db.planEntries, async () => {
-    const trip = await db.trips.get(tripId)
-    if (trip) {
-      await db.trips.put({
-        ...trip,
-        peopleIds: trip.peopleIds.filter((id) => id !== personId),
-      })
-    }
-    await db.planEntries.where('[tripId+personId]').equals([tripId, personId]).delete()
-    await db.people.delete(personId)
-  })
+  await db.transaction(
+    'rw',
+    [db.trips, db.people, db.planEntries, db.gearAssignments],
+    async () => {
+      const trip = await db.trips.get(tripId)
+      if (trip) {
+        await db.trips.put({
+          ...trip,
+          peopleIds: trip.peopleIds.filter((id) => id !== personId),
+        })
+      }
+      await db.planEntries.where('[tripId+personId]').equals([tripId, personId]).delete()
+      await db.gearAssignments.where('[tripId+personId]').equals([tripId, personId]).delete()
+      await db.people.delete(personId)
+    },
+  )
 }

@@ -13,10 +13,11 @@ export type SyncKind =
   | 'planEntry'
   | 'mark'
   | 'gearItem'
+  | 'gearAssignment'
 
 /** The synced tables, in a stable order. `mark` holds shopping/packing
  *  tick-offs (one row per ticked item) so a checklist is shared live;
- *  `gearItem` is the gear library. */
+ *  `gearItem` is the gear library and `gearAssignment` is who carries what. */
 export const SYNC_KINDS: readonly SyncKind[] = [
   'trip',
   'person',
@@ -26,6 +27,7 @@ export const SYNC_KINDS: readonly SyncKind[] = [
   'planEntry',
   'mark',
   'gearItem',
+  'gearAssignment',
 ]
 
 export interface SyncRecord<T = unknown> {

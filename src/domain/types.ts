@@ -136,6 +136,17 @@ export interface GearItem {
   shared?: boolean
 }
 
+/** A gear item taken on a trip and who carries it (Gear epic, G2). Shared gear
+ *  (tent) has one assignment to its carrier; personal gear (clothing) has one
+ *  per person who packs their own. Id is deterministic
+ *  (`${tripId}|${personId}|${gearItemId}`) so assigning is idempotent. */
+export interface GearAssignment {
+  id: string
+  tripId: string
+  personId: string
+  gearItemId: string
+}
+
 export interface MealComponent {
   itemId: string
   grams: number
