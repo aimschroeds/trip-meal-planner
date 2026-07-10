@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
+import { deleteGear, GearInUseError } from '../store/repos'
 import { GEAR_CATEGORIES, categoryLabel, gearWeightSplit } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
@@ -73,6 +74,15 @@ export function GearPage() {
     setDraft(toDraft(g))
     setEditingId(g.id)
     setError(null)
+  }
+
+  async function remove(id: string) {
+    try {
+      await deleteGear(id)
+      if (id === editingId) reset()
+    } catch (e) {
+      setError(e instanceof GearInUseError ? e.message : String(e))
+    }
   }
 
   async function save() {
@@ -256,10 +266,7 @@ export function GearPage() {
                       <button className="text-emerald-700 underline" onClick={() => edit(g)}>
                         edit
                       </button>
-                      <button
-                        className="ml-3 text-red-700 underline"
-                        onClick={() => void db.gear.delete(g.id)}
-                      >
+                      <button className="ml-3 text-red-700 underline" onClick={() => void remove(g.id)}>
                         delete
                       </button>
                     </td>

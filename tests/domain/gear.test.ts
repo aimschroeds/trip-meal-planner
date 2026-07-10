@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { baseWeightG, categoryLabel, gearWeightSplit, isBigThree } from '../../src/domain/gear'
+import {
+  baseWeightG,
+  categoryLabel,
+  gearWeightSplit,
+  isBigThree,
+  personGearByCategory,
+  personGearTotals,
+} from '../../src/domain/gear'
+import type { GearAssignment, GearItem } from '../../src/domain/types'
 
 describe('gearWeightSplit', () => {
   it('is all base weight when nothing is worn or consumable', () => {
@@ -46,5 +54,55 @@ describe('isBigThree / categoryLabel', () => {
   it('labels curated categories and passes custom ones through', () => {
     expect(categoryLabel('hygiene')).toBe('Hygiene / first aid')
     expect(categoryLabel('Ski gear')).toBe('Ski gear')
+  })
+})
+
+const GEAR: GearItem[] = [
+  { id: 'tent', name: 'Duplex', category: 'shelter', weightG: 540, shared: true },
+  { id: 'stove', name: 'Fuel', category: 'cooking', weightG: 220, consumableWeightG: 100 },
+  { id: 'puffy', name: 'Puffy', category: 'clothing', weightG: 300, wornWeightG: 300 },
+]
+const gearById = new Map(GEAR.map((g) => [g.id, g]))
+
+function assign(personId: string, gearItemId: string): GearAssignment {
+  return { id: `t|${personId}|${gearItemId}`, tripId: 't', personId, gearItemId }
+}
+
+describe('personGearTotals', () => {
+  it('sums base/worn/consumable across a person’s assignments', () => {
+    const assignments = [assign('alice', 'tent'), assign('alice', 'stove'), assign('bob', 'puffy')]
+    // Alice: tent 540 base + fuel (120 base / 100 consumable).
+    expect(personGearTotals(assignments, gearById, 'alice')).toEqual({
+      baseG: 660,
+      wornG: 0,
+      consumableG: 100,
+    })
+    // Bob: puffy fully worn.
+    expect(personGearTotals(assignments, gearById, 'bob')).toEqual({
+      baseG: 0,
+      wornG: 300,
+      consumableG: 0,
+    })
+  })
+
+  it('skips assignments whose gear item no longer exists', () => {
+    const assignments = [assign('alice', 'tent'), assign('alice', 'ghost')]
+    expect(personGearTotals(assignments, gearById, 'alice')).toEqual({
+      baseG: 540,
+      wornG: 0,
+      consumableG: 0,
+    })
+  })
+})
+
+describe('personGearByCategory', () => {
+  it('groups a person’s gear base/worn/consumable by category', () => {
+    const byCat = personGearByCategory(
+      [assign('alice', 'tent'), assign('alice', 'stove')],
+      gearById,
+      'alice',
+    )
+    expect(byCat.get('shelter')).toEqual({ baseG: 540, wornG: 0, consumableG: 0 })
+    expect(byCat.get('cooking')).toEqual({ baseG: 120, wornG: 0, consumableG: 100 })
   })
 })
