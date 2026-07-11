@@ -288,14 +288,18 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
                 <td className="py-1.5 pr-2 font-medium">{day.index}</td>
                 <td className="py-1.5 pr-2">
                   <input
+                    // Uncontrolled + commit on blur (like the km/ascent fields):
+                    // a per-keystroke write round-trips through Dexie/liveQuery
+                    // and the re-render jumps the caret to the end. Keyed on the
+                    // stored value so external edits (CSV import) still refresh it.
+                    key={`leg-${day.index}-${day.name ?? ''}`}
                     className="w-32 rounded border border-gray-300 px-1 py-0.5"
                     placeholder="—"
-                    value={day.name ?? ''}
-                    onChange={(e) =>
-                      void setDayItinerary(day, {
-                        name: e.target.value === '' ? undefined : e.target.value,
-                      })
-                    }
+                    defaultValue={day.name ?? ''}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim()
+                      void setDayItinerary(day, { name: v === '' ? undefined : v })
+                    }}
                   />
                 </td>
                 <td className="py-1.5 pr-2 text-right">
