@@ -209,7 +209,7 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
       )}
       <p className="text-xs text-gray-500">
         Pack weight = gear base + gear consumables (fuel) + that carry’s food + its packaging
-        (base). Set a per-item packaging weight on the Items tab to include wrappers.
+        (base). Set a per-item packaging weight on the Food tab to include wrappers.
       </p>
     </section>
   )

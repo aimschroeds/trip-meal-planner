@@ -93,7 +93,7 @@ export function TripsPage({
       {trips.length === 0 ? (
         <p className="text-sm text-gray-500">
           No trips yet. Create one above, then add who’s coming and their calorie targets and plan
-          each day. Tip: add a few Items (and optionally Meals) first so there’s food to plan with.
+          each day. Tip: add a few Foods (and optionally Meals) first so there’s food to plan with.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -145,7 +145,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   async function describeDays(days: Day[]) {
     const key = getApiKey()
     if (!key) {
-      setDescNote('Add an Anthropic API key (via photo extract on the Items tab) to get day notes.')
+      setDescNote('Add an Anthropic API key (via photo extract on the Food tab) to get day notes.')
       return
     }
     const describable = days.filter(hasItinerary)
