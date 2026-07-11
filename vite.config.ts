@@ -13,7 +13,12 @@ export default defineConfig({
     // on the trail (data already lives in IndexedDB). Installable to the home
     // screen; auto-updates to the latest build next time there's a connection.
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not autoUpdate): a new deploy does NOT skipWaiting/claim and
+      // evict the running tab's lazy chunks out from under it (which caused
+      // "Failed to fetch dynamically imported module"). Instead ReloadPrompt
+      // shows a "new version — reload" banner; the old SW keeps serving the
+      // current session's chunks until the user reloads.
+      registerType: 'prompt',
       // Registration is done from the app (ReloadPrompt) so we can confirm
       // "ready to use offline".
       injectRegister: false,
