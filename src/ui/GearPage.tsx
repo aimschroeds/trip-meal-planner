@@ -5,6 +5,7 @@ import { deleteGear, GearInUseError } from '../store/repos'
 import { GEAR_CATEGORIES, categoryLabel, gearWeightSplit, isBigThree } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
+import { GearImportExport } from './GearImportExport'
 
 interface GearDraft {
   name: string
@@ -236,6 +237,8 @@ export function GearPage() {
           {error && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </section>
+
+      <GearImportExport />
 
       {gear.length === 0 ? (
         <p className="text-sm text-gray-500">
