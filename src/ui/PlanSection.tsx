@@ -72,10 +72,10 @@ export function PlanSection({
 }: {
   trip: Trip
   people: Person[]
-  /** Which slice to show: the per-person meal grid ('plan') or the carry
-   *  boundaries + shopping/packing lists ('carries'). Both share this
-   *  component's derived totals; the person selector shows in either. */
-  section: 'plan' | 'carries'
+  /** Which slice to show: the per-person meal grid ('plan'), the carry
+   *  boundaries table ('carries'), or the shopping + packing lists
+   *  ('shopping'). All share this component's derived totals. */
+  section: 'plan' | 'carries' | 'shopping'
 }) {
   const [personId, setPersonId] = useState<string | null>(null)
   const [packingView, setPackingView] = useState<'flat' | 'nested'>('flat')
@@ -298,7 +298,12 @@ export function PlanSection({
             </tr>
           </tbody>
         </table>
+      </section>
+      )}
 
+      {section === 'shopping' && (
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="mb-1 font-semibold text-gray-800">Shopping &amp; packing</h3>
         <details className="mt-3" open>
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
             🛒 Shopping list — buy for the whole trip

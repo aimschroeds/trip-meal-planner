@@ -245,6 +245,15 @@ export async function toggleGearAssignment(
   })
 }
 
+/** Remove a gear item from a trip entirely (every carrier). */
+export async function removeGearFromTrip(tripId: string, gearItemId: string): Promise<void> {
+  await db.gearAssignments
+    .where('gearItemId')
+    .equals(gearItemId)
+    .and((a) => a.tripId === tripId)
+    .delete()
+}
+
 export class GearInUseError extends Error {
   readonly gear: GearItem
   readonly tripCount: number

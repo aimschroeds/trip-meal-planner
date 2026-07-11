@@ -126,7 +126,7 @@ export function TripsPage({
 }
 
 function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
-  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'carries'>('setup')
+  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'carries' | 'shopping'>('setup')
   const [descBusy, setDescBusy] = useState(false)
   const [descNote, setDescNote] = useState<string | null>(null)
   const people = useLiveQuery(
@@ -194,7 +194,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </button>
         <h2 className="text-xl font-bold text-gray-800">{trip.name}</h2>
         <nav className="flex gap-2">
-          {(['setup', 'days', 'plan', 'carries'] as const).map((v) => (
+          {(['setup', 'days', 'plan', 'carries', 'shopping'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -241,6 +241,8 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
           <PackBreakdown trip={trip} people={people} />
         </>
       )}
+
+      {view === 'shopping' && <PlanSection trip={trip} people={people} section="shopping" />}
 
       {view === 'days' && (
       <section className="rounded-lg border border-gray-200 bg-white p-4">
