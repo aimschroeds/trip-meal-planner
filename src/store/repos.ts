@@ -6,6 +6,7 @@ import { db, type MarkRow } from './db'
 import { calorieDensity } from '../domain/density'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
+import type { GearFields } from '../domain/csv/gear'
 import type { MealFields, MealImportPlan } from '../domain/csv/meals'
 import type {
   GearItem,
@@ -267,6 +268,41 @@ export async function deleteGear(id: string): Promise<void> {
     const tripIds = new Set(assignments.map((a) => a.tripId))
     if (tripIds.size > 0) throw new GearInUseError(gear, tripIds.size)
     await db.gear.delete(id)
+  })
+}
+
+export interface GearImportResult {
+  added: number
+  skipped: number
+}
+
+/** Bulk-add gear from a parsed CSV (e.g. a LighterPack export). Rows whose name
+ *  already exists in the library are skipped, so re-importing doesn't duplicate. */
+export async function commitGearImport(fields: GearFields[]): Promise<GearImportResult> {
+  return db.transaction('rw', db.gear, async () => {
+    const existing = new Set((await db.gear.toArray()).map((g) => g.name.trim().toLowerCase()))
+    const toAdd: GearItem[] = []
+    let skipped = 0
+    for (const f of fields) {
+      const key = f.name.trim().toLowerCase()
+      if (existing.has(key)) {
+        skipped++
+        continue
+      }
+      existing.add(key)
+      toAdd.push({
+        id: crypto.randomUUID(),
+        name: f.name,
+        brand: f.brand,
+        category: f.category || 'misc',
+        weightG: f.weightG,
+        wornWeightG: f.wornWeightG,
+        consumableWeightG: f.consumableWeightG,
+        shared: f.shared,
+      })
+    }
+    await db.gear.bulkAdd(toAdd)
+    return { added: toAdd.length, skipped }
   })
 }
 
