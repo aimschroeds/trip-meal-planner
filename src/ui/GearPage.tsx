@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { deleteGear, GearInUseError } from '../store/repos'
-import { GEAR_CATEGORIES, categoryLabel, gearWeightSplit } from '../domain/gear'
+import { GEAR_CATEGORIES, categoryLabel, gearWeightSplit, isBigThree } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
 
@@ -108,9 +108,27 @@ export function GearPage() {
     reset()
   }
 
-  const sorted = [...gear].sort(
-    (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
+  /** Start a fresh entry pre-set to a category (adds under that heading). */
+  function addInCategory(category: string) {
+    setDraft({ ...emptyDraft, category })
+    setEditingId(null)
+    setError(null)
+  }
+
+  // Group by category — Big 3 first, then alphabetical; items by name.
+  const byCategory = new Map<string, GearItem[]>()
+  for (const g of [...gear].sort((a, b) => a.name.localeCompare(b.name))) {
+    const list = byCategory.get(g.category) ?? []
+    list.push(g)
+    byCategory.set(g.category, list)
+  }
+  const categories = [...byCategory.keys()].sort(
+    (a, b) =>
+      Number(isBigThree(b)) - Number(isBigThree(a)) ||
+      categoryLabel(a).localeCompare(categoryLabel(b)),
   )
+  const totalG = gear.reduce((n, g) => n + g.weightG, 0)
+  const totalBaseG = gear.reduce((n, g) => n + gearWeightSplit(g).baseG, 0)
 
   return (
     <div className="space-y-6">
@@ -219,62 +237,93 @@ export function GearPage() {
         </div>
       </section>
 
-      {sorted.length === 0 ? (
+      {gear.length === 0 ? (
         <p className="text-sm text-gray-500">
           No gear yet. Add your kit above — a category (shelter, sleep, pack = the “big 3”), the
           total weight, and how much of it is worn or consumable (fuel gas, soap). You’ll then be
           able to pick gear per trip and see full base/worn/consumable weight alongside food.
         </p>
       ) : (
-        <section className="rounded-lg border border-gray-200 bg-white p-4">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-gray-300 text-left text-gray-600">
-                <th className="py-1 pr-2">Item</th>
-                <th className="py-1 pr-2">Category</th>
-                <th className="py-1 pr-2 text-right">Total</th>
-                <th className="py-1 pr-2 text-right">Base</th>
-                <th className="py-1 pr-2 text-right">Worn</th>
-                <th className="py-1 pr-2 text-right">Consum.</th>
-                <th className="py-1 pr-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((g) => {
-                const s = gearWeightSplit(g)
-                return (
-                  <tr key={g.id} className="border-b border-gray-100">
-                    <td className="py-1.5 pr-2">
-                      {g.brand && <span className="text-gray-400">{g.brand} · </span>}
-                      {g.name}
-                      {g.shared && (
-                        <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
-                          shared
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-1.5 pr-2 text-gray-600">{categoryLabel(g.category)}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(g.weightG)}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(s.baseG)}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums text-gray-500">
-                      {s.wornG ? fmtGrams(s.wornG) : '—'}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums text-gray-500">
-                      {s.consumableG ? fmtGrams(s.consumableG) : '—'}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                      <button className="text-emerald-700 underline" onClick={() => edit(g)}>
-                        edit
-                      </button>
-                      <button className="ml-3 text-red-700 underline" onClick={() => void remove(g.id)}>
-                        delete
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="font-semibold text-gray-800">Your gear</h2>
+            <span className="text-sm text-gray-600 tabular-nums">
+              {gear.length} items · {fmtGrams(totalG)} total · base {fmtGrams(totalBaseG)}
+            </span>
+          </div>
+
+          {categories.map((category) => {
+            const list = byCategory.get(category)!
+            const catTotal = list.reduce((n, g) => n + g.weightG, 0)
+            return (
+              <div key={category}>
+                <div className="mb-1 flex items-baseline gap-2 border-b border-gray-200 pb-0.5">
+                  <h3 className="font-medium text-gray-800">
+                    {categoryLabel(category)}
+                    {isBigThree(category) && (
+                      <span className="ml-1 rounded bg-emerald-50 px-1 text-xs text-emerald-800">
+                        big 3
+                      </span>
+                    )}
+                  </h3>
+                  <span className="text-xs text-gray-500 tabular-nums">
+                    {list.length} · {fmtGrams(catTotal)}
+                  </span>
+                  <button
+                    className="ml-auto text-xs text-emerald-700 underline"
+                    onClick={() => addInCategory(category)}
+                  >
+                    + add here
+                  </button>
+                </div>
+                <table className="w-full border-collapse text-sm">
+                  <tbody>
+                    {list.map((g) => {
+                      const s = gearWeightSplit(g)
+                      return (
+                        <tr key={g.id} className="border-b border-gray-100">
+                          <td className="py-1.5 pr-2">
+                            {g.brand && <span className="text-gray-400">{g.brand} · </span>}
+                            {g.name}
+                            {g.shared && (
+                              <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
+                                shared
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            className="py-1.5 pr-2 text-right tabular-nums"
+                            title="total weight"
+                          >
+                            {fmtGrams(g.weightG)}
+                          </td>
+                          <td
+                            className="py-1.5 pr-2 text-right tabular-nums text-gray-500"
+                            title="worn / consumable"
+                          >
+                            {[s.wornG && `${fmtGrams(s.wornG)} worn`, s.consumableG && `${fmtGrams(s.consumableG)} consum.`]
+                              .filter(Boolean)
+                              .join(' · ') || '—'}
+                          </td>
+                          <td className="py-1.5 pr-2 text-right whitespace-nowrap">
+                            <button className="text-emerald-700 underline" onClick={() => edit(g)}>
+                              edit
+                            </button>
+                            <button
+                              className="ml-3 text-red-700 underline"
+                              onClick={() => void remove(g.id)}
+                            >
+                              delete
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })}
         </section>
       )}
     </div>
