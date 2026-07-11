@@ -54,6 +54,7 @@ export function GearPage() {
   const [draft, setDraft] = useState<GearDraft>(emptyDraft)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const weightG = num(draft.weightG)
   const split =
@@ -116,9 +117,19 @@ export function GearPage() {
     setError(null)
   }
 
+  const q = query.trim().toLowerCase()
+  const filtered = gear.filter(
+    (g) =>
+      q === '' ||
+      g.name.toLowerCase().includes(q) ||
+      (g.brand ?? '').toLowerCase().includes(q) ||
+      categoryLabel(g.category).toLowerCase().includes(q) ||
+      g.category.toLowerCase().includes(q),
+  )
+
   // Group by category — Big 3 first, then alphabetical; items by name.
   const byCategory = new Map<string, GearItem[]>()
-  for (const g of [...gear].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const g of [...filtered].sort((a, b) => a.name.localeCompare(b.name))) {
     const list = byCategory.get(g.category) ?? []
     list.push(g)
     byCategory.set(g.category, list)
@@ -128,8 +139,8 @@ export function GearPage() {
       Number(isBigThree(b)) - Number(isBigThree(a)) ||
       categoryLabel(a).localeCompare(categoryLabel(b)),
   )
-  const totalG = gear.reduce((n, g) => n + g.weightG, 0)
-  const totalBaseG = gear.reduce((n, g) => n + gearWeightSplit(g).baseG, 0)
+  const totalG = filtered.reduce((n, g) => n + g.weightG, 0)
+  const totalBaseG = filtered.reduce((n, g) => n + gearWeightSplit(g).baseG, 0)
 
   return (
     <div className="space-y-6">
@@ -250,10 +261,22 @@ export function GearPage() {
         <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="font-semibold text-gray-800">Your gear</h2>
+            <input
+              type="search"
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              placeholder="search gear…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <span className="text-sm text-gray-600 tabular-nums">
-              {gear.length} items · {fmtGrams(totalG)} total · base {fmtGrams(totalBaseG)}
+              {q ? `${filtered.length} of ${gear.length}` : `${gear.length} items`} ·{' '}
+              {fmtGrams(totalG)} total · base {fmtGrams(totalBaseG)}
             </span>
           </div>
+
+          {filtered.length === 0 && (
+            <p className="text-sm text-gray-500">No gear matches your search.</p>
+          )}
 
           {categories.map((category) => {
             const list = byCategory.get(category)!

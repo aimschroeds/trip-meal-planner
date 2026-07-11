@@ -63,6 +63,7 @@ export function MealsPage() {
   const [typeFilter, setTypeFilter] = useState<MealType | 'all'>('all')
   const [vegOnly, setVegOnly] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -167,10 +168,12 @@ export function MealsPage() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const q = query.trim().toLowerCase()
   const rows = meals
     .map((meal) => ({ meal, rollup: rollUpMeal(meal, itemsById) }))
     .filter(({ meal }) => typeFilter === 'all' || mealSlotTypes(meal).includes(typeFilter))
     .filter(({ rollup }) => !vegOnly || rollup.vegetarian)
+    .filter(({ meal }) => q === '' || meal.name.toLowerCase().includes(q))
     .sort((a, b) =>
       sortKey === 'name'
         ? a.meal.name.localeCompare(b.meal.name)
@@ -327,8 +330,17 @@ export function MealsPage() {
 
       {/* Sort/filter sit directly above the list they control. */}
       {meals.length > 0 && (
-        <div className="flex items-center gap-4 border-b border-gray-200 pb-2 text-sm">
-          <span className="font-medium text-gray-700">{meals.length} meals</span>
+        <div className="flex flex-wrap items-center gap-4 border-b border-gray-200 pb-2 text-sm">
+          <input
+            type="search"
+            className="rounded border border-gray-300 px-2 py-1"
+            placeholder="search meals…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <span className="font-medium text-gray-700">
+            {q ? `${rows.length} of ${meals.length}` : `${meals.length} meals`}
+          </span>
           <label className="flex items-center gap-1">
             type
             <select
