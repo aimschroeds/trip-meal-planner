@@ -145,7 +145,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   async function describeDays(days: Day[]) {
     const key = getApiKey()
     if (!key) {
-      setDescNote('Add an Anthropic API key (via photo extract on the Food tab) to get day notes.')
+      setDescNote('Add your Anthropic API key on the Backup tab to get day notes.')
       return
     }
     const describable = days.filter(hasItinerary)
