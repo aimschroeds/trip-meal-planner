@@ -132,6 +132,7 @@ export function ItemsPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [vegOnly, setVegOnly] = useState(false)
+  const [query, setQuery] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
   const density = draftDensity(draft)
@@ -227,8 +228,15 @@ export function ItemsPage() {
     }
   }
 
+  const q = query.trim().toLowerCase()
   const visible = items
     .filter((i) => !vegOnly || i.vegetarian)
+    .filter(
+      (i) =>
+        q === '' ||
+        i.name.toLowerCase().includes(q) ||
+        (i.brand ?? '').toLowerCase().includes(q),
+    )
     .sort((a, b) =>
       sortKey === 'name'
         ? a.name.localeCompare(b.name)
@@ -431,8 +439,17 @@ export function ItemsPage() {
 
       {/* Sort/filter sit directly above the list they control. */}
       {items.length > 0 && (
-        <div className="flex items-center gap-4 border-b border-gray-200 pb-2 text-sm">
-          <span className="font-medium text-gray-700">{items.length} items</span>
+        <div className="flex flex-wrap items-center gap-4 border-b border-gray-200 pb-2 text-sm">
+          <input
+            type="search"
+            className="rounded border border-gray-300 px-2 py-1"
+            placeholder="search food…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <span className="font-medium text-gray-700">
+            {q ? `${visible.length} of ${items.length}` : `${items.length} items`}
+          </span>
           <label className="flex items-center gap-1">
             sort by
             <select
@@ -457,8 +474,14 @@ export function ItemsPage() {
 
       {visible.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No items yet. This is your food library — add one above, import a CSV, or snap a photo of
-          a label. Everything else (meals, plans) builds on items, so start here.
+          {q || vegOnly ? (
+            'No food matches your search.'
+          ) : (
+            <>
+              No items yet. This is your food library — add one above, import a CSV, or snap a photo
+              of a label. Everything else (meals, plans) builds on items, so start here.
+            </>
+          )}
         </p>
       ) : (
         <table className="w-full border-collapse text-sm">
