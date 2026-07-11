@@ -137,7 +137,7 @@ export function MealTextBuilder({
               It sees your whole library and picks items to fit — describe meals directly or by idea
               ("different bean items, each with a tortilla"). Quantities use each item's serving size.
               Review below, then save.
-              {items.length === 0 && ' (add items in the Items tab first)'}
+              {items.length === 0 && ' (add foods in the Food tab first)'}
             </p>
           </>
         )}

@@ -19,8 +19,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Hiking Trip Meal Planner',
-        short_name: 'Meal Planner',
+        name: 'Hiking Trip Meal & Gear Planner',
+        short_name: 'Trip Planner',
         description: 'Plan and pack food for multi-day hikes — works offline on the trail.',
         theme_color: '#065f46',
         background_color: '#f9fafb',

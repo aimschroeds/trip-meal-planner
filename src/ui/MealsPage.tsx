@@ -281,7 +281,7 @@ export function MealsPage() {
             </button>
             <MultiAddItems items={items} onAdd={addItems} />
             {items.length === 0 && (
-              <span className="text-sm text-gray-500">(add items in the Items tab first)</span>
+              <span className="text-sm text-gray-500">(add foods in the Food tab first)</span>
             )}
           </div>
         </div>

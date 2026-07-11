@@ -9,7 +9,7 @@ import { ReloadPrompt } from './ui/ReloadPrompt'
 import { PwaInstallButton } from './ui/PwaInstallButton'
 import { readJoinToken } from './sync/workspace'
 
-const TABS = ['Trips', 'Items', 'Meals', 'Gear', 'Backup'] as const
+const TABS = ['Trips', 'Food', 'Meals', 'Gear', 'Backup'] as const
 type Tab = (typeof TABS)[number]
 
 const HELP_DISMISSED = 'intro-dismissed'
@@ -28,7 +28,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center gap-8 px-6 py-4">
-          <h1 className="text-lg font-bold text-emerald-800">Hiking Trip Meal Planner</h1>
+          <h1 className="text-lg font-bold text-emerald-800">Hiking Trip Meal &amp; Gear Planner</h1>
           <nav className="flex gap-4">
             {TABS.map((t) => (
               <button
@@ -71,7 +71,7 @@ function App() {
         {tab === 'Trips' && (
           <TripsPage selectedId={selectedTripId} onSelect={setSelectedTripId} />
         )}
-        {tab === 'Items' && <ItemsPage />}
+        {tab === 'Food' && <ItemsPage />}
         {tab === 'Meals' && <MealsPage />}
         {tab === 'Gear' && <GearPage />}
         {tab === 'Backup' && <BackupPage />}

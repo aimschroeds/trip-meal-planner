@@ -38,7 +38,7 @@ test('plan a day end to end', async ({ page }) => {
   await page.goto('/')
 
   // Import the item library from CSV.
-  await page.getByRole('button', { name: 'Items' }).click()
+  await page.getByRole('button', { name: 'Food' }).click()
   await importCsv(page, 'items.csv', ITEMS_CSV)
   await expect(page.getByRole('cell', { name: 'Oats', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '3.80 cal/g' })).toBeVisible()
