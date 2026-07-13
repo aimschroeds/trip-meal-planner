@@ -94,9 +94,10 @@ test('plan a day end to end', async ({ page }) => {
   const day1 = page.locator('section', { hasText: 'Day 1' }).first()
   await expect(day1.getByRole('listitem').filter({ hasText: 'Porridge' })).toBeVisible()
 
-  // The carries table (now its own tab) aggregates the day into weight/calories.
+  // The Carries tab's pack breakdown shows a per-carry row with pack weight and
+  // that carry's food calories (no resupplies → one carry covering the trip).
   await page.getByRole('button', { name: 'carries', exact: true }).click()
-  const tripRow = page.getByRole('row').filter({ hasText: 'Trip' })
-  await expect(tripRow).toContainText(/\d{3,} cal/)
-  await expect(tripRow).toContainText(/\d{3,} g/)
+  const carryRow = page.getByRole('row').filter({ hasText: 'Carry 1' })
+  await expect(carryRow).toContainText(/\d{3,} g/)
+  await expect(carryRow).toContainText(/\d{3,} cal/)
 })
