@@ -41,4 +41,13 @@ describe('parseGearCsv — own format round-trip', () => {
       { name: 'Fuel', brand: undefined, category: 'cooking', weightG: 220, wornWeightG: undefined, consumableWeightG: 100, shared: undefined },
     ])
   })
+
+  it('round-trips a personal item\'s owner', () => {
+    const gear: GearItem[] = [
+      { id: 'h', name: 'Sun hoodie', category: 'clothing', weightG: 140, owner: 'Alice' },
+    ]
+    const { rows, issues } = parseGearCsv(gearToCsv(gear))
+    expect(issues).toEqual([])
+    expect(rows[0].fields.owner).toBe('Alice')
+  })
 })

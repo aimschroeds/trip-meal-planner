@@ -98,6 +98,18 @@ export function gearTotalG(t: GearTotals): number {
 
 /** The base/worn/consumable a person carries from their gear assignments.
  *  Assignments referencing a missing gear item (e.g. deleted) are skipped. */
+/** Trip person whose name matches a gear item's owner (case-insensitive), or
+ *  undefined when there's no owner or no match. Used to auto-assign personal
+ *  gear to its owner when it's added to a trip. */
+export function ownerPersonId(
+  owner: string | undefined,
+  people: readonly { id: string; name: string }[],
+): string | undefined {
+  if (!owner || owner.trim() === '') return undefined
+  const key = owner.trim().toLowerCase()
+  return people.find((p) => p.name.trim().toLowerCase() === key)?.id
+}
+
 export function personGearTotals(
   assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
   gearById: ReadonlyMap<string, GearItem>,

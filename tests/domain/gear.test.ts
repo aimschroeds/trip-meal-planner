@@ -5,6 +5,7 @@ import {
   categoryLabel,
   gearWeightSplit,
   isBigThree,
+  ownerPersonId,
   personGearByCategory,
   personGearTotals,
 } from '../../src/domain/gear'
@@ -112,5 +113,23 @@ describe('personGearByCategory', () => {
     )
     expect(byCat.get('shelter')).toEqual({ baseG: 540, wornG: 0, consumableG: 0 })
     expect(byCat.get('cooking')).toEqual({ baseG: 120, wornG: 0, consumableG: 100 })
+  })
+})
+
+describe('ownerPersonId', () => {
+  const people = [
+    { id: 'a', name: 'Alice' },
+    { id: 'b', name: 'Bob' },
+  ]
+
+  it('matches an owner name to a trip person, case-insensitively', () => {
+    expect(ownerPersonId('Alice', people)).toBe('a')
+    expect(ownerPersonId('  bob ', people)).toBe('b')
+  })
+
+  it('is undefined with no owner or no matching person', () => {
+    expect(ownerPersonId(undefined, people)).toBeUndefined()
+    expect(ownerPersonId('', people)).toBeUndefined()
+    expect(ownerPersonId('Carol', people)).toBeUndefined()
   })
 })

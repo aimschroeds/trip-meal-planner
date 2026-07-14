@@ -15,6 +15,7 @@ export interface GearFields {
   consumableWeightG?: number
   shared?: boolean
   brand?: string
+  owner?: string
 }
 
 export interface ParsedGearRow {
@@ -73,6 +74,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
 
     const category = pick(raw, 'category') ?? 'misc'
     const brand = pick(raw, 'brand')
+    const owner = pick(raw, 'owner')
 
     // Weight: prefer an explicit grams column; else LighterPack weight+unit×qty.
     let weightG: number
@@ -129,6 +131,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
         consumableWeightG,
         shared: truthy(raw.shared) || undefined,
         brand,
+        owner,
       },
     })
   })
@@ -139,6 +142,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
 export const GEAR_CSV_COLUMNS = [
   'name',
   'brand',
+  'owner',
   'category',
   'weight_g',
   'worn_weight_g',
@@ -151,6 +155,7 @@ export function gearToCsv(gear: GearItem[]): string {
     gear.map((g) => ({
       name: g.name,
       brand: g.brand ?? '',
+      owner: g.owner ?? '',
       category: g.category,
       weight_g: g.weightG,
       worn_weight_g: g.wornWeightG ?? '',

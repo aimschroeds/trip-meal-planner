@@ -139,6 +139,11 @@ export interface GearItem {
   /** Group gear one person carries for everyone (tent, pot) vs personal kit
    *  each hiker packs their own (clothing). Drives assignment UI. */
   shared?: boolean
+  /** Optional owner name for personal gear (Gear epic): lets the library hold
+   *  "Sun hoodie — Alice" (140 g) and "Sun hoodie — Bob" (160 g) as distinct
+   *  items. On a trip, an owned item auto-assigns to the person whose name
+   *  matches. Free text (the global library isn't tied to a trip's people). */
+  owner?: string
 }
 
 /** A gear item taken on a trip and who carries it (Gear epic, G2). Shared gear

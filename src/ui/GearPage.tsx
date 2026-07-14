@@ -10,6 +10,7 @@ import { GearImportExport } from './GearImportExport'
 interface GearDraft {
   name: string
   brand: string
+  owner: string
   category: string
   weightG: string
   wornWeightG: string
@@ -20,6 +21,7 @@ interface GearDraft {
 const emptyDraft: GearDraft = {
   name: '',
   brand: '',
+  owner: '',
   category: '',
   weightG: '',
   wornWeightG: '',
@@ -31,6 +33,7 @@ function toDraft(g: GearItem): GearDraft {
   return {
     name: g.name,
     brand: g.brand ?? '',
+    owner: g.owner ?? '',
     category: g.category,
     weightG: String(g.weightG),
     wornWeightG: g.wornWeightG != null ? String(g.wornWeightG) : '',
@@ -55,6 +58,7 @@ export function GearPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState('all')
 
   const weightG = num(draft.weightG)
   const split =
@@ -100,6 +104,7 @@ export function GearPage() {
       id: editingId ?? crypto.randomUUID(),
       name,
       brand: draft.brand.trim() || undefined,
+      owner: draft.owner.trim() || undefined,
       category: draft.category.trim() || 'misc',
       weightG,
       wornWeightG: worn || undefined,
@@ -117,15 +122,29 @@ export function GearPage() {
     setError(null)
   }
 
-  const q = query.trim().toLowerCase()
-  const filtered = gear.filter(
-    (g) =>
-      q === '' ||
-      g.name.toLowerCase().includes(q) ||
-      (g.brand ?? '').toLowerCase().includes(q) ||
-      categoryLabel(g.category).toLowerCase().includes(q) ||
-      g.category.toLowerCase().includes(q),
+  // Distinct owners in the library, for the filter dropdown + the form datalist.
+  const owners = [...new Set(gear.map((g) => g.owner?.trim()).filter((o): o is string => !!o))].sort(
+    (a, b) => a.localeCompare(b),
   )
+
+  const q = query.trim().toLowerCase()
+  const filtered = gear
+    .filter((g) =>
+      ownerFilter === 'all'
+        ? true
+        : ownerFilter === '__shared'
+          ? !g.owner
+          : g.owner === ownerFilter,
+    )
+    .filter(
+      (g) =>
+        q === '' ||
+        g.name.toLowerCase().includes(q) ||
+        (g.brand ?? '').toLowerCase().includes(q) ||
+        (g.owner ?? '').toLowerCase().includes(q) ||
+        categoryLabel(g.category).toLowerCase().includes(q) ||
+        g.category.toLowerCase().includes(q),
+    )
 
   // Group by category — Big 3 first, then alphabetical; items by name.
   const byCategory = new Map<string, GearItem[]>()
@@ -164,6 +183,26 @@ export function GearPage() {
               onChange={(e) => setDraft({ ...draft, brand: e.target.value })}
               placeholder="optional"
             />
+          </label>
+          <label className="block">
+            <span
+              className="block text-sm text-gray-600"
+              title="Whose personal gear this is; leave blank for shared group gear. On a trip it auto-assigns to the person with this name."
+            >
+              Owner
+            </span>
+            <input
+              className={`${inputClass} w-28`}
+              list="gear-owners"
+              value={draft.owner}
+              onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
+              placeholder="e.g. Alice"
+            />
+            <datalist id="gear-owners">
+              {owners.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
           </label>
           <label className="block">
             <span className="block text-sm text-gray-600">Category</span>
@@ -268,6 +307,21 @@ export function GearPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+            {owners.length > 0 && (
+              <select
+                className="rounded border border-gray-300 px-1 py-1 text-sm"
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+              >
+                <option value="all">all owners</option>
+                <option value="__shared">shared (no owner)</option>
+                {owners.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            )}
             <span className="text-sm text-gray-600 tabular-nums">
               {q ? `${filtered.length} of ${gear.length}` : `${gear.length} items`} ·{' '}
               {fmtGrams(totalG)} total · base {fmtGrams(totalBaseG)}
@@ -311,6 +365,11 @@ export function GearPage() {
                           <td className="py-1.5 pr-2">
                             {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                             {g.name}
+                            {g.owner && (
+                              <span className="ml-1 rounded bg-violet-100 px-1 text-xs text-violet-800">
+                                {g.owner}
+                              </span>
+                            )}
                             {g.shared && (
                               <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
                                 shared
