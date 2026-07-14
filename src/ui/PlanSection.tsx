@@ -51,6 +51,24 @@ import { GroupedCombobox } from './GroupedCombobox'
 
 const OFF_TRAIL = '@offtrail'
 
+/** Secondary count for a packing line: pieces when the item has a unit weight
+ *  ("4.7 tortillas"), otherwise whole packages for per-package items
+ *  ("2 packages"). Null when neither applies (loose weight). */
+function packingCount(l: {
+  units: number | null
+  packages: number | null
+  item: { unitName?: string }
+}): string | null {
+  if (l.units !== null) {
+    const n = Math.round(l.units * 10) / 10
+    return `${n} ${(l.item.unitName || 'piece') + (n === 1 ? '' : 's')}`
+  }
+  if (l.packages !== null) {
+    return `${l.packages} package${l.packages === 1 ? '' : 's'}`
+  }
+  return null
+}
+
 const STATUS_STYLES: Record<DayStatus, string> = {
   ok: 'bg-green-100 text-green-800',
   under: 'bg-red-100 text-red-800',
@@ -583,6 +601,7 @@ export function PlanSection({
                         {lines.map((l) => {
                           const key = `${carry.index}:${l.item.id}`
                           const isPacked = packed.has(key)
+                          const count = packingCount(l)
                           return (
                             <li key={l.item.id}>
                               <label className="flex cursor-pointer items-baseline gap-2">
@@ -600,12 +619,11 @@ export function PlanSection({
                                   )}
                                   {l.item.name}
                                 </span>
-                                {l.units !== null && (
+                                {count && (
                                   <span
                                     className={`shrink-0 text-xs ${isPacked ? 'text-gray-400' : 'text-gray-500'}`}
                                   >
-                                    {Math.round(l.units * 10) / 10}{' '}
-                                    {(l.item.unitName || 'piece') + (l.units === 1 ? '' : 's')}
+                                    {count}
                                   </span>
                                 )}
                                 <span
