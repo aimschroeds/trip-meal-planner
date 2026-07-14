@@ -6,6 +6,7 @@ import {
   deleteGear,
   deleteTrip,
   GearInUseError,
+  setGearOwners,
   toggleGearAssignment,
 } from '../../src/store/repos'
 import type { GearItem } from '../../src/domain/types'
@@ -46,5 +47,24 @@ describe('deleteTrip', () => {
     await toggleGearAssignment(tripId, 'alice', 'tent')
     await deleteTrip(tripId)
     expect(await db.gearAssignments.where('tripId').equals(tripId).count()).toBe(0)
+  })
+})
+
+describe('setGearOwners', () => {
+  beforeEach(async () => {
+    await db.gear.bulkAdd([
+      { id: 'a', name: 'Hoodie', category: 'clothing', weightG: 140 },
+      { id: 'b', name: 'Puffy', category: 'clothing', weightG: 300 },
+    ])
+  })
+
+  it('sets owners on many items at once, and clears with undefined', async () => {
+    await setGearOwners(['a', 'b'], ['Alice'])
+    expect((await db.gear.get('a'))?.owners).toEqual(['Alice'])
+    expect((await db.gear.get('b'))?.owners).toEqual(['Alice'])
+
+    await setGearOwners(['a'], undefined)
+    expect((await db.gear.get('a'))?.owners).toBeUndefined()
+    expect((await db.gear.get('b'))?.owners).toEqual(['Alice'])
   })
 })

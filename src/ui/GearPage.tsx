@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { deleteGear, GearInUseError } from '../store/repos'
+import { deleteGear, GearInUseError, setGearOwners } from '../store/repos'
 import {
   GEAR_CATEGORIES,
   categoryLabel,
@@ -65,6 +65,23 @@ export function GearPage() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('all')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkOwner, setBulkOwner] = useState('')
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function applyBulkOwner(owners: string[] | undefined) {
+    await setGearOwners([...selected], owners)
+    setSelected(new Set())
+    setBulkOwner('')
+  }
 
   const weightG = num(draft.weightG)
   const split =
@@ -330,7 +347,42 @@ export function GearPage() {
               {q ? `${filtered.length} of ${gear.length}` : `${gear.length} items`} ·{' '}
               {fmtGrams(totalG)} total · base {fmtGrams(totalBaseG)}
             </span>
+            {filtered.length > 0 && (
+              <button
+                className="text-xs text-emerald-700 underline"
+                onClick={() => setSelected(new Set(filtered.map((g) => g.id)))}
+              >
+                select all {filtered.length}
+              </button>
+            )}
           </div>
+
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-violet-300 bg-violet-50 p-2 text-sm">
+              <span className="font-medium text-violet-900">{selected.size} selected</span>
+              <span className="text-violet-900">· set owner(s):</span>
+              <input
+                className="rounded border border-gray-300 px-2 py-1"
+                list="gear-owners"
+                placeholder="e.g. Alice, Bob"
+                value={bulkOwner}
+                onChange={(e) => setBulkOwner(e.target.value)}
+              />
+              <button
+                className="rounded bg-emerald-700 px-2 py-1 font-medium text-white disabled:opacity-50"
+                disabled={parseOwners(bulkOwner).length === 0}
+                onClick={() => void applyBulkOwner(parseOwners(bulkOwner))}
+              >
+                Apply
+              </button>
+              <button className="text-gray-600 underline" onClick={() => void applyBulkOwner(undefined)}>
+                clear owner
+              </button>
+              <button className="ml-auto text-gray-500 underline" onClick={() => setSelected(new Set())}>
+                deselect
+              </button>
+            </div>
+          )}
 
           {filtered.length === 0 && (
             <p className="text-sm text-gray-500">No gear matches your search.</p>
@@ -367,6 +419,13 @@ export function GearPage() {
                       return (
                         <tr key={g.id} className="border-b border-gray-100">
                           <td className="py-1.5 pr-2">
+                            <input
+                              type="checkbox"
+                              className="mr-2 align-middle"
+                              aria-label={`Select ${g.name}`}
+                              checked={selected.has(g.id)}
+                              onChange={() => toggleSelected(g.id)}
+                            />
                             {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                             {g.name}
                             {g.owners?.length ? (
