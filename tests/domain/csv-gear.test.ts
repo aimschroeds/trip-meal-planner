@@ -42,12 +42,14 @@ describe('parseGearCsv — own format round-trip', () => {
     ])
   })
 
-  it('round-trips a personal item\'s owner', () => {
+  it('round-trips one or several owners', () => {
     const gear: GearItem[] = [
-      { id: 'h', name: 'Sun hoodie', category: 'clothing', weightG: 140, owner: 'Alice' },
+      { id: 'h', name: 'Sun hoodie', category: 'clothing', weightG: 140, owners: ['Alice'] },
+      { id: 'p', name: 'Puffy', category: 'clothing', weightG: 300, owners: ['Alice', 'Bob'] },
     ]
     const { rows, issues } = parseGearCsv(gearToCsv(gear))
     expect(issues).toEqual([])
-    expect(rows[0].fields.owner).toBe('Alice')
+    expect(rows[0].fields.owners).toEqual(['Alice'])
+    expect(rows[1].fields.owners).toEqual(['Alice', 'Bob'])
   })
 })

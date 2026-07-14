@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { deleteGear, GearInUseError } from '../store/repos'
-import { GEAR_CATEGORIES, categoryLabel, gearWeightSplit, isBigThree } from '../domain/gear'
+import {
+  GEAR_CATEGORIES,
+  categoryLabel,
+  gearWeightSplit,
+  isBigThree,
+  parseOwners,
+} from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
 import { GearImportExport } from './GearImportExport'
@@ -33,7 +39,7 @@ function toDraft(g: GearItem): GearDraft {
   return {
     name: g.name,
     brand: g.brand ?? '',
-    owner: g.owner ?? '',
+    owner: (g.owners ?? []).join(', '),
     category: g.category,
     weightG: String(g.weightG),
     wornWeightG: g.wornWeightG != null ? String(g.wornWeightG) : '',
@@ -104,7 +110,7 @@ export function GearPage() {
       id: editingId ?? crypto.randomUUID(),
       name,
       brand: draft.brand.trim() || undefined,
-      owner: draft.owner.trim() || undefined,
+      owners: parseOwners(draft.owner).length ? parseOwners(draft.owner) : undefined,
       category: draft.category.trim() || 'misc',
       weightG,
       wornWeightG: worn || undefined,
@@ -123,9 +129,7 @@ export function GearPage() {
   }
 
   // Distinct owners in the library, for the filter dropdown + the form datalist.
-  const owners = [...new Set(gear.map((g) => g.owner?.trim()).filter((o): o is string => !!o))].sort(
-    (a, b) => a.localeCompare(b),
-  )
+  const owners = [...new Set(gear.flatMap((g) => g.owners ?? []))].sort((a, b) => a.localeCompare(b))
 
   const q = query.trim().toLowerCase()
   const filtered = gear
@@ -133,15 +137,15 @@ export function GearPage() {
       ownerFilter === 'all'
         ? true
         : ownerFilter === '__shared'
-          ? !g.owner
-          : g.owner === ownerFilter,
+          ? !g.owners?.length
+          : (g.owners ?? []).includes(ownerFilter),
     )
     .filter(
       (g) =>
         q === '' ||
         g.name.toLowerCase().includes(q) ||
         (g.brand ?? '').toLowerCase().includes(q) ||
-        (g.owner ?? '').toLowerCase().includes(q) ||
+        (g.owners ?? []).join(' ').toLowerCase().includes(q) ||
         categoryLabel(g.category).toLowerCase().includes(q) ||
         g.category.toLowerCase().includes(q),
     )
@@ -187,16 +191,16 @@ export function GearPage() {
           <label className="block">
             <span
               className="block text-sm text-gray-600"
-              title="Whose personal gear this is; leave blank for shared group gear. On a trip it auto-assigns to the person with this name."
+              title="Whose personal gear this is; leave blank for shared group gear. Name several (comma-separated) for an identical item multiple people each bring. On a trip it auto-assigns to each matching person."
             >
-              Owner
+              Owner(s)
             </span>
             <input
-              className={`${inputClass} w-28`}
+              className={`${inputClass} w-32`}
               list="gear-owners"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
-              placeholder="e.g. Alice"
+              placeholder="e.g. Alice, Bob"
             />
             <datalist id="gear-owners">
               {owners.map((o) => (
@@ -365,11 +369,11 @@ export function GearPage() {
                           <td className="py-1.5 pr-2">
                             {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                             {g.name}
-                            {g.owner && (
+                            {g.owners?.length ? (
                               <span className="ml-1 rounded bg-violet-100 px-1 text-xs text-violet-800">
-                                {g.owner}
+                                {g.owners.join(', ')}
                               </span>
-                            )}
+                            ) : null}
                             {g.shared && (
                               <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
                                 shared

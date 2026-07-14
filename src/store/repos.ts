@@ -303,7 +303,7 @@ export async function commitGearImport(fields: GearFields[]): Promise<GearImport
         id: crypto.randomUUID(),
         name: f.name,
         brand: f.brand,
-        owner: f.owner,
+        owners: f.owners,
         category: f.category || 'misc',
         weightG: f.weightG,
         wornWeightG: f.wornWeightG,

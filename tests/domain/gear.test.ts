@@ -5,7 +5,8 @@ import {
   categoryLabel,
   gearWeightSplit,
   isBigThree,
-  ownerPersonId,
+  ownerPersonIds,
+  parseOwners,
   personGearByCategory,
   personGearTotals,
 } from '../../src/domain/gear'
@@ -116,20 +117,27 @@ describe('personGearByCategory', () => {
   })
 })
 
-describe('ownerPersonId', () => {
+describe('parseOwners', () => {
+  it('splits on commas/semicolons, trims, and dedupes', () => {
+    expect(parseOwners('Alice, Bob ; Alice')).toEqual(['Alice', 'Bob'])
+    expect(parseOwners('  ')).toEqual([])
+  })
+})
+
+describe('ownerPersonIds', () => {
   const people = [
     { id: 'a', name: 'Alice' },
     { id: 'b', name: 'Bob' },
   ]
 
-  it('matches an owner name to a trip person, case-insensitively', () => {
-    expect(ownerPersonId('Alice', people)).toBe('a')
-    expect(ownerPersonId('  bob ', people)).toBe('b')
+  it('matches every owner name to a trip person, case-insensitively', () => {
+    expect(ownerPersonIds(['Alice'], people)).toEqual(['a'])
+    expect(ownerPersonIds(['alice', 'BOB'], people)).toEqual(['a', 'b'])
   })
 
-  it('is undefined with no owner or no matching person', () => {
-    expect(ownerPersonId(undefined, people)).toBeUndefined()
-    expect(ownerPersonId('', people)).toBeUndefined()
-    expect(ownerPersonId('Carol', people)).toBeUndefined()
+  it('is empty for shared gear (no owners) or unmatched names', () => {
+    expect(ownerPersonIds(undefined, people)).toEqual([])
+    expect(ownerPersonIds([], people)).toEqual([])
+    expect(ownerPersonIds(['Carol'], people)).toEqual([])
   })
 })
