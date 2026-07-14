@@ -236,7 +236,6 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
       {view === 'carries' && (
         <>
-          <PlanSection trip={trip} people={people} section="carries" />
           <GearSection trip={trip} people={people} />
           <PackBreakdown trip={trip} people={people} />
         </>
