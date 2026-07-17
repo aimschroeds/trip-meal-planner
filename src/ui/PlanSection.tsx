@@ -10,6 +10,7 @@ import {
   type SlotRef,
 } from '../domain/carries'
 import { copyDayPlan } from '../domain/copyDay'
+import { tripDayDate } from '../domain/dates'
 import { dayLegLabel } from '../domain/dayDescription'
 import { generateDayPlan } from '../domain/generate'
 import { mealSlotTypes, rollUpMeal } from '../domain/rollups'
@@ -35,6 +36,7 @@ import type { Day, Item, Meal, PlanPart, Person, PlanEntry, Resupply, Slot, Trip
 import { downloadCsv } from './download'
 import {
   fmtCalories,
+  fmtDate,
   fmtDensity,
   fmtGrams,
   fmtPrepIngredient,
@@ -771,6 +773,11 @@ function DayCard({
       <div className="mb-2 flex items-center gap-3">
         <h4 className="font-semibold text-gray-800">
           Day {day.index}
+          {tripDayDate(trip.startDate, day.index) && (
+            <span className="ml-2 font-normal text-gray-500">
+              {fmtDate(tripDayDate(trip.startDate, day.index)!)}
+            </span>
+          )}
           <span className="ml-2 font-normal text-gray-500">
             {day.type} · target {fmtCalories(totals.target)}
           </span>

@@ -5,6 +5,10 @@ export const fmtDensity = (calPerGram: number) => `${calPerGram.toFixed(2)} cal/
 export const fmtGrams = (g: number) => `${Math.round(g)} g`
 export const fmtCalories = (cal: number) => `${Math.round(cal)} cal`
 
+/** A trip day/resupply date, e.g. "Mon, Jul 20". */
+export const fmtDate = (date: Date) =>
+  date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+
 /** Friendly headers for the prep list ("Breakfast", not "brekkie") — used
  *  only there; the rest of the app uses the raw slot type. */
 export const MEAL_TYPE_LABEL: Record<MealType, string> = {
