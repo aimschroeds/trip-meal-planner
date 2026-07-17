@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   GearAssignment,
+  GearCollection,
   GearItem,
   Item,
   Meal,
@@ -59,6 +60,7 @@ export const db = new Dexie('hiking-meal-planner') as Dexie & {
   planEntries: EntityTable<PlanEntry, 'id'>
   gear: EntityTable<GearItem, 'id'>
   gearAssignments: EntityTable<GearAssignment, 'id'>
+  gearCollections: EntityTable<GearCollection, 'id'>
   marks: EntityTable<MarkRow, 'id'>
   syncMeta: EntityTable<SyncMetaRow, 'key'>
   syncState: EntityTable<SyncStateRow, 'id'>
@@ -125,4 +127,9 @@ db.version(7).stores({
 // Gear epic G2: which gear is taken on a trip and who carries it.
 db.version(8).stores({
   gearAssignments: 'id, tripId, [tripId+personId], gearItemId',
+})
+
+// Gear epic: reusable named gear collections (kits).
+db.version(9).stores({
+  gearCollections: 'id, name',
 })

@@ -9,6 +9,7 @@ import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
 import type { GearFields } from '../domain/csv/gear'
 import type { MealFields, MealImportPlan } from '../domain/csv/meals'
 import type {
+  GearCollection,
   GearItem,
   Item,
   Meal,
@@ -268,15 +269,51 @@ export class GearInUseError extends Error {
   }
 }
 
-/** Delete a gear item, blocked (like items/meals) if it's assigned on any trip. */
+/** Delete a gear item, blocked (like items/meals) if it's assigned on any trip.
+ *  Also drops it from any gear collections it belonged to. */
 export async function deleteGear(id: string): Promise<void> {
-  await db.transaction('rw', db.gear, db.gearAssignments, async () => {
+  await db.transaction('rw', db.gear, db.gearAssignments, db.gearCollections, async () => {
     const gear = await db.gear.get(id)
     if (!gear) return
     const assignments = await db.gearAssignments.where('gearItemId').equals(id).toArray()
     const tripIds = new Set(assignments.map((a) => a.tripId))
     if (tripIds.size > 0) throw new GearInUseError(gear, tripIds.size)
     await db.gear.delete(id)
+    const collections = await db.gearCollections.toArray()
+    for (const c of collections) {
+      if (c.gearItemIds.includes(id)) {
+        await db.gearCollections.put({ ...c, gearItemIds: c.gearItemIds.filter((g) => g !== id) })
+      }
+    }
+  })
+}
+
+export async function createGearCollection(name: string): Promise<string> {
+  const collection: GearCollection = { id: crypto.randomUUID(), name: name.trim(), gearItemIds: [] }
+  await db.gearCollections.add(collection)
+  return collection.id
+}
+
+export async function renameGearCollection(id: string, name: string): Promise<void> {
+  await db.gearCollections.update(id, { name: name.trim() })
+}
+
+export async function deleteGearCollection(id: string): Promise<void> {
+  await db.gearCollections.delete(id)
+}
+
+/** Add or remove a gear item from a collection (membership is a set). */
+export async function toggleCollectionItem(collectionId: string, gearItemId: string): Promise<void> {
+  await db.transaction('rw', db.gearCollections, async () => {
+    const c = await db.gearCollections.get(collectionId)
+    if (!c) return
+    const has = c.gearItemIds.includes(gearItemId)
+    await db.gearCollections.put({
+      ...c,
+      gearItemIds: has
+        ? c.gearItemIds.filter((g) => g !== gearItemId)
+        : [...c.gearItemIds, gearItemId],
+    })
   })
 }
 

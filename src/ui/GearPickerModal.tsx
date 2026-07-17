@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { removeGearFromTrip, toggleGearAssignment } from '../store/repos'
 import { categoryLabel, isBigThree, ownerPersonIds } from '../domain/gear'
-import type { GearAssignment, GearItem, Person, Trip } from '../domain/types'
+import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
 
 // A searchable picker for choosing which gear goes on a trip. Shows the whole
@@ -23,6 +23,11 @@ export function GearPickerModal({
     () => db.gearAssignments.where('tripId').equals(trip.id).toArray(),
     [trip.id],
     [] as GearAssignment[],
+  )
+  const collections = useLiveQuery(
+    () => db.gearCollections.toArray(),
+    [],
+    [] as GearCollection[],
   )
   const [query, setQuery] = useState('')
 
@@ -60,17 +65,29 @@ export function GearPickerModal({
       categoryLabel(a).localeCompare(categoryLabel(b)),
   )
 
-  function toggleOnTrip(g: GearItem) {
-    if (onTripIds.has(g.id)) {
-      void removeGearFromTrip(trip.id, g.id)
-      return
-    }
-    // Personal gear auto-assigns to each person whose name matches an owner
-    // (so an item owned by Alice & Bob lands on both). Shared gear (no match)
-    // goes to the first person and can be reassigned below.
+  // Add one item to the trip (no-op if already on). Personal gear auto-assigns
+  // to each person whose name matches an owner (so an item owned by Alice & Bob
+  // lands on both); shared gear goes to the first person and can be reassigned.
+  function addToTrip(g: GearItem) {
+    if (onTripIds.has(g.id)) return
     const carriers = ownerPersonIds(g.owners, people)
     const targets = carriers.length ? carriers : defaultCarrier ? [defaultCarrier] : []
     for (const pid of targets) void toggleGearAssignment(trip.id, pid, g.id)
+  }
+
+  function toggleOnTrip(g: GearItem) {
+    if (onTripIds.has(g.id)) void removeGearFromTrip(trip.id, g.id)
+    else addToTrip(g)
+  }
+
+  const gearById = new Map(gear.map((g) => [g.id, g]))
+  function applyCollection(id: string) {
+    const c = collections.find((x) => x.id === id)
+    if (!c) return
+    for (const gid of c.gearItemIds) {
+      const g = gearById.get(gid)
+      if (g) addToTrip(g)
+    }
   }
 
   return (
@@ -100,6 +117,25 @@ export function GearPickerModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {collections.length > 0 && (
+            <label className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              Add a collection:
+              <select
+                className="rounded border border-gray-300 px-1 py-1 text-sm"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) applyCollection(e.target.value)
+                }}
+              >
+                <option value="">— pick a kit —</option>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.gearItemIds.length})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <p className="text-xs text-gray-500">
             {onTripIds.size} on this trip — check to add or remove
             {multi ? '; set who carries below each one' : ''}.

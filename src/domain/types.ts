@@ -151,6 +151,16 @@ export interface GearItem {
   owners?: string[]
 }
 
+/** A named, reusable set of gear (Gear epic): "Solo weekend", "Group rainy".
+ *  An item may belong to several collections (it just appears in each list).
+ *  On a trip, applying a collection adds all its items; you can still add more
+ *  individually. */
+export interface GearCollection {
+  id: string
+  name: string
+  gearItemIds: string[]
+}
+
 /** A gear item taken on a trip and who carries it (Gear epic, G2). Shared gear
  *  (tent) has one assignment to its carrier; personal gear (clothing) has one
  *  per person who packs their own. Id is deterministic

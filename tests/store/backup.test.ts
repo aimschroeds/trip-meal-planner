@@ -42,6 +42,7 @@ function fullData(): BackupData {
       },
     ],
     gear: [gaz],
+    gearCollections: [],
   }
 }
 
@@ -80,6 +81,7 @@ describe('backup store', () => {
       resupplies: [],
       planEntries: [],
       gear: [],
+      gearCollections: [],
     })
   })
 
@@ -125,6 +127,7 @@ describe('backup store', () => {
       resupplies: [],
       planEntries: [],
       gear: [],
+      gearCollections: [],
     })
     expect(await db.items.count()).toBe(0)
     expect(await db.trips.count()).toBe(0)

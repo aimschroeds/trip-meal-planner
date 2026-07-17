@@ -2,11 +2,13 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../../src/store/db'
 import {
+  createGearCollection,
   createTrip,
   deleteGear,
   deleteTrip,
   GearInUseError,
   setGearOwners,
+  toggleCollectionItem,
   toggleGearAssignment,
 } from '../../src/store/repos'
 import type { GearItem } from '../../src/domain/types'
@@ -66,5 +68,37 @@ describe('setGearOwners', () => {
     await setGearOwners(['a'], undefined)
     expect((await db.gear.get('a'))?.owners).toBeUndefined()
     expect((await db.gear.get('b'))?.owners).toEqual(['Alice'])
+  })
+})
+
+describe('gear collections', () => {
+  beforeEach(async () => {
+    await db.gearCollections.clear()
+    await db.gear.bulkAdd([
+      { id: 'a', name: 'Hoodie', category: 'clothing', weightG: 140 },
+      { id: 'b', name: 'Puffy', category: 'clothing', weightG: 300 },
+    ])
+  })
+
+  it('creates, toggles membership, and an item can be in several', async () => {
+    const c1 = await createGearCollection('Solo weekend')
+    const c2 = await createGearCollection('Group rainy')
+    await toggleCollectionItem(c1, 'a')
+    await toggleCollectionItem(c2, 'a') // same item in two collections
+    await toggleCollectionItem(c1, 'b')
+
+    expect((await db.gearCollections.get(c1))?.gearItemIds).toEqual(['a', 'b'])
+    expect((await db.gearCollections.get(c2))?.gearItemIds).toEqual(['a'])
+
+    await toggleCollectionItem(c1, 'a') // remove
+    expect((await db.gearCollections.get(c1))?.gearItemIds).toEqual(['b'])
+  })
+
+  it('deleting a gear item drops it from collections', async () => {
+    const c = await createGearCollection('Kit')
+    await toggleCollectionItem(c, 'a')
+    await toggleCollectionItem(c, 'b')
+    await deleteGear('a')
+    expect((await db.gearCollections.get(c))?.gearItemIds).toEqual(['b'])
   })
 })
