@@ -98,6 +98,23 @@ export function gearTotalG(t: GearTotals): number {
 
 /** The base/worn/consumable a person carries from their gear assignments.
  *  Assignments referencing a missing gear item (e.g. deleted) are skipped. */
+/** Split a free-text owner field ("Alice, Bob") into distinct trimmed names. */
+export function parseOwners(text: string): string[] {
+  return [...new Set(text.split(/[,;]/).map((s) => s.trim()).filter(Boolean))]
+}
+
+/** Trip person ids whose names match a gear item's owner(s), case-insensitive.
+ *  Empty when the item is shared (no owners) or no names match. Used to
+ *  auto-assign personal gear to its owner(s) when added to a trip. */
+export function ownerPersonIds(
+  owners: readonly string[] | undefined,
+  people: readonly { id: string; name: string }[],
+): string[] {
+  if (!owners || owners.length === 0) return []
+  const keys = new Set(owners.map((o) => o.trim().toLowerCase()).filter(Boolean))
+  return people.filter((p) => keys.has(p.name.trim().toLowerCase())).map((p) => p.id)
+}
+
 export function personGearTotals(
   assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
   gearById: ReadonlyMap<string, GearItem>,

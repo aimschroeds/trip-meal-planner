@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { commitGearImport, type GearImportResult } from '../store/repos'
 import { gearToCsv, parseGearCsv, type ParsedGearRow } from '../domain/csv/gear'
+import { parseOwners } from '../domain/gear'
 import type { CsvIssue } from '../domain/csv/items'
 import type { GearItem } from '../domain/types'
 import { downloadCsv } from './download'
@@ -15,6 +16,7 @@ export function GearImportExport() {
   const [parsed, setParsed] = useState<{ rows: ParsedGearRow[]; issues: CsvIssue[] } | null>(null)
   const [result, setResult] = useState<GearImportResult | null>(null)
   const [open, setOpen] = useState(false)
+  const [importOwner, setImportOwner] = useState('')
 
   function pickFile(file: File) {
     setResult(null)
@@ -23,8 +25,15 @@ export function GearImportExport() {
 
   async function doImport() {
     if (!parsed) return
-    const res = await commitGearImport(parsed.rows.map((r) => r.fields))
+    // A LighterPack CSV has no owner column — apply the typed owner(s) to any
+    // imported item that doesn't already name one (e.g. import Alice's pack).
+    const owners = parseOwners(importOwner)
+    const fields = parsed.rows.map((r) =>
+      owners.length && !r.fields.owners?.length ? { ...r.fields, owners } : r.fields,
+    )
+    const res = await commitGearImport(fields)
     setParsed(null)
+    setImportOwner('')
     setResult(res)
   }
 
@@ -78,6 +87,18 @@ export function GearImportExport() {
                   ))}
                 </ul>
               )}
+              <label className="flex flex-wrap items-center gap-2">
+                Owner for these items (optional):
+                <input
+                  className="rounded border border-gray-300 px-2 py-1 text-sm"
+                  placeholder="e.g. Alice"
+                  value={importOwner}
+                  onChange={(e) => setImportOwner(e.target.value)}
+                />
+                <span className="text-xs text-gray-500">
+                  applied to rows without an owner — a LighterPack export has none
+                </span>
+              </label>
               <div className="flex gap-3">
                 <button
                   className="rounded bg-emerald-700 px-3 py-1 font-medium text-white disabled:opacity-50"

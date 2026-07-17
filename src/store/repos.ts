@@ -303,6 +303,7 @@ export async function commitGearImport(fields: GearFields[]): Promise<GearImport
         id: crypto.randomUUID(),
         name: f.name,
         brand: f.brand,
+        owners: f.owners,
         category: f.category || 'misc',
         weightG: f.weightG,
         wornWeightG: f.wornWeightG,
@@ -312,6 +313,21 @@ export async function commitGearImport(fields: GearFields[]): Promise<GearImport
     }
     await db.gear.bulkAdd(toAdd)
     return { added: toAdd.length, skipped }
+  })
+}
+
+/** Set (or clear, with undefined) the owner(s) on many gear items at once —
+ *  e.g. after a LighterPack import, tag the whole batch with a person. */
+export async function setGearOwners(
+  ids: string[],
+  owners: string[] | undefined,
+): Promise<void> {
+  await db.transaction('rw', db.gear, async () => {
+    const items = await db.gear.bulkGet(ids)
+    const updated = items
+      .filter((g): g is GearItem => !!g)
+      .map((g) => ({ ...g, owners: owners?.length ? owners : undefined }))
+    await db.gear.bulkPut(updated)
   })
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import { removeGearFromTrip, toggleGearAssignment } from '../store/repos'
-import { categoryLabel, isBigThree } from '../domain/gear'
+import { categoryLabel, isBigThree, ownerPersonIds } from '../domain/gear'
 import type { GearAssignment, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
 
@@ -43,6 +43,7 @@ export function GearPickerModal({
       q === '' ||
       g.name.toLowerCase().includes(q) ||
       (g.brand ?? '').toLowerCase().includes(q) ||
+      (g.owners ?? []).join(' ').toLowerCase().includes(q) ||
       categoryLabel(g.category).toLowerCase().includes(q) ||
       g.category.toLowerCase().includes(q),
   )
@@ -60,8 +61,16 @@ export function GearPickerModal({
   )
 
   function toggleOnTrip(g: GearItem) {
-    if (onTripIds.has(g.id)) void removeGearFromTrip(trip.id, g.id)
-    else if (defaultCarrier) void toggleGearAssignment(trip.id, defaultCarrier, g.id)
+    if (onTripIds.has(g.id)) {
+      void removeGearFromTrip(trip.id, g.id)
+      return
+    }
+    // Personal gear auto-assigns to each person whose name matches an owner
+    // (so an item owned by Alice & Bob lands on both). Shared gear (no match)
+    // goes to the first person and can be reassigned below.
+    const carriers = ownerPersonIds(g.owners, people)
+    const targets = carriers.length ? carriers : defaultCarrier ? [defaultCarrier] : []
+    for (const pid of targets) void toggleGearAssignment(trip.id, pid, g.id)
   }
 
   return (
@@ -123,6 +132,11 @@ export function GearPickerModal({
                             {g.name}
                           </span>
                           <span className="tabular-nums text-gray-400">{fmtGrams(g.weightG)}</span>
+                          {g.owners?.length ? (
+                            <span className="rounded bg-violet-100 px-1 text-xs text-violet-800">
+                              {g.owners.join(', ')}
+                            </span>
+                          ) : null}
                           {g.shared && (
                             <span className="rounded bg-sky-100 px-1 text-xs text-sky-800">
                               shared

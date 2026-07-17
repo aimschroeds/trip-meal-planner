@@ -5,6 +5,8 @@ import {
   categoryLabel,
   gearWeightSplit,
   isBigThree,
+  ownerPersonIds,
+  parseOwners,
   personGearByCategory,
   personGearTotals,
 } from '../../src/domain/gear'
@@ -112,5 +114,30 @@ describe('personGearByCategory', () => {
     )
     expect(byCat.get('shelter')).toEqual({ baseG: 540, wornG: 0, consumableG: 0 })
     expect(byCat.get('cooking')).toEqual({ baseG: 120, wornG: 0, consumableG: 100 })
+  })
+})
+
+describe('parseOwners', () => {
+  it('splits on commas/semicolons, trims, and dedupes', () => {
+    expect(parseOwners('Alice, Bob ; Alice')).toEqual(['Alice', 'Bob'])
+    expect(parseOwners('  ')).toEqual([])
+  })
+})
+
+describe('ownerPersonIds', () => {
+  const people = [
+    { id: 'a', name: 'Alice' },
+    { id: 'b', name: 'Bob' },
+  ]
+
+  it('matches every owner name to a trip person, case-insensitively', () => {
+    expect(ownerPersonIds(['Alice'], people)).toEqual(['a'])
+    expect(ownerPersonIds(['alice', 'BOB'], people)).toEqual(['a', 'b'])
+  })
+
+  it('is empty for shared gear (no owners) or unmatched names', () => {
+    expect(ownerPersonIds(undefined, people)).toEqual([])
+    expect(ownerPersonIds([], people)).toEqual([])
+    expect(ownerPersonIds(['Carol'], people)).toEqual([])
   })
 })

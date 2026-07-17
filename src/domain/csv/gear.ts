@@ -4,6 +4,7 @@
 // consumable_weight_g / shared / brand). Export uses this app's own format.
 
 import Papa from 'papaparse'
+import { parseOwners } from '../gear'
 import type { GearItem } from '../types'
 import type { CsvIssue } from './items'
 
@@ -15,6 +16,7 @@ export interface GearFields {
   consumableWeightG?: number
   shared?: boolean
   brand?: string
+  owners?: string[]
 }
 
 export interface ParsedGearRow {
@@ -73,6 +75,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
 
     const category = pick(raw, 'category') ?? 'misc'
     const brand = pick(raw, 'brand')
+    const owners = parseOwners(pick(raw, 'owner') ?? '')
 
     // Weight: prefer an explicit grams column; else LighterPack weight+unit×qty.
     let weightG: number
@@ -129,6 +132,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
         consumableWeightG,
         shared: truthy(raw.shared) || undefined,
         brand,
+        owners: owners.length ? owners : undefined,
       },
     })
   })
@@ -139,6 +143,7 @@ export function parseGearCsv(text: string): { rows: ParsedGearRow[]; issues: Csv
 export const GEAR_CSV_COLUMNS = [
   'name',
   'brand',
+  'owner',
   'category',
   'weight_g',
   'worn_weight_g',
@@ -151,6 +156,7 @@ export function gearToCsv(gear: GearItem[]): string {
     gear.map((g) => ({
       name: g.name,
       brand: g.brand ?? '',
+      owner: (g.owners ?? []).join('; '),
       category: g.category,
       weight_g: g.weightG,
       worn_weight_g: g.wornWeightG ?? '',
