@@ -170,6 +170,9 @@ export interface GearAssignment {
   tripId: string
   personId: string
   gearItemId: string
+  /** How many this person carries (default 1) — e.g. 2 pairs of socks, 3 water
+   *  bottles. Weight counts the item × quantity. */
+  quantity?: number
 }
 
 export interface MealComponent {

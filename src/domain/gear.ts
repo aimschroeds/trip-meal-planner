@@ -96,6 +96,10 @@ export function gearTotalG(t: GearTotals): number {
   return t.baseG + t.wornG + t.consumableG
 }
 
+function scaleGearTotals(t: GearTotals, n: number): GearTotals {
+  return { baseG: t.baseG * n, wornG: t.wornG * n, consumableG: t.consumableG * n }
+}
+
 /** The base/worn/consumable a person carries from their gear assignments.
  *  Assignments referencing a missing gear item (e.g. deleted) are skipped. */
 /** Split a free-text owner field ("Alice, Bob") into distinct trimmed names. */
@@ -116,7 +120,7 @@ export function ownerPersonIds(
 }
 
 export function personGearTotals(
-  assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
 ): GearTotals {
@@ -124,7 +128,7 @@ export function personGearTotals(
   for (const a of assignments) {
     if (a.personId !== personId) continue
     const item = gearById.get(a.gearItemId)
-    if (item) totals = addGearTotals(totals, gearWeightSplit(item))
+    if (item) totals = addGearTotals(totals, scaleGearTotals(gearWeightSplit(item), a.quantity ?? 1))
   }
   return totals
 }
@@ -140,7 +144,7 @@ export function carryPackWeightG(gear: GearTotals, carryFoodG: number): number {
  *  Keyed by category; each value is the base/worn/consumable split so the view
  *  can show, e.g., Big-3 base weight. */
 export function personGearByCategory(
-  assignments: Pick<GearAssignment, 'personId' | 'gearItemId'>[],
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
 ): Map<string, GearTotals> {
@@ -150,7 +154,10 @@ export function personGearByCategory(
     const item = gearById.get(a.gearItemId)
     if (!item) continue
     const prev = byCategory.get(item.category) ?? ZERO_GEAR_TOTALS
-    byCategory.set(item.category, addGearTotals(prev, gearWeightSplit(item)))
+    byCategory.set(
+      item.category,
+      addGearTotals(prev, scaleGearTotals(gearWeightSplit(item), a.quantity ?? 1)),
+    )
   }
   return byCategory
 }

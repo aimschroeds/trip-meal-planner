@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { removeGearFromTrip, toggleGearAssignment } from '../store/repos'
+import { removeGearFromTrip, setGearQuantity, toggleGearAssignment } from '../store/repos'
 import { categoryLabel, isBigThree, ownerPersonIds } from '../domain/gear'
 import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
@@ -38,6 +38,9 @@ export function GearPickerModal({
   }, [onClose])
 
   const assigned = new Set(assignments.map((a) => `${a.personId}|${a.gearItemId}`))
+  const qtyByKey = new Map(
+    assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.quantity ?? 1]),
+  )
   const onTripIds = new Set(assignments.map((a) => a.gearItemId))
   const defaultCarrier = people[0]?.id
   const multi = people.length > 1
@@ -178,6 +181,25 @@ export function GearPickerModal({
                               shared
                             </span>
                           )}
+                          {on && !multi && defaultCarrier && (
+                            <span className="ml-auto flex items-center gap-1 text-xs text-gray-500">
+                              ×
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-12 rounded border border-gray-300 px-1 py-0.5"
+                                value={qtyByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
+                                onChange={(e) =>
+                                  void setGearQuantity(
+                                    trip.id,
+                                    defaultCarrier,
+                                    g.id,
+                                    Number(e.target.value) || 1,
+                                  )
+                                }
+                              />
+                            </span>
+                          )}
                         </label>
                         {on && multi && (
                           <div className="ml-6 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
@@ -190,6 +212,25 @@ export function GearPickerModal({
                                   onChange={() => void toggleGearAssignment(trip.id, p.id, g.id)}
                                 />
                                 {p.name}
+                                {assigned.has(`${p.id}|${g.id}`) && (
+                                  <>
+                                    ×
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      className="w-11 rounded border border-gray-300 px-1 py-0.5"
+                                      value={qtyByKey.get(`${p.id}|${g.id}`) ?? 1}
+                                      onChange={(e) =>
+                                        void setGearQuantity(
+                                          trip.id,
+                                          p.id,
+                                          g.id,
+                                          Number(e.target.value) || 1,
+                                        )
+                                      }
+                                    />
+                                  </>
+                                )}
                               </label>
                             ))}
                           </div>

@@ -246,6 +246,23 @@ export async function toggleGearAssignment(
   })
 }
 
+/** Set how many of a gear item a person carries (e.g. 2 pairs of socks). A
+ *  quantity ≤ 1 clears the field back to the default. No-op if not assigned. */
+export async function setGearQuantity(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  quantity: number,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    const q = Math.max(1, Math.round(quantity))
+    await db.gearAssignments.put({ ...a, quantity: q > 1 ? q : undefined })
+  })
+}
+
 /** Remove a gear item from a trip entirely (every carrier). */
 export async function removeGearFromTrip(tripId: string, gearItemId: string): Promise<void> {
   await db.gearAssignments
