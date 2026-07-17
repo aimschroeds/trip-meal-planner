@@ -12,6 +12,7 @@ import {
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
 import { GearImportExport } from './GearImportExport'
+import { CollectionsSection } from './CollectionsSection'
 
 interface GearDraft {
   name: string
@@ -308,6 +309,8 @@ export function GearPage() {
           {error && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </section>
+
+      <CollectionsSection />
 
       <GearImportExport />
 

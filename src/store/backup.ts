@@ -5,7 +5,16 @@
 import { db } from './db'
 import { normalizePlanEntry, type BackupData } from '../domain/backup'
 
-const ALL_TABLES = [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries, db.gear]
+const ALL_TABLES = [
+  db.trips,
+  db.people,
+  db.items,
+  db.meals,
+  db.resupplies,
+  db.planEntries,
+  db.gear,
+  db.gearCollections,
+]
 
 export async function exportBackup(): Promise<BackupData> {
   return db.transaction('r', ALL_TABLES, async () => ({
@@ -16,6 +25,7 @@ export async function exportBackup(): Promise<BackupData> {
     resupplies: await db.resupplies.toArray(),
     planEntries: await db.planEntries.toArray(),
     gear: await db.gear.toArray(),
+    gearCollections: await db.gearCollections.toArray(),
   }))
 }
 
@@ -34,6 +44,7 @@ export async function mergeBackup(data: BackupData): Promise<void> {
     await db.resupplies.bulkPut(data.resupplies)
     await db.planEntries.bulkPut(data.planEntries.map(normalizePlanEntry))
     await db.gear.bulkPut(data.gear ?? [])
+    await db.gearCollections.bulkPut(data.gearCollections ?? [])
   })
 }
 
@@ -49,5 +60,6 @@ export async function restoreBackup(data: BackupData): Promise<void> {
     // into the parts model on the way in so old exports restore cleanly.
     await db.planEntries.bulkAdd(data.planEntries.map(normalizePlanEntry))
     await db.gear.bulkAdd(data.gear ?? [])
+    await db.gearCollections.bulkAdd(data.gearCollections ?? [])
   })
 }
