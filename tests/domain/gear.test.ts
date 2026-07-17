@@ -88,6 +88,16 @@ describe('personGearTotals', () => {
     })
   })
 
+  it('multiplies weight by an assignment quantity (e.g. 2 pairs of socks)', () => {
+    const assignments = [{ ...assign('alice', 'stove'), quantity: 2 }]
+    // Fuel: 120 base + 100 consumable, ×2.
+    expect(personGearTotals(assignments, gearById, 'alice')).toEqual({
+      baseG: 240,
+      wornG: 0,
+      consumableG: 200,
+    })
+  })
+
   it('skips assignments whose gear item no longer exists', () => {
     const assignments = [assign('alice', 'tent'), assign('alice', 'ghost')]
     expect(personGearTotals(assignments, gearById, 'alice')).toEqual({

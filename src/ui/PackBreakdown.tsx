@@ -86,7 +86,10 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   for (const a of assignments) {
     const item = gearById.get(a.gearItemId)
     if (!item) continue
-    byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + gearWeightSplit(item).baseG)
+    byCategory.set(
+      item.category,
+      (byCategory.get(item.category) ?? 0) + gearWeightSplit(item).baseG * (a.quantity ?? 1),
+    )
   }
   const categoryRows = [...byCategory.entries()].sort(
     (a, b) => Number(isBigThree(b[0])) - Number(isBigThree(a[0])) || b[1] - a[1],
