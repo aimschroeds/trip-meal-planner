@@ -67,6 +67,9 @@ export interface Trip {
   days: Day[]
   peopleIds: string[]
   dayTypeFactors: Record<DayType, number>
+  /** Optional first-day calendar date ("yyyy-mm-dd"). When set, each day and
+   *  resupply shows its date; see tripDayDate() in domain/dates.ts. */
+  startDate?: string
 }
 
 export interface Resupply {

@@ -24,7 +24,8 @@ import { hasItinerary } from '../domain/dayDescription'
 import { getApiKey } from '../extract/apiKey'
 import type { CsvIssue } from '../domain/csv/items'
 import type { Day, DayType, Person, Resupply, ResupplyTiming, Trip } from '../domain/types'
-import { fmtCalories, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
+import { fmtCalories, fmtDate, RESUPPLY_TIMINGS, resupplyTimingLabel } from './format'
+import { tripDayDate } from '../domain/dates'
 import { PlanSection } from './PlanSection'
 import { GearSection } from './GearSection'
 import { PackBreakdown } from './PackBreakdown'
@@ -226,6 +227,27 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
       {view === 'setup' && (
         <>
+          <section className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-gray-200 bg-white p-4">
+            <label className="text-sm text-gray-700">
+              Start date
+              <input
+                type="date"
+                className="ml-2 rounded border border-gray-300 px-2 py-1"
+                value={trip.startDate ?? ''}
+                onChange={(e) => void update({ startDate: e.target.value || undefined })}
+              />
+            </label>
+            {trip.startDate ? (
+              <span className="text-sm text-gray-500">
+                Day 1 {fmtDate(tripDayDate(trip.startDate, 1)!)} → day {trip.days.length}{' '}
+                {fmtDate(tripDayDate(trip.startDate, trip.days.length)!)}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">
+                optional — set it to see the date of each day and resupply
+              </span>
+            )}
+          </section>
           <PeopleSection trip={trip} people={people} />
           <FactorsSection trip={trip} onUpdate={update} />
           <ResuppliesSection trip={trip} />
@@ -284,7 +306,14 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
           <tbody>
             {trip.days.map((day) => (
               <tr key={day.index} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2 font-medium">{day.index}</td>
+                <td className="py-1.5 pr-2 font-medium">
+                  {day.index}
+                  {tripDayDate(trip.startDate, day.index) && (
+                    <span className="block text-xs font-normal whitespace-nowrap text-gray-400">
+                      {fmtDate(tripDayDate(trip.startDate, day.index)!)}
+                    </span>
+                  )}
+                </td>
                 <td className="py-1.5 pr-2">
                   <input
                     // Uncontrolled + commit on blur (like the km/ascent fields):
@@ -591,7 +620,10 @@ function ResuppliesSection({ trip }: { trip: Trip }) {
             <li key={r.id} className="flex items-center gap-3 text-sm">
               <span>
                 {r.location && <span className="font-medium">{r.location} — </span>}
-                Day {r.dayIndex}, {resupplyTimingLabel(r.timing)}
+                Day {r.dayIndex}
+                {tripDayDate(trip.startDate, r.dayIndex) &&
+                  ` (${fmtDate(tripDayDate(trip.startDate, r.dayIndex)!)})`}
+                , {resupplyTimingLabel(r.timing)}
               </span>
               <button
                 className="text-red-700 underline"
