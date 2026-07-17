@@ -61,17 +61,23 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
 
   const rows = people.map((p) => {
     const gearT = personGearTotals(assignments, gearById, p.id)
+    // Pack weight per carry = constant gear + that carry's food & packaging.
     const packByCarry = perCarry.map((c, i) => {
       const foodG = c.perPerson.get(p.id)?.weightG ?? 0
       const packagingG = packagingBaseG(carries[i].slots, [p.id], entriesByKey, mealsById, itemsById)
       return carryPackWeightG(gearT, foodG) + packagingG
     })
     const foodCalByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.calories ?? 0)
-    const heaviest = packByCarry.length
+    const heaviestPack = packByCarry.length
       ? Math.max(...packByCarry)
       : gearT.baseG + gearT.consumableG
-    const heaviestIdx = packByCarry.length ? packByCarry.indexOf(heaviest) : -1
-    return { person: p, gearT, packByCarry, foodCalByCarry, heaviest, heaviestIdx }
+    const heaviestIdx = packByCarry.length ? packByCarry.indexOf(heaviestPack) : -1
+    // Base is the constant gear base; everything else in the heaviest pack
+    // (food + fuel + packaging) is consumable. Worn is on the body.
+    const base = gearT.baseG
+    const worn = gearT.wornG
+    const consumable = heaviestPack - base
+    return { person: p, base, worn, consumable, heaviestPack, heaviestIdx, packByCarry, foodCalByCarry }
   })
 
   if (gear.length === 0 && assignments.length === 0 && planEntries.length === 0) return null
@@ -107,22 +113,32 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
           <div key={r.person.id} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
             <div className="font-medium text-gray-800">{r.person.name}</div>
             <div className="tabular-nums text-lg font-semibold text-emerald-800">
-              {fmtGrams(r.heaviest)}
-              {r.heaviestIdx >= 0 && carries.length > 1 && (
-                <span className="ml-1 text-xs font-normal text-gray-500">
-                  heaviest (carry {carries[r.heaviestIdx].index})
-                </span>
-              )}
-              {carries.length <= 1 && (
-                <span className="ml-1 text-xs font-normal text-gray-500">pack</span>
-              )}
+              {fmtGrams(r.heaviestPack)}
+              <span className="ml-1 text-xs font-normal text-gray-500">
+                pack
+                {r.heaviestIdx >= 0 && carries.length > 1 && ` (heaviest, carry ${carries[r.heaviestIdx].index})`}
+              </span>
             </div>
             <div className="tabular-nums text-gray-600">
-              base {fmtGrams(r.gearT.baseG)}
-              {r.gearT.wornG ? ` · worn ${fmtGrams(r.gearT.wornG)}` : ''}
+              base {fmtGrams(r.base)} · consumable {fmtGrams(r.consumable)}
+              {r.worn ? ` · worn ${fmtGrams(r.worn)}` : ''}
             </div>
           </div>
         ))}
+        {showGroup && (
+          <div className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+            <div className="font-medium text-gray-800">Group</div>
+            <div className="tabular-nums text-lg font-semibold text-emerald-800">
+              {fmtGrams(rows.reduce((n, r) => n + r.heaviestPack, 0))}
+              <span className="ml-1 text-xs font-normal text-gray-500">pack (per-person heaviest)</span>
+            </div>
+            <div className="tabular-nums text-gray-600">
+              base {fmtGrams(rows.reduce((n, r) => n + r.base, 0))} · consumable{' '}
+              {fmtGrams(rows.reduce((n, r) => n + r.consumable, 0))}
+              {rows.some((r) => r.worn) ? ` · worn ${fmtGrams(rows.reduce((n, r) => n + r.worn, 0))}` : ''}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* One per-carry table: pack weight (top) + that carry's food calories. */}
@@ -171,7 +187,7 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
                 <td className="py-1.5 pr-2">Heaviest</td>
                 {rows.map((r) => (
                   <td key={r.person.id} className="py-1.5 pr-2 text-right tabular-nums">
-                    {fmtGrams(r.heaviest)}
+                    {fmtGrams(r.heaviestPack)}
                   </td>
                 ))}
                 <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(groupHeaviest)}</td>
