@@ -29,6 +29,7 @@ import { tripDayDate } from '../domain/dates'
 import { PlanSection } from './PlanSection'
 import { GearSection } from './GearSection'
 import { PackBreakdown } from './PackBreakdown'
+import { GearPackingList } from './GearPackingList'
 import { fileInputClass } from './styles'
 import { VegBadge } from './VegBadge'
 
@@ -263,7 +264,12 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </>
       )}
 
-      {view === 'shopping' && <PlanSection trip={trip} people={people} section="shopping" />}
+      {view === 'shopping' && (
+        <>
+          <PlanSection trip={trip} people={people} section="shopping" />
+          <GearPackingList trip={trip} people={people} />
+        </>
+      )}
 
       {view === 'days' && (
       <section className="rounded-lg border border-gray-200 bg-white p-4">
