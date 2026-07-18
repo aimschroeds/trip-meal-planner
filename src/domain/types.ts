@@ -173,6 +173,10 @@ export interface GearAssignment {
   /** How many this person carries (default 1) — e.g. 2 pairs of socks, 3 water
    *  bottles. Weight counts the item × quantity. */
   quantity?: number
+  /** Of `quantity`, how many are worn on the body (default: all). The rest are
+   *  packed, so their worn weight counts as base — e.g. 3 pairs of socks, 1
+   *  worn + 2 in the pack. Only meaningful for wearable items. */
+  wornQuantity?: number
 }
 
 export interface MealComponent {

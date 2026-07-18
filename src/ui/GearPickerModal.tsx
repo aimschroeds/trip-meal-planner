@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { removeGearFromTrip, setGearQuantity, toggleGearAssignment } from '../store/repos'
+import {
+  removeGearFromTrip,
+  setGearQuantity,
+  setGearWornQuantity,
+  toggleGearAssignment,
+} from '../store/repos'
 import { categoryLabel, isBigThree, ownerPersonIds } from '../domain/gear'
 import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
@@ -40,6 +45,13 @@ export function GearPickerModal({
   const assigned = new Set(assignments.map((a) => `${a.personId}|${a.gearItemId}`))
   const qtyByKey = new Map(
     assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.quantity ?? 1]),
+  )
+  // Default worn = all (the quantity), matching the prior behavior.
+  const wornByKey = new Map(
+    assignments.map((a) => [
+      `${a.personId}|${a.gearItemId}`,
+      a.wornQuantity ?? a.quantity ?? 1,
+    ]),
   )
   const onTripIds = new Set(assignments.map((a) => a.gearItemId))
   const defaultCarrier = people[0]?.id
@@ -182,22 +194,47 @@ export function GearPickerModal({
                             </span>
                           )}
                           {on && !multi && defaultCarrier && (
-                            <span className="ml-auto flex items-center gap-1 text-xs text-gray-500">
-                              ×
-                              <input
-                                type="number"
-                                min={1}
-                                className="w-12 rounded border border-gray-300 px-1 py-0.5"
-                                value={qtyByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
-                                onChange={(e) =>
-                                  void setGearQuantity(
-                                    trip.id,
-                                    defaultCarrier,
-                                    g.id,
-                                    Number(e.target.value) || 1,
-                                  )
-                                }
-                              />
+                            <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                ×
+                                <input
+                                  type="number"
+                                  min={1}
+                                  className="w-12 rounded border border-gray-300 px-1 py-0.5"
+                                  value={qtyByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
+                                  onChange={(e) =>
+                                    void setGearQuantity(
+                                      trip.id,
+                                      defaultCarrier,
+                                      g.id,
+                                      Number(e.target.value) || 1,
+                                    )
+                                  }
+                                />
+                              </span>
+                              {(g.wornWeightG ?? 0) > 0 && (
+                                <span
+                                  className="flex items-center gap-1"
+                                  title="How many of these are worn on the body (the rest are packed = base weight)"
+                                >
+                                  worn
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={qtyByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
+                                    className="w-12 rounded border border-gray-300 px-1 py-0.5"
+                                    value={wornByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
+                                    onChange={(e) =>
+                                      void setGearWornQuantity(
+                                        trip.id,
+                                        defaultCarrier,
+                                        g.id,
+                                        Number(e.target.value) || 0,
+                                      )
+                                    }
+                                  />
+                                </span>
+                              )}
                             </span>
                           )}
                         </label>
@@ -229,6 +266,29 @@ export function GearPickerModal({
                                         )
                                       }
                                     />
+                                    {(g.wornWeightG ?? 0) > 0 && (
+                                      <span
+                                        className="flex items-center gap-1"
+                                        title="How many of these are worn (rest packed)"
+                                      >
+                                        worn
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={qtyByKey.get(`${p.id}|${g.id}`) ?? 1}
+                                          className="w-11 rounded border border-gray-300 px-1 py-0.5"
+                                          value={wornByKey.get(`${p.id}|${g.id}`) ?? 1}
+                                          onChange={(e) =>
+                                            void setGearWornQuantity(
+                                              trip.id,
+                                              p.id,
+                                              g.id,
+                                              Number(e.target.value) || 0,
+                                            )
+                                          }
+                                        />
+                                      </span>
+                                    )}
                                   </>
                                 )}
                               </label>

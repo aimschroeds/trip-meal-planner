@@ -4,9 +4,9 @@ import { carryEndpoints, deriveCarries } from '../domain/carries'
 import { carryTotals, planKey } from '../domain/totals'
 import { packagingBaseG } from '../domain/units'
 import {
+  assignmentGearTotals,
   carryPackWeightG,
   categoryLabel,
-  gearWeightSplit,
   isBigThree,
   personGearTotals,
 } from '../domain/gear'
@@ -94,7 +94,8 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
     if (!item) continue
     byCategory.set(
       item.category,
-      (byCategory.get(item.category) ?? 0) + gearWeightSplit(item).baseG * (a.quantity ?? 1),
+      (byCategory.get(item.category) ?? 0) +
+        assignmentGearTotals(item, a.quantity, a.wornQuantity).baseG,
     )
   }
   const categoryRows = [...byCategory.entries()].sort(
