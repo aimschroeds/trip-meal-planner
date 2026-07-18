@@ -261,14 +261,17 @@ export function PlanSection({
               mealsById,
               itemsById,
             })
-            const toggle = (id: string) => void toggleMark(trip.id, 'buy', id)
+            const toggle = (ref: string) => void toggleMark(trip.id, 'buy', ref)
             return shopping.length === 0 ? (
               <p className="mt-2 text-sm text-gray-500">Nothing planned yet.</p>
             ) : (
               <>
                 <ul className="mt-2 space-y-0.5 text-sm">
                   {shopping.map((s) => {
-                    const checked = bought.has(s.item.id)
+                    // Key the tick by the amount too, so changing how much you
+                    // need un-checks it (you haven't bought the new amount).
+                    const key = `${s.item.id}:${Math.round(s.grams)}`
+                    const checked = bought.has(key)
                     return (
                       <li key={s.item.id}>
                         <label className="flex cursor-pointer items-baseline gap-2">
@@ -276,7 +279,7 @@ export function PlanSection({
                             type="checkbox"
                             className="shrink-0"
                             checked={checked}
-                            onChange={() => toggle(s.item.id)}
+                            onChange={() => toggle(key)}
                           />
                           <span
                             className={`min-w-0 flex-1 truncate ${checked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
@@ -526,7 +529,9 @@ export function PlanSection({
                     ) : (
                       <ul className="mt-1 space-y-0.5 text-sm">
                         {lines.map((l) => {
-                          const key = `${carry.index}:${l.item.id}`
+                          // Amount in the key: swapping the plan so this item's
+                          // grams change un-ticks it (you packed the old amount).
+                          const key = `${carry.index}:${l.item.id}:${Math.round(l.grams)}`
                           const isPacked = packed.has(key)
                           const count = packingCount(l)
                           return (
@@ -619,7 +624,7 @@ export function PlanSection({
                                 <ul className="mt-0.5 space-y-0.5 text-sm">
                                   {perPersonLines.flatMap(({ pid, lines }) =>
                                     lines.map((l) => {
-                                      const key = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}`
+                                      const key = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}:${Math.round(l.grams)}`
                                       const isPacked = packed.has(key)
                                       return (
                                         <li key={key}>

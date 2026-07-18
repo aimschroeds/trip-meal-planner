@@ -24,7 +24,9 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
 
   const gearById = new Map(gear.map((g) => [g.id, g]))
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
-  const packRef = (personId: string, gearItemId: string) => `gear:${personId}:${gearItemId}`
+  // Quantity in the key so bumping how many you carry un-ticks the item.
+  const packRef = (personId: string, gearItemId: string, qty: number) =>
+    `gear:${personId}:${gearItemId}:${qty}`
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">
@@ -38,7 +40,9 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
             .sort((x, y) => x.g.category.localeCompare(y.g.category) || x.g.name.localeCompare(y.g.name))
           if (items.length === 0) return null
           const total = items.reduce((n, { a, g }) => n + g.weightG * (a.quantity ?? 1), 0)
-          const doneCount = items.filter(({ g }) => packed.has(packRef(p.id, g.id))).length
+          const doneCount = items.filter(({ a, g }) =>
+            packed.has(packRef(p.id, g.id, a.quantity ?? 1)),
+          ).length
           return (
             <div key={p.id}>
               <div className="flex items-baseline gap-2 border-b border-gray-200 pb-0.5 text-sm">
@@ -49,9 +53,9 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
               </div>
               <ul className="mt-1 space-y-0.5 text-sm">
                 {items.map(({ a, g }) => {
-                  const key = packRef(p.id, g.id)
-                  const isPacked = packed.has(key)
                   const qty = a.quantity ?? 1
+                  const key = packRef(p.id, g.id, qty)
+                  const isPacked = packed.has(key)
                   return (
                     <li key={g.id}>
                       <label className="flex cursor-pointer items-baseline gap-2">
