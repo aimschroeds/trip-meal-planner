@@ -420,13 +420,19 @@ export function GearPage() {
                     {list.map((g) => {
                       const s = gearWeightSplit(g)
                       return (
-                        <tr key={g.id} className="border-b border-gray-100">
+                        <tr
+                          key={g.id}
+                          className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                          onClick={() => edit(g)}
+                          title="Edit this gear"
+                        >
                           <td className="py-1.5 pr-2">
                             <input
                               type="checkbox"
                               className="mr-2 align-middle"
                               aria-label={`Select ${g.name}`}
                               checked={selected.has(g.id)}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={() => toggleSelected(g.id)}
                             />
                             {g.brand && <span className="text-gray-400">{g.brand} · </span>}
@@ -457,12 +463,12 @@ export function GearPage() {
                               .join(' · ') || '—'}
                           </td>
                           <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                            <button className="text-emerald-700 underline" onClick={() => edit(g)}>
-                              edit
-                            </button>
                             <button
-                              className="ml-3 text-red-700 underline"
-                              onClick={() => void remove(g.id)}
+                              className="text-red-700 underline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void remove(g.id)
+                              }}
                             >
                               delete
                             </button>
