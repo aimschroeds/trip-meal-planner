@@ -108,6 +108,20 @@ export function PlanSection({
   const bought = new Set(marks.filter((m) => m.scope === 'buy').map((m) => m.ref))
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
   const prepped = new Set(marks.filter((m) => m.scope === 'prep').map((m) => m.ref))
+
+  // Tick keys include the amount so changing how much you need un-checks the
+  // item — but honor a legacy (amount-less) key so ticks made before amounts
+  // were added stay checked. Toggling migrates to the new key.
+  const isMarked = (set: Set<string>, key: string, legacy: string) =>
+    set.has(key) || set.has(legacy)
+  const toggleMarked = (scope: MarkRow['scope'], set: Set<string>, key: string, legacy: string) => {
+    if (set.has(key) || set.has(legacy)) {
+      if (set.has(key)) void toggleMark(trip.id, scope, key)
+      if (set.has(legacy)) void toggleMark(trip.id, scope, legacy)
+    } else {
+      void toggleMark(trip.id, scope, key)
+    }
+  }
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
   const resupplies = useLiveQuery(
@@ -261,17 +275,15 @@ export function PlanSection({
               mealsById,
               itemsById,
             })
-            const toggle = (ref: string) => void toggleMark(trip.id, 'buy', ref)
             return shopping.length === 0 ? (
               <p className="mt-2 text-sm text-gray-500">Nothing planned yet.</p>
             ) : (
               <>
                 <ul className="mt-2 space-y-0.5 text-sm">
                   {shopping.map((s) => {
-                    // Key the tick by the amount too, so changing how much you
-                    // need un-checks it (you haven't bought the new amount).
-                    const key = `${s.item.id}:${Math.round(s.grams)}`
-                    const checked = bought.has(key)
+                    const legacy = s.item.id
+                    const key = `${legacy}:${Math.round(s.grams)}`
+                    const checked = isMarked(bought, key, legacy)
                     return (
                       <li key={s.item.id}>
                         <label className="flex cursor-pointer items-baseline gap-2">
@@ -279,7 +291,7 @@ export function PlanSection({
                             type="checkbox"
                             className="shrink-0"
                             checked={checked}
-                            onChange={() => toggle(key)}
+                            onChange={() => toggleMarked('buy', bought, key, legacy)}
                           />
                           <span
                             className={`min-w-0 flex-1 truncate ${checked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
@@ -512,7 +524,6 @@ export function PlanSection({
                   itemsById,
                 })
                 const { from, to } = endpoints[i]
-                const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
                 return (
                   <div key={carry.index}>
                     <div className="flex items-baseline gap-2 border-b border-gray-200 pb-1 text-sm">
@@ -531,8 +542,9 @@ export function PlanSection({
                         {lines.map((l) => {
                           // Amount in the key: swapping the plan so this item's
                           // grams change un-ticks it (you packed the old amount).
-                          const key = `${carry.index}:${l.item.id}:${Math.round(l.grams)}`
-                          const isPacked = packed.has(key)
+                          const legacy = `${carry.index}:${l.item.id}`
+                          const key = `${legacy}:${Math.round(l.grams)}`
+                          const isPacked = isMarked(packed, key, legacy)
                           const count = packingCount(l)
                           return (
                             <li key={l.item.id}>
@@ -541,7 +553,7 @@ export function PlanSection({
                                   type="checkbox"
                                   className="shrink-0"
                                   checked={isPacked}
-                                  onChange={() => togglePacked(key)}
+                                  onChange={() => toggleMarked('pack', packed, key, legacy)}
                                 />
                                 <span
                                   className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
@@ -577,7 +589,6 @@ export function PlanSection({
             <div className="mt-2 space-y-4">
               {carries.map((carry, i) => {
                 const { from, to } = endpoints[i]
-                const togglePacked = (key: string) => void toggleMark(trip.id, 'pack', key)
                 // Carry.slots is already chronological (day, then slot within the
                 // day), so grouping by consecutive dayIndex keeps that order.
                 const dayGroups: { dayIndex: number; slots: SlotRef[] }[] = []
@@ -624,8 +635,9 @@ export function PlanSection({
                                 <ul className="mt-0.5 space-y-0.5 text-sm">
                                   {perPersonLines.flatMap(({ pid, lines }) =>
                                     lines.map((l) => {
-                                      const key = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}:${Math.round(l.grams)}`
-                                      const isPacked = packed.has(key)
+                                      const legacy = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}`
+                                      const key = `${legacy}:${Math.round(l.grams)}`
+                                      const isPacked = isMarked(packed, key, legacy)
                                       return (
                                         <li key={key}>
                                           <label className="flex cursor-pointer items-baseline gap-2 pl-2">
@@ -633,7 +645,7 @@ export function PlanSection({
                                               type="checkbox"
                                               className="shrink-0"
                                               checked={isPacked}
-                                              onChange={() => togglePacked(key)}
+                                              onChange={() => toggleMarked('pack', packed, key, legacy)}
                                             />
                                             <span className="w-16 shrink-0 truncate text-xs font-medium text-gray-500">
                                               {peopleById.get(pid)?.name ?? pid}

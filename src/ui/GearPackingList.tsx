@@ -24,9 +24,23 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
 
   const gearById = new Map(gear.map((g) => [g.id, g]))
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
-  // Quantity in the key so bumping how many you carry un-ticks the item.
+  // Quantity in the key so bumping how many you carry un-ticks the item; honor
+  // the legacy (quantity-less) key so earlier ticks stay checked.
+  const legacyRef = (personId: string, gearItemId: string) => `gear:${personId}:${gearItemId}`
   const packRef = (personId: string, gearItemId: string, qty: number) =>
-    `gear:${personId}:${gearItemId}:${qty}`
+    `${legacyRef(personId, gearItemId)}:${qty}`
+  const isPackedFor = (personId: string, gearItemId: string, qty: number) =>
+    packed.has(packRef(personId, gearItemId, qty)) || packed.has(legacyRef(personId, gearItemId))
+  const togglePack = (personId: string, gearItemId: string, qty: number) => {
+    const key = packRef(personId, gearItemId, qty)
+    const legacy = legacyRef(personId, gearItemId)
+    if (packed.has(key) || packed.has(legacy)) {
+      if (packed.has(key)) void toggleMark(trip.id, 'pack', key)
+      if (packed.has(legacy)) void toggleMark(trip.id, 'pack', legacy)
+    } else {
+      void toggleMark(trip.id, 'pack', key)
+    }
+  }
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">
@@ -41,7 +55,7 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
           if (items.length === 0) return null
           const total = items.reduce((n, { a, g }) => n + g.weightG * (a.quantity ?? 1), 0)
           const doneCount = items.filter(({ a, g }) =>
-            packed.has(packRef(p.id, g.id, a.quantity ?? 1)),
+            isPackedFor(p.id, g.id, a.quantity ?? 1),
           ).length
           return (
             <div key={p.id}>
@@ -54,8 +68,7 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
               <ul className="mt-1 space-y-0.5 text-sm">
                 {items.map(({ a, g }) => {
                   const qty = a.quantity ?? 1
-                  const key = packRef(p.id, g.id, qty)
-                  const isPacked = packed.has(key)
+                  const isPacked = isPackedFor(p.id, g.id, qty)
                   return (
                     <li key={g.id}>
                       <label className="flex cursor-pointer items-baseline gap-2">
@@ -63,7 +76,7 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
                           type="checkbox"
                           className="shrink-0"
                           checked={isPacked}
-                          onChange={() => void toggleMark(trip.id, 'pack', key)}
+                          onChange={() => togglePack(p.id, g.id, qty)}
                         />
                         <span
                           className={`min-w-0 flex-1 truncate ${isPacked ? 'text-gray-400 line-through' : 'text-gray-800'}`}
