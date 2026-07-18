@@ -1087,13 +1087,33 @@ function SlotCell({
               {parts.map((p, i) => (
                 <li
                   key={`${p.kind}:${p.kind === 'meal' ? p.mealId : p.itemId}:${i}`}
-                  className="flex items-center gap-2 text-sm"
+                  className="flex items-baseline gap-2 text-sm"
                 >
-                  <span className="min-w-0 flex-1 truncate">
-                    {p.kind === 'meal'
-                      ? (mealsById.get(p.mealId)?.name ?? '— missing meal —')
-                      : (itemsById.get(p.itemId)?.name ?? '— missing item —')}
-                  </span>
+                  {p.kind === 'meal'
+                    ? (() => {
+                        const meal = mealsById.get(p.mealId)
+                        const scale = p.quantityScale ?? 1
+                        const summary = meal?.components
+                          .map(
+                            (c) =>
+                              `${itemsById.get(c.itemId)?.name ?? '?'} ${Math.round(c.grams * scale)} g`,
+                          )
+                          .join(' · ')
+                        return (
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">
+                              {meal?.name ?? '— missing meal —'}
+                              {scale !== 1 && <span className="text-gray-500"> ×{scale}</span>}
+                            </span>
+                            {summary && <span className="block text-xs text-gray-400">{summary}</span>}
+                          </span>
+                        )
+                      })()
+                    : (
+                        <span className="min-w-0 flex-1 truncate">
+                          {itemsById.get(p.itemId)?.name ?? '— missing item —'}
+                        </span>
+                      )}
                   {p.kind === 'item' && (
                     <>
                       <input
@@ -1134,6 +1154,10 @@ function SlotCell({
                 return {
                   value: `m:${m.id}`,
                   label: m.name,
+                  // Show what's in the meal right in the picker.
+                  sublabel: m.components
+                    .map((c) => itemsById.get(c.itemId)?.name ?? '?')
+                    .join(', '),
                   group: 'Meals',
                   hint: r.weightG > 0 ? fmtDensity(r.calories / r.weightG) : undefined,
                 }
