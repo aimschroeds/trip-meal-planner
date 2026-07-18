@@ -259,7 +259,31 @@ export async function setGearQuantity(
     const a = await db.gearAssignments.get(id)
     if (!a) return
     const q = Math.max(1, Math.round(quantity))
-    await db.gearAssignments.put({ ...a, quantity: q > 1 ? q : undefined })
+    // Worn can't exceed the new quantity; drop it if it now means "all worn".
+    const worn = a.wornQuantity !== undefined ? Math.min(a.wornQuantity, q) : undefined
+    await db.gearAssignments.put({
+      ...a,
+      quantity: q > 1 ? q : undefined,
+      wornQuantity: worn !== undefined && worn < q ? worn : undefined,
+    })
+  })
+}
+
+/** Set how many of a person's units of a gear item are worn (the rest packed).
+ *  Equal to the quantity ("all worn") clears it back to the default. */
+export async function setGearWornQuantity(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  wornQuantity: number,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    const total = Math.max(1, a.quantity ?? 1)
+    const worn = Math.min(Math.max(0, Math.round(wornQuantity)), total)
+    await db.gearAssignments.put({ ...a, wornQuantity: worn < total ? worn : undefined })
   })
 }
 

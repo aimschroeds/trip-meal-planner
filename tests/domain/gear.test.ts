@@ -5,6 +5,7 @@ import {
   categoryLabel,
   gearWeightSplit,
   isBigThree,
+  assignmentGearTotals,
   ownerPersonIds,
   parseOwners,
   personGearByCategory,
@@ -70,6 +71,28 @@ const gearById = new Map(GEAR.map((g) => [g.id, g]))
 function assign(personId: string, gearItemId: string): GearAssignment {
   return { id: `t|${personId}|${gearItemId}`, tripId: 't', personId, gearItemId }
 }
+
+describe('assignmentGearTotals (worn count)', () => {
+  const socks = { weightG: 100, wornWeightG: 100 } // fully worn when worn
+
+  it('splits worn vs packed units — 3 pairs, 1 worn', () => {
+    // 1 worn (100 g worn) + 2 packed (200 g base).
+    expect(assignmentGearTotals(socks, 3, 1)).toEqual({ baseG: 200, wornG: 100, consumableG: 0 })
+  })
+
+  it('defaults to all worn (backward compatible)', () => {
+    expect(assignmentGearTotals(socks, 3, undefined)).toEqual({
+      baseG: 0,
+      wornG: 300,
+      consumableG: 0,
+    })
+  })
+
+  it('keeps consumable per unit regardless of worn', () => {
+    const fuel = { weightG: 220, consumableWeightG: 100 }
+    expect(assignmentGearTotals(fuel, 2, 0)).toEqual({ baseG: 240, wornG: 0, consumableG: 200 })
+  })
+})
 
 describe('personGearTotals', () => {
   it('sums base/worn/consumable across a person’s assignments', () => {

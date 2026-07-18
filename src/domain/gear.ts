@@ -96,8 +96,25 @@ export function gearTotalG(t: GearTotals): number {
   return t.baseG + t.wornG + t.consumableG
 }
 
-function scaleGearTotals(t: GearTotals, n: number): GearTotals {
-  return { baseG: t.baseG * n, wornG: t.wornG * n, consumableG: t.consumableG * n }
+/** The base/worn/consumable one gear assignment contributes, accounting for
+ *  quantity and how many are worn. Worn units keep the item's worn split;
+ *  packed units move that worn weight into base (it's in the pack, not on the
+ *  body). Consumable is intrinsic (per unit) regardless. Defaults: quantity 1,
+ *  all units worn. */
+export function assignmentGearTotals(
+  item: Pick<GearItem, 'weightG' | 'wornWeightG' | 'consumableWeightG'>,
+  quantity: number | undefined,
+  wornQuantity: number | undefined,
+): GearTotals {
+  const unit = gearWeightSplit(item)
+  const n = Math.max(1, Math.round(quantity ?? 1))
+  const worn = Math.min(Math.max(0, Math.round(wornQuantity ?? n)), n)
+  const packed = n - worn
+  return {
+    baseG: worn * unit.baseG + packed * (unit.baseG + unit.wornG),
+    wornG: worn * unit.wornG,
+    consumableG: n * unit.consumableG,
+  }
 }
 
 /** The base/worn/consumable a person carries from their gear assignments.
@@ -120,7 +137,7 @@ export function ownerPersonIds(
 }
 
 export function personGearTotals(
-  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity' | 'wornQuantity'>[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
 ): GearTotals {
@@ -128,7 +145,7 @@ export function personGearTotals(
   for (const a of assignments) {
     if (a.personId !== personId) continue
     const item = gearById.get(a.gearItemId)
-    if (item) totals = addGearTotals(totals, scaleGearTotals(gearWeightSplit(item), a.quantity ?? 1))
+    if (item) totals = addGearTotals(totals, assignmentGearTotals(item, a.quantity, a.wornQuantity))
   }
   return totals
 }
@@ -144,7 +161,7 @@ export function carryPackWeightG(gear: GearTotals, carryFoodG: number): number {
  *  Keyed by category; each value is the base/worn/consumable split so the view
  *  can show, e.g., Big-3 base weight. */
 export function personGearByCategory(
-  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity' | 'wornQuantity'>[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
 ): Map<string, GearTotals> {
@@ -156,7 +173,7 @@ export function personGearByCategory(
     const prev = byCategory.get(item.category) ?? ZERO_GEAR_TOTALS
     byCategory.set(
       item.category,
-      addGearTotals(prev, scaleGearTotals(gearWeightSplit(item), a.quantity ?? 1)),
+      addGearTotals(prev, assignmentGearTotals(item, a.quantity, a.wornQuantity)),
     )
   }
   return byCategory
