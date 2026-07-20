@@ -5,10 +5,11 @@ import {
   createGearCollection,
   deleteGearCollection,
   renameGearCollection,
+  toggleCollectionItem,
 } from '../store/repos'
 import type { GearCollection, GearItem } from '../domain/types'
 import { fmtGrams } from './format'
-import { CollectionEditorModal } from './CollectionEditorModal'
+import { GearLibraryPanel } from './GearLibraryPanel'
 
 // Manage reusable gear collections ("Solo weekend", "Group rainy"). An item can
 // be in several collections; a trip can apply a collection then add more.
@@ -25,6 +26,7 @@ export function CollectionsSection() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [open, setOpen] = useState(false)
+  const editing = collections.find((c) => c.id === editingId)
 
   function collectionWeight(c: GearCollection): number {
     return c.gearItemIds.reduce((n, id) => n + (gearById.get(id)?.weightG ?? 0), 0)
@@ -132,8 +134,14 @@ export function CollectionsSection() {
         </div>
       )}
 
-      {editingId && (
-        <CollectionEditorModal collectionId={editingId} onClose={() => setEditingId(null)} />
+      {editing && (
+        <GearLibraryPanel
+          title={`Collection — ${editing.name}`}
+          subtitle="Check items to include in this kit"
+          onClose={() => setEditingId(null)}
+          isSelected={(g) => editing.gearItemIds.includes(g.id)}
+          onToggle={(g) => void toggleCollectionItem(editing.id, g.id)}
+        />
       )}
     </section>
   )

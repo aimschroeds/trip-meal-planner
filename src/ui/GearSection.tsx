@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
@@ -9,12 +10,13 @@ import {
 import { categoryLabel, gearTotalG, isBigThree, ownerPersonIds, personGearTotals } from '../domain/gear'
 import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
-import { GroupedCombobox } from './GroupedCombobox'
+import { GearLibraryPanel } from './GearLibraryPanel'
 
-// Inline gear manager for the Carries tab: the gear on this trip is always
-// visible (grouped by category, with carrier/qty/worn controls); add more with
-// a type-ahead search or by applying a collection. No modal.
+// Inline gear manager for the trip's Gear tab: the gear on this trip is always
+// visible (grouped by category, with carrier/qty/worn controls); add more from
+// a fly-in library panel or by applying a collection.
 export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) {
+  const [browsing, setBrowsing] = useState(false)
   const gear = useLiveQuery(() => db.gear.toArray(), [], [] as GearItem[])
   const assignments = useLiveQuery(
     () => db.gearAssignments.where('tripId').equals(trip.id).toArray(),
@@ -41,7 +43,6 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     .map((id) => gearById.get(id))
     .filter((g): g is GearItem => !!g)
     .sort(byCatName)
-  const offTrip = gear.filter((g) => !onTripIds.has(g.id)).sort(byCatName)
 
   function addToTrip(g: GearItem) {
     if (onTripIds.has(g.id)) return
@@ -65,14 +66,6 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     list.push(g)
     grouped.set(g.category, list)
   }
-
-  const addOptions = offTrip.map((g) => ({
-    value: g.id,
-    label: g.name,
-    sublabel: [g.brand, g.owners?.join(', ')].filter(Boolean).join(' · ') || undefined,
-    group: categoryLabel(g.category),
-    hint: fmtGrams(g.weightG),
-  }))
 
   return (
     <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -100,7 +93,9 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
           )}
 
           {onTrip.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing added yet — search below to add gear.</p>
+            <p className="text-sm text-gray-500">
+              Nothing added yet — use “Add gear from library” below.
+            </p>
           ) : (
             <div className="space-y-2">
               {[...grouped.keys()].map((cat) => (
@@ -193,16 +188,12 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
           )}
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-64 flex-1">
-              <GroupedCombobox
-                placeholder="➕ add gear…"
-                options={addOptions}
-                onSelect={(value) => {
-                  const g = gearById.get(value)
-                  if (g) addToTrip(g)
-                }}
-              />
-            </div>
+            <button
+              className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white"
+              onClick={() => setBrowsing(true)}
+            >
+              ➕ Add gear from library
+            </button>
             {collections.length > 0 && (
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 or a collection:
@@ -224,6 +215,18 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
             )}
           </div>
         </>
+      )}
+
+      {browsing && (
+        <GearLibraryPanel
+          title={`Add gear — ${trip.name}`}
+          subtitle="Check items to add them to this trip"
+          onClose={() => setBrowsing(false)}
+          isSelected={(g) => onTripIds.has(g.id)}
+          onToggle={(g) =>
+            onTripIds.has(g.id) ? void removeGearFromTrip(trip.id, g.id) : addToTrip(g)
+          }
+        />
       )}
     </section>
   )
