@@ -8,6 +8,7 @@ import {
   carryPackWeightG,
   categoryLabel,
   isBigThree,
+  fairShareBreakdown,
   personGearTotals,
 } from '../domain/gear'
 import type {
@@ -83,6 +84,8 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   if (gear.length === 0 && assignments.length === 0 && planEntries.length === 0) return null
 
   const showGroup = people.length > 1
+  const fair = fairShareBreakdown(assignments, gearById, personIds)
+  const personName = new Map(people.map((p) => [p.id, p.name]))
   const groupCarry = carries.map((_, i) => rows.reduce((n, r) => n + r.packByCarry[i], 0))
   const groupCal = carries.map((_, i) => rows.reduce((n, r) => n + r.foodCalByCarry[i], 0))
   const groupHeaviest = groupCarry.length ? Math.max(...groupCarry) : 0
@@ -197,6 +200,59 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
           </tbody>
         </table>
       </div>
+
+      {showGroup && fair.sharedTotalG > 0 && (
+        <div>
+          <h4 className="mb-1 text-sm font-medium text-gray-700">
+            Fair share — split group gear evenly
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full max-w-lg border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-300 text-left text-gray-600">
+                  <th className="py-1 pr-2" />
+                  <th className="py-1 pr-2 text-right">Personal</th>
+                  <th className="py-1 pr-2 text-right">+ shared share</th>
+                  <th className="py-1 pr-2 text-right">Fair total</th>
+                  <th className="py-1 pr-2 text-right">Carrying</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fair.rows.map((r) => {
+                  const delta = r.physicalG - r.fairG
+                  return (
+                    <tr key={r.personId} className="border-b border-gray-100">
+                      <td className="py-1 pr-2 text-gray-700">{personName.get(r.personId)}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{fmtGrams(r.personalG)}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-gray-500">
+                        {fmtGrams(fair.perPersonSharedG)}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums font-medium">
+                        {fmtGrams(r.fairG)}
+                      </td>
+                      <td className="py-1 pr-2 text-right tabular-nums">
+                        {fmtGrams(r.physicalG)}
+                        {Math.abs(delta) >= 50 && (
+                          <span className={delta > 0 ? 'ml-1 text-xs text-red-700' : 'ml-1 text-xs text-emerald-700'}>
+                            {delta > 0 ? '+' : '−'}
+                            {fmtGrams(Math.abs(delta))}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Shared gear ({fmtGrams(fair.sharedTotalG)}) is split evenly, so over-packing personal
+            kit is that person's own burden. “Carrying” is what each holds now — a red +N means
+            they're carrying more than their fair total (hand some shared gear to someone with a
+            green −N).
+          </p>
+        </div>
+      )}
 
       {categoryRows.length > 0 && (
         <details>

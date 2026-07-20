@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   baseWeightG,
   carryPackWeightG,
+  fairShareBreakdown,
   categoryLabel,
   gearWeightSplit,
   isBigThree,
@@ -135,6 +136,29 @@ describe('carryPackWeightG', () => {
   it('is gear base + gear consumable + that carry’s food (worn excluded)', () => {
     const gear = { baseG: 660, wornG: 200, consumableG: 100 }
     expect(carryPackWeightG(gear, 2000)).toBe(2760) // 660 + 100 + 2000; worn 200 not counted
+  })
+})
+
+describe('fairShareBreakdown', () => {
+  it('splits shared gear evenly; personal is each person’s own', () => {
+    // Alice carries the shared tent (540) + her puffy (300). Bob: quilt (400).
+    const assignments = [
+      { personId: 'alice', gearItemId: 'tent' },
+      { personId: 'alice', gearItemId: 'puffy' },
+      { personId: 'bob', gearItemId: 'quilt' },
+    ]
+    const map = new Map([
+      ['tent', { id: 'tent', name: 'Tent', category: 'shelter', weightG: 540, shared: true }],
+      ['puffy', { id: 'puffy', name: 'Puffy', category: 'clothing', weightG: 300 }],
+      ['quilt', { id: 'quilt', name: 'Quilt', category: 'sleep', weightG: 400 }],
+    ] as [string, GearItem][])
+    const fair = fairShareBreakdown(assignments, map, ['alice', 'bob'])
+    expect(fair.sharedTotalG).toBe(540)
+    expect(fair.perPersonSharedG).toBe(270)
+    // Alice: personal 300, carrying 840 (tent+puffy), fair 570 → over by 270.
+    expect(fair.rows[0]).toEqual({ personId: 'alice', personalG: 300, physicalG: 840, fairG: 570 })
+    // Bob: personal 400, carrying 400, fair 670 → under by 270.
+    expect(fair.rows[1]).toEqual({ personId: 'bob', personalG: 400, physicalG: 400, fairG: 670 })
   })
 })
 

@@ -157,6 +157,59 @@ export function carryPackWeightG(gear: GearTotals, carryFoodG: number): number {
   return gear.baseG + gear.consumableG + carryFoodG
 }
 
+export interface FairShareRow {
+  personId: string
+  /** Total weight of this person's own (non-shared) gear. */
+  personalG: number
+  /** What they physically carry now (their personal gear + any shared items
+   *  assigned to them in full). */
+  physicalG: number
+  /** What they *should* carry for fairness: personal + an equal split of the
+   *  group's shared gear. */
+  fairG: number
+}
+
+export interface FairShare {
+  rows: FairShareRow[]
+  /** Total weight of shared group gear on the trip. */
+  sharedTotalG: number
+  /** Each person's equal share of the shared gear. */
+  perPersonSharedG: number
+}
+
+/** Split the trip's gear into personal vs a fair (equal) share of shared group
+ *  gear. Shared gear is split evenly across everyone regardless of who happens
+ *  to carry it, so one person over-packing personally doesn't change anyone
+ *  else's shared obligation. Weight is total (item × quantity). */
+export function fairShareBreakdown(
+  assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
+  gearById: ReadonlyMap<string, GearItem>,
+  personIds: readonly string[],
+): FairShare {
+  let sharedTotalG = 0
+  const personal = new Map<string, number>()
+  const physical = new Map<string, number>()
+  for (const a of assignments) {
+    const g = gearById.get(a.gearItemId)
+    if (!g) continue
+    const w = g.weightG * (a.quantity ?? 1)
+    physical.set(a.personId, (physical.get(a.personId) ?? 0) + w)
+    if (g.shared) sharedTotalG += w
+    else personal.set(a.personId, (personal.get(a.personId) ?? 0) + w)
+  }
+  const perPersonSharedG = personIds.length > 0 ? sharedTotalG / personIds.length : 0
+  const rows = personIds.map((personId) => {
+    const personalG = personal.get(personId) ?? 0
+    return {
+      personId,
+      personalG,
+      physicalG: physical.get(personId) ?? 0,
+      fairG: personalG + perPersonSharedG,
+    }
+  })
+  return { rows, sharedTotalG, perPersonSharedG }
+}
+
 /** Base-weight-by-category for a person — the LighterPack-style breakdown.
  *  Keyed by category; each value is the base/worn/consumable split so the view
  *  can show, e.g., Big-3 base weight. */
