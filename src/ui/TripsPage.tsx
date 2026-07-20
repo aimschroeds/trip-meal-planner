@@ -128,7 +128,9 @@ export function TripsPage({
 }
 
 function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
-  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'carries' | 'shopping'>('setup')
+  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'gear' | 'carries' | 'shopping'>(
+    'setup',
+  )
   const [descBusy, setDescBusy] = useState(false)
   const [descNote, setDescNote] = useState<string | null>(null)
   const people = useLiveQuery(
@@ -196,7 +198,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </button>
         <h2 className="text-xl font-bold text-gray-800">{trip.name}</h2>
         <nav className="flex gap-2">
-          {(['setup', 'days', 'plan', 'carries', 'shopping'] as const).map((v) => (
+          {(['setup', 'days', 'plan', 'gear', 'carries', 'shopping'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -257,12 +259,9 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
       {view === 'plan' && <PlanSection trip={trip} people={people} section="plan" />}
 
-      {view === 'carries' && (
-        <>
-          <GearSection trip={trip} people={people} />
-          <PackBreakdown trip={trip} people={people} />
-        </>
-      )}
+      {view === 'gear' && <GearSection trip={trip} people={people} />}
+
+      {view === 'carries' && <PackBreakdown trip={trip} people={people} />}
 
       {view === 'shopping' && (
         <>
