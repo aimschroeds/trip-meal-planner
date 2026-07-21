@@ -128,7 +128,7 @@ export function TripsPage({
 }
 
 function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
-  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'gear' | 'carries' | 'shopping'>(
+  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'shopping' | 'gear' | 'carries'>(
     'setup',
   )
   const [descBusy, setDescBusy] = useState(false)
@@ -198,7 +198,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
         </button>
         <h2 className="text-xl font-bold text-gray-800">{trip.name}</h2>
         <nav className="flex gap-2">
-          {(['setup', 'days', 'plan', 'gear', 'carries', 'shopping'] as const).map((v) => (
+          {(['setup', 'days', 'plan', 'shopping', 'gear', 'carries'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
