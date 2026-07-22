@@ -30,6 +30,7 @@ import type {
   Trip,
 } from '../domain/types'
 import { fmtGrams } from './format'
+import { OwnerPills } from './OwnerPills'
 import { GearLibraryPanel } from './GearLibraryPanel'
 
 interface CarryOption {
@@ -178,11 +179,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                             <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
                               {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                               {g.name}
-                              {g.owners?.length ? (
-                                <span className="ml-1 rounded bg-violet-100 px-1 text-xs text-violet-800">
-                                  {g.owners.join(', ')}
-                                </span>
-                              ) : null}
+                              <OwnerPills owners={g.owners} />
                               {g.shared && (
                                 <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
                                   shared

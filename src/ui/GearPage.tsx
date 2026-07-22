@@ -11,6 +11,7 @@ import {
 } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
+import { OwnerPills } from './OwnerPills'
 import { GearImportExport } from './GearImportExport'
 import { CollectionsSection } from './CollectionsSection'
 
@@ -214,7 +215,7 @@ export function GearPage() {
               Owner(s)
             </span>
             <input
-              className={`${inputClass} w-32`}
+              className={`${inputClass} w-48`}
               list="gear-owners"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
@@ -225,6 +226,12 @@ export function GearPage() {
                 <option key={o} value={o} />
               ))}
             </datalist>
+            {/* Live preview so comma-separated names clearly read as several owners. */}
+            {parseOwners(draft.owner).length > 0 && (
+              <span className="mt-1 flex flex-wrap items-center gap-y-1">
+                <OwnerPills owners={parseOwners(draft.owner)} />
+              </span>
+            )}
           </label>
           <label className="block">
             <span className="block text-sm text-gray-600">Category</span>
@@ -437,11 +444,7 @@ export function GearPage() {
                             />
                             {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                             {g.name}
-                            {g.owners?.length ? (
-                              <span className="ml-1 rounded bg-violet-100 px-1 text-xs text-violet-800">
-                                {g.owners.join(', ')}
-                              </span>
-                            ) : null}
+                            <OwnerPills owners={g.owners} />
                             {g.shared && (
                               <span className="ml-1 rounded bg-sky-100 px-1 text-xs text-sky-800">
                                 shared
