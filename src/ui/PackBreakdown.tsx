@@ -1,15 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { carryEndpoints, deriveCarries } from '../domain/carries'
+import { carryEndpoints, carryKey, deriveCarries } from '../domain/carries'
 import { carryTotals, planKey } from '../domain/totals'
 import { packagingBaseG } from '../domain/units'
 import {
   assignmentGearTotals,
+  assignmentOnCarry,
   carryPackWeightG,
   categoryLabel,
   isBigThree,
   fairShareBreakdown,
   personGearTotals,
+  personGearTotalsForCarry,
 } from '../domain/gear'
 import type {
   GearAssignment,
@@ -23,11 +25,12 @@ import type {
 } from '../domain/types'
 import { fmtCalories, fmtGrams } from './format'
 
-// Summary-first food + gear pack view. Gear rides every carry (constant); food
-// is consumed, so it varies per carry — pack weight for a carry = gear base +
-// gear consumable (fuel) + that carry's food + its packaging. Worn is on the
-// body, shown separately. The headline is base weight and the heaviest pack;
-// the per-carry table and category breakdown are the supporting detail.
+// Summary-first food + gear pack view. Most gear rides every carry, but some is
+// pinned to one carry (a heavier rain shell, extra soap), so gear is summed per
+// carry; food is consumed, so it varies too — pack weight for a carry = that
+// carry's gear base + gear consumable (fuel) + its food + its packaging. Worn is
+// on the body, shown separately. The headline is base weight and the heaviest
+// pack; the per-carry table and category breakdown are the supporting detail.
 export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }) {
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
@@ -56,27 +59,31 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
 
   const carries = deriveCarries(trip, resupplies)
   const endpoints = carryEndpoints(carries, resupplies)
+  const carryKeys = carries.map((c) => carryKey(c))
   const perCarry = carries.map((carry) =>
     carryTotals({ carry, personIds, entriesByKey, mealsById, itemsById }),
   )
 
   const rows = people.map((p) => {
-    const gearT = personGearTotals(assignments, gearById, p.id)
-    // Pack weight per carry = constant gear + that carry's food & packaging.
+    // Gear is summed per carry so items pinned to one leg count only there.
+    const gearByCarry = carryKeys.map((k) => personGearTotalsForCarry(assignments, gearById, p.id, k))
     const packByCarry = perCarry.map((c, i) => {
       const foodG = c.perPerson.get(p.id)?.weightG ?? 0
       const packagingG = packagingBaseG(carries[i].slots, [p.id], entriesByKey, mealsById, itemsById)
-      return carryPackWeightG(gearT, foodG) + packagingG
+      return carryPackWeightG(gearByCarry[i], foodG) + packagingG
     })
     const foodCalByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.calories ?? 0)
+    // No carries yet (nothing planned): all gear rides the one notional pack.
+    const gearAll = personGearTotals(assignments, gearById, p.id)
     const heaviestPack = packByCarry.length
       ? Math.max(...packByCarry)
-      : gearT.baseG + gearT.consumableG
+      : gearAll.baseG + gearAll.consumableG
     const heaviestIdx = packByCarry.length ? packByCarry.indexOf(heaviestPack) : -1
-    // Base is the constant gear base; everything else in the heaviest pack
-    // (food + fuel + packaging) is consumable. Worn is on the body.
-    const base = gearT.baseG
-    const worn = gearT.wornG
+    // Base/worn come from the gear on the heaviest carry; everything else in
+    // that pack (food + fuel + packaging) is consumable. Worn is on the body.
+    const gearAtHeaviest = heaviestIdx >= 0 ? gearByCarry[heaviestIdx] : gearAll
+    const base = gearAtHeaviest.baseG
+    const worn = gearAtHeaviest.wornG
     const consumable = heaviestPack - base
     return { person: p, base, worn, consumable, heaviestPack, heaviestIdx, packByCarry, foodCalByCarry }
   })
@@ -84,15 +91,23 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   if (gear.length === 0 && assignments.length === 0 && planEntries.length === 0) return null
 
   const showGroup = people.length > 1
-  const fair = fairShareBreakdown(assignments, gearById, personIds)
   const personName = new Map(people.map((p) => [p.id, p.name]))
   const groupCarry = carries.map((_, i) => rows.reduce((n, r) => n + r.packByCarry[i], 0))
   const groupCal = carries.map((_, i) => rows.reduce((n, r) => n + r.foodCalByCarry[i], 0))
   const groupHeaviest = groupCarry.length ? Math.max(...groupCarry) : 0
 
+  // Category breakdown and fair share describe the pack that drives the
+  // headline — the group's heaviest carry — so per-carry swaps aren't
+  // double-counted. With no pinned gear this is identical to every carry.
+  const groupHeaviestIdx = groupCarry.length ? groupCarry.indexOf(groupHeaviest) : -1
+  const activeKey = groupHeaviestIdx >= 0 ? carryKeys[groupHeaviestIdx] : undefined
+  const activeAssignments =
+    activeKey === undefined ? assignments : assignments.filter((a) => assignmentOnCarry(a, activeKey))
+  const fair = fairShareBreakdown(activeAssignments, gearById, personIds)
+
   // Group base weight by gear category (the LighterPack-style breakdown).
   const byCategory = new Map<string, number>()
-  for (const a of assignments) {
+  for (const a of activeAssignments) {
     const item = gearById.get(a.gearItemId)
     if (!item) continue
     byCategory.set(
@@ -288,8 +303,9 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
       )}
 
       <p className="text-xs text-gray-500">
-        Pack weight = gear base + gear consumables (fuel) + that carry’s food + its packaging.
-        Calories are that carry’s food. Worn weight is on the body, not counted.
+        Pack weight = that carry’s gear base + gear consumables (fuel) + its food + its packaging.
+        Gear pinned to a carry (on the Gear tab) counts only there. Calories are that carry’s food.
+        Worn weight is on the body, not counted.
       </p>
     </section>
   )

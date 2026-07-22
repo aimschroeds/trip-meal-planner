@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
   removeGearFromTrip,
+  setGearCarryScope,
   setGearQuantity,
   setGearWornQuantity,
   toggleGearAssignment,
@@ -19,7 +20,15 @@ import {
   ZERO_GEAR_TOTALS,
 } from '../domain/gear'
 import type { GearTotals } from '../domain/gear'
-import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
+import { carryEndpoints, carryKey, deriveCarries } from '../domain/carries'
+import type {
+  GearAssignment,
+  GearCollection,
+  GearItem,
+  Person,
+  Resupply,
+  Trip,
+} from '../domain/types'
 import { fmtGrams } from './format'
 import { GearLibraryPanel } from './GearLibraryPanel'
 
@@ -47,9 +56,30 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     [] as GearAssignment[],
   )
   const collections = useLiveQuery(() => db.gearCollections.toArray(), [], [] as GearCollection[])
+  const resupplies = useLiveQuery(
+    () => db.resupplies.where('tripId').equals(trip.id).toArray(),
+    [trip.id],
+    [] as Resupply[],
+  )
+
+  // Carries this trip splits into, for pinning gear to one leg. Labelled by
+  // number and (when known) endpoints, e.g. "Carry 2 (Vizzavona → finish)".
+  const carries = deriveCarries(trip, resupplies)
+  const carryEnds = carryEndpoints(carries, resupplies)
+  const carryOptions = carries.map((c, i) => {
+    const e = carryEnds[i]
+    const where = e.from || e.to ? ` (${e.from ?? 'start'} → ${e.to ?? 'finish'})` : ''
+    return { key: carryKey(c), label: `Carry ${c.index}${where}` }
+  })
+  const carryKeySet = new Set(carryOptions.map((o) => o.key))
 
   const gearById = new Map(gear.map((g) => [g.id, g]))
   const assigned = new Set(assignments.map((a) => `${a.personId}|${a.gearItemId}`))
+  // An item's carry scope (shared across its carriers): the first assignment's.
+  const carryByItem = new Map<string, string | undefined>()
+  for (const a of assignments) {
+    if (!carryByItem.has(a.gearItemId)) carryByItem.set(a.gearItemId, a.carryKey)
+  }
   const qtyByKey = new Map(assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.quantity ?? 1]))
   // Raw worn count per assignment (undefined = "use the item's default"), so the
   // effective worn value is resolved per row with defaultWornQuantity().
@@ -92,6 +122,12 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     for (const gid of c.gearItemIds) {
       const g = gearById.get(gid)
       if (g) addToTrip(g)
+    }
+  }
+  // Pin an item to one carry (or clear to every carry) for all its carriers.
+  function setItemCarry(g: GearItem, key: string) {
+    for (const p of people) {
+      if (assigned.has(`${p.id}|${g.id}`)) void setGearCarryScope(trip.id, p.id, g.id, key || undefined)
     }
   }
 
@@ -167,6 +203,27 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                               </span>
                               {split && <span className="text-xs text-gray-400">{split}</span>}
                             </span>
+                            {carryOptions.length > 1 &&
+                              (() => {
+                                const scope = carryByItem.get(g.id)
+                                const stale = scope !== undefined && !carryKeySet.has(scope)
+                                return (
+                                  <select
+                                    className="rounded border border-gray-300 px-1 py-0.5 text-xs text-gray-600"
+                                    title="Which carry this item rides (default: every carry)"
+                                    value={scope ?? ''}
+                                    onChange={(e) => setItemCarry(g, e.target.value)}
+                                  >
+                                    <option value="">Every carry</option>
+                                    {stale && <option value={scope}>Carry (removed)</option>}
+                                    {carryOptions.map((o) => (
+                                      <option key={o.key} value={o.key}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )
+                              })()}
                             {!multi &&
                               defaultCarrier &&
                               (() => {
