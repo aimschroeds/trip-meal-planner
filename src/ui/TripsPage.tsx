@@ -28,6 +28,7 @@ import { fmtCalories, fmtDate, RESUPPLY_TIMINGS, resupplyTimingLabel } from './f
 import { tripDayDate } from '../domain/dates'
 import { PlanSection } from './PlanSection'
 import { GearSection } from './GearSection'
+import { TripConsumablesSection } from './TripConsumablesSection'
 import { PackBreakdown } from './PackBreakdown'
 import { GearPackingList } from './GearPackingList'
 import { fileInputClass } from './styles'
@@ -259,7 +260,12 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
       {view === 'plan' && <PlanSection trip={trip} people={people} section="plan" />}
 
-      {view === 'gear' && <GearSection trip={trip} people={people} />}
+      {view === 'gear' && (
+        <div className="space-y-4">
+          <GearSection trip={trip} people={people} />
+          <TripConsumablesSection trip={trip} people={people} />
+        </div>
+      )}
 
       {view === 'carries' && <PackBreakdown trip={trip} people={people} />}
 

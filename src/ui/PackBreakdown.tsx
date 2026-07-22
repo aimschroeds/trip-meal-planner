@@ -4,16 +4,21 @@ import { carryEndpoints, carryKey, deriveCarries } from '../domain/carries'
 import { carryTotals, planKey } from '../domain/totals'
 import { packagingBaseG } from '../domain/units'
 import {
+  addGearTotals,
   assignmentGearTotals,
   assignmentOnCarry,
   assignmentQuantityOnCarry,
   carryPackWeightG,
   categoryLabel,
+  consumableLoadOnCarry,
+  gearTotalG,
   isBigThree,
   fairShareBreakdown,
+  personConsumableTotalsForCarry,
   personGearTotals,
   personGearTotalsForCarry,
 } from '../domain/gear'
+import type { GearTotals } from '../domain/gear'
 import type {
   GearAssignment,
   GearItem,
@@ -23,6 +28,7 @@ import type {
   PlanEntry,
   Resupply,
   Trip,
+  TripConsumable,
 } from '../domain/types'
 import { fmtCalories, fmtGrams } from './format'
 
@@ -51,6 +57,11 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
     [trip.id],
     [] as GearAssignment[],
   )
+  const consumables = useLiveQuery(
+    () => db.tripConsumables.where('tripId').equals(trip.id).toArray(),
+    [trip.id],
+    [] as TripConsumable[],
+  )
 
   const itemsById = new Map(items.map((i) => [i.id, i]))
   const mealsById = new Map(meals.map((m) => [m.id, m]))
@@ -66,16 +77,26 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   )
 
   const rows = people.map((p) => {
-    // Gear is summed per carry so items pinned to one leg count only there.
-    const gearByCarry = carryKeys.map((k) => personGearTotalsForCarry(assignments, gearById, p.id, k))
+    // Gear + trip consumables are summed per carry, so items pinned to one leg
+    // (and per-leg consumable loads) count only there.
+    const gearByCarry = carryKeys.map((k) =>
+      addGearTotals(
+        personGearTotalsForCarry(assignments, gearById, p.id, k),
+        personConsumableTotalsForCarry(consumables, p.id, k),
+      ),
+    )
     const packByCarry = perCarry.map((c, i) => {
       const foodG = c.perPerson.get(p.id)?.weightG ?? 0
       const packagingG = packagingBaseG(carries[i].slots, [p.id], entriesByKey, mealsById, itemsById)
       return carryPackWeightG(gearByCarry[i], foodG) + packagingG
     })
     const foodCalByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.calories ?? 0)
-    // No carries yet (nothing planned): all gear rides the one notional pack.
-    const gearAll = personGearTotals(assignments, gearById, p.id)
+    // No carries yet (nothing planned): all gear rides the one notional pack;
+    // consumables fall back to their default load.
+    const gearAll = addGearTotals(
+      personGearTotals(assignments, gearById, p.id),
+      personConsumableTotalsForCarry(consumables, p.id, '__none__'),
+    )
     const heaviestPack = packByCarry.length
       ? Math.max(...packByCarry)
       : gearAll.baseG + gearAll.consumableG
@@ -89,7 +110,13 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
     return { person: p, base, worn, consumable, heaviestPack, heaviestIdx, packByCarry, foodCalByCarry }
   })
 
-  if (gear.length === 0 && assignments.length === 0 && planEntries.length === 0) return null
+  if (
+    gear.length === 0 &&
+    assignments.length === 0 &&
+    consumables.length === 0 &&
+    planEntries.length === 0
+  )
+    return null
 
   const showGroup = people.length > 1
   const personName = new Map(people.map((p) => [p.id, p.name]))
@@ -108,10 +135,28 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
       : assignments
           .filter((a) => assignmentOnCarry(a, activeKey))
           .map((a) => ({ ...a, quantity: assignmentQuantityOnCarry(a, activeKey) }))
-  const fair = fairShareBreakdown(activeAssignments, gearById, personIds)
+  // Trip consumables on the heaviest carry, as {load, category} for the same
+  // breakdowns. On a no-carry trip they contribute their default load.
+  const activeConsumables = consumables
+    .map((c) => ({ c, load: consumableLoadOnCarry(c, activeKey ?? '__none__') }))
+    .filter((x): x is { c: TripConsumable; load: GearTotals } => x.load !== null)
+  const fair = fairShareBreakdown(
+    activeAssignments,
+    gearById,
+    personIds,
+    activeConsumables.map(({ c, load }) => ({
+      personId: c.personId,
+      weightG: gearTotalG(load),
+      shared: c.shared,
+    })),
+  )
 
-  // Group base weight by gear category (the LighterPack-style breakdown).
+  // Group base weight by gear category (the LighterPack-style breakdown),
+  // including trip consumables' base on the heaviest carry.
   const byCategory = new Map<string, number>()
+  for (const { c, load } of activeConsumables) {
+    byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + load.baseG)
+  }
   for (const a of activeAssignments) {
     const item = gearById.get(a.gearItemId)
     if (!item) continue
@@ -308,9 +353,9 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
       )}
 
       <p className="text-xs text-gray-500">
-        Pack weight = that carry’s gear base + gear consumables (fuel) + its food + its packaging.
-        Gear pinned to a carry (on the Gear tab) counts only there. Calories are that carry’s food.
-        Worn weight is on the body, not counted.
+        Pack weight = that carry’s gear base + consumables (fuel, soap) + its food + its packaging.
+        Gear and trip consumables pinned to a carry (on the Gear tab) count only there. Calories are
+        that carry’s food. Worn weight is on the body, not counted.
       </p>
     </section>
   )
