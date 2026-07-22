@@ -96,24 +96,44 @@ export function gearTotalG(t: GearTotals): number {
   return t.baseG + t.wornG + t.consumableG
 }
 
-/** The base/worn/consumable one gear assignment contributes, accounting for
- *  quantity and how many are worn. Worn units keep the item's worn split;
- *  packed units move that worn weight into base (it's in the pack, not on the
- *  body). Consumable is intrinsic (per unit) regardless. Defaults: quantity 1,
- *  all units worn. */
+/** Whether an item is worn by default (wearable): the library flags part of its
+ *  weight as worn — clothing you put on. Worn is otherwise a per-trip choice, so
+ *  this only sets the default; any item can be marked worn on a given trip. */
+export function isWearable(item: Pick<GearItem, 'wornWeightG'>): boolean {
+  return (item.wornWeightG ?? 0) > 0
+}
+
+/** How many of a person's units are worn when the trip hasn't said otherwise:
+ *  all of them for a wearable item, none for everything else (it rides in the
+ *  pack until you say you're wearing it). */
+export function defaultWornQuantity(
+  item: Pick<GearItem, 'wornWeightG'>,
+  quantity: number | undefined,
+): number {
+  return isWearable(item) ? Math.max(1, Math.round(quantity ?? 1)) : 0
+}
+
+/** The base/worn/consumable one gear assignment contributes. Worn is a
+ *  whole-unit, per-trip decision: each worn unit carries its full non-depleting
+ *  weight on the body, each packed unit puts that same weight in the pack as
+ *  base. The consumable portion (fuel gas) depletes per unit regardless of
+ *  worn. Defaults: quantity 1; worn = all units for a wearable item, none
+ *  otherwise (see defaultWornQuantity). */
 export function assignmentGearTotals(
   item: Pick<GearItem, 'weightG' | 'wornWeightG' | 'consumableWeightG'>,
   quantity: number | undefined,
   wornQuantity: number | undefined,
 ): GearTotals {
-  const unit = gearWeightSplit(item)
+  const total = Math.max(0, item.weightG)
+  const consumablePerUnit = Math.min(Math.max(0, item.consumableWeightG ?? 0), total)
+  const solidPerUnit = total - consumablePerUnit // non-depleting weight of one unit
   const n = Math.max(1, Math.round(quantity ?? 1))
-  const worn = Math.min(Math.max(0, Math.round(wornQuantity ?? n)), n)
+  const worn = Math.min(Math.max(0, Math.round(wornQuantity ?? defaultWornQuantity(item, n))), n)
   const packed = n - worn
   return {
-    baseG: worn * unit.baseG + packed * (unit.baseG + unit.wornG),
-    wornG: worn * unit.wornG,
-    consumableG: n * unit.consumableG,
+    baseG: packed * solidPerUnit,
+    wornG: worn * solidPerUnit,
+    consumableG: n * consumablePerUnit,
   }
 }
 
