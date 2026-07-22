@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
   removeGearFromTrip,
-  setGearCarryScope,
+  setGearCarries,
   setGearQuantity,
   setGearWornQuantity,
   toggleGearAssignment,
@@ -32,6 +32,14 @@ import type {
 import { fmtGrams } from './format'
 import { GearLibraryPanel } from './GearLibraryPanel'
 
+interface CarryOption {
+  key: string
+  /** "Carry 2" — short chip label. */
+  short: string
+  /** "Carry 2 (Vizzavona → Corte)" — full title for the chip tooltip. */
+  full: string
+}
+
 // The packed/worn/consumable split under a row's total — shown only when it's
 // more than plain packed base weight (i.e. something is worn or depletes), so
 // ordinary gear stays uncluttered.
@@ -44,9 +52,10 @@ function splitLabel(t: GearTotals): string | null {
   return parts.join(' · ')
 }
 
-// Inline gear manager for the trip's Gear tab: the gear on this trip is always
-// visible (grouped by category, with carrier/qty/worn controls); add more from
-// a fly-in library panel or by applying a collection.
+// Inline gear manager for the trip's Gear tab. Each item is a card: a header
+// with its name and total weight, then one control line per person carrying it
+// (quantity, whether it's worn, and which carries it rides). Add more from a
+// fly-in library panel or by applying a collection.
 export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) {
   const [browsing, setBrowsing] = useState(false)
   const gear = useLiveQuery(() => db.gear.toArray(), [], [] as GearItem[])
@@ -62,34 +71,22 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     [] as Resupply[],
   )
 
-  // Carries this trip splits into, for pinning gear to one leg. Labelled by
-  // number and (when known) endpoints, e.g. "Carry 2 (Vizzavona → finish)".
+  // The carries this trip splits into — the options for pinning gear to a leg.
   const carries = deriveCarries(trip, resupplies)
   const carryEnds = carryEndpoints(carries, resupplies)
-  const carryOptions = carries.map((c, i) => {
+  const carryOptions: CarryOption[] = carries.map((c, i) => {
     const e = carryEnds[i]
     const where = e.from || e.to ? ` (${e.from ?? 'start'} → ${e.to ?? 'finish'})` : ''
-    return { key: carryKey(c), label: `Carry ${c.index}${where}` }
+    return { key: carryKey(c), short: `Carry ${c.index}`, full: `Carry ${c.index}${where}` }
   })
-  const carryKeySet = new Set(carryOptions.map((o) => o.key))
+  const perCarry = carryOptions.length > 1
 
   const gearById = new Map(gear.map((g) => [g.id, g]))
-  const assigned = new Set(assignments.map((a) => `${a.personId}|${a.gearItemId}`))
-  // An item's carry scope (shared across its carriers): the first assignment's.
-  const carryByItem = new Map<string, string | undefined>()
-  for (const a of assignments) {
-    if (!carryByItem.has(a.gearItemId)) carryByItem.set(a.gearItemId, a.carryKey)
-  }
-  const qtyByKey = new Map(assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.quantity ?? 1]))
-  // Raw worn count per assignment (undefined = "use the item's default"), so the
-  // effective worn value is resolved per row with defaultWornQuantity().
-  const wornRawByKey = new Map(
-    assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.wornQuantity]),
-  )
+  const assignmentByKey = new Map(assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a]))
   const onTripIds = new Set(assignments.map((a) => a.gearItemId))
 
   // Total base/worn/consumable an item contributes across everyone carrying it —
-  // the row headline reflects quantity (and worn/consumable), not the unit weight.
+  // the header weight reflects quantity (and worn/consumable), not unit weight.
   const itemTotals = (g: GearItem): GearTotals => {
     let t = ZERO_GEAR_TOTALS
     for (const a of assignments) {
@@ -122,12 +119,6 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     for (const gid of c.gearItemIds) {
       const g = gearById.get(gid)
       if (g) addToTrip(g)
-    }
-  }
-  // Pin an item to one carry (or clear to every carry) for all its carriers.
-  function setItemCarry(g: GearItem, key: string) {
-    for (const p of people) {
-      if (assigned.has(`${p.id}|${g.id}`)) void setGearCarryScope(trip.id, p.id, g.id, key || undefined)
     }
   }
 
@@ -169,21 +160,22 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
               Nothing added yet — use “Add gear from library” below.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[...grouped.keys()].map((cat) => (
                 <div key={cat}>
-                  <h4 className="mb-0.5 text-xs font-medium tracking-wide text-gray-500 uppercase">
+                  <h4 className="mb-1 text-xs font-medium tracking-wide text-gray-500 uppercase">
                     {categoryLabel(cat)}
                   </h4>
-                  <ul className="space-y-1">
+                  <ul className="space-y-1.5">
                     {grouped.get(cat)!.map((g) => {
-                      const carriers = people.filter((p) => assigned.has(`${p.id}|${g.id}`))
                       const totals = itemTotals(g)
                       const split = splitLabel(totals)
+                      const carriers = people.filter((p) => assignmentByKey.has(`${p.id}|${g.id}`))
                       return (
-                        <li key={g.id} className="text-sm">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="min-w-0 flex-1 truncate text-gray-800">
+                        <li key={g.id} className="rounded-md border border-gray-100 bg-gray-50/40 px-2.5 py-2">
+                          {/* Header: name + badges on the left, weight on the right. */}
+                          <div className="flex items-baseline gap-2">
+                            <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
                               {g.brand && <span className="text-gray-400">{g.brand} · </span>}
                               {g.name}
                               {g.owners?.length ? (
@@ -197,95 +189,57 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                                 </span>
                               )}
                             </span>
-                            <span className="flex flex-col items-end leading-tight">
-                              <span className="tabular-nums text-gray-700">
+                            <span className="shrink-0 text-right leading-tight">
+                              <span className="text-sm tabular-nums text-gray-700">
                                 {fmtGrams(gearTotalG(totals))}
                               </span>
-                              {split && <span className="text-xs text-gray-400">{split}</span>}
+                              {split && <span className="block text-xs text-gray-400">{split}</span>}
                             </span>
-                            {carryOptions.length > 1 &&
-                              (() => {
-                                const scope = carryByItem.get(g.id)
-                                const stale = scope !== undefined && !carryKeySet.has(scope)
-                                return (
-                                  <select
-                                    className="rounded border border-gray-300 px-1 py-0.5 text-xs text-gray-600"
-                                    title="Which carry this item rides (default: every carry)"
-                                    value={scope ?? ''}
-                                    onChange={(e) => setItemCarry(g, e.target.value)}
-                                  >
-                                    <option value="">Every carry</option>
-                                    {stale && <option value={scope}>Carry (removed)</option>}
-                                    {carryOptions.map((o) => (
-                                      <option key={o.key} value={o.key}>
-                                        {o.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                )
-                              })()}
-                            {!multi &&
-                              defaultCarrier &&
-                              (() => {
-                                const key = `${defaultCarrier}|${g.id}`
-                                const qty = qtyByKey.get(key) ?? 1
-                                return (
-                                  <QtyWorn
-                                    trip={trip}
-                                    personId={defaultCarrier}
-                                    g={g}
-                                    qty={qty}
-                                    worn={wornRawByKey.get(key) ?? defaultWornQuantity(g, qty)}
-                                  />
-                                )
-                              })()}
                             <button
-                              className="text-red-700"
-                              title="remove from trip"
+                              className="shrink-0 text-gray-400 hover:text-red-700"
+                              title="Remove from trip"
                               onClick={() => void removeGearFromTrip(trip.id, g.id)}
                             >
                               ✕
                             </button>
                           </div>
+
+                          {/* Who carries it — toggle chips (multi-person trips). */}
                           {multi && (
-                            <div className="mt-0.5 ml-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                              carried by:
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="text-xs text-gray-400">carried by</span>
                               {people.map((p) => {
-                                const on = assigned.has(`${p.id}|${g.id}`)
+                                const on = assignmentByKey.has(`${p.id}|${g.id}`)
                                 return (
-                                  <span key={p.id} className="flex items-center gap-1">
-                                    <label className="flex items-center gap-1">
-                                      <input
-                                        type="checkbox"
-                                        checked={on}
-                                        onChange={() =>
-                                          void toggleGearAssignment(trip.id, p.id, g.id)
-                                        }
-                                      />
-                                      {p.name}
-                                    </label>
-                                    {on &&
-                                      (() => {
-                                        const key = `${p.id}|${g.id}`
-                                        const qty = qtyByKey.get(key) ?? 1
-                                        return (
-                                          <QtyWorn
-                                            trip={trip}
-                                            personId={p.id}
-                                            g={g}
-                                            qty={qty}
-                                            worn={wornRawByKey.get(key) ?? defaultWornQuantity(g, qty)}
-                                          />
-                                        )
-                                      })()}
-                                  </span>
+                                  <button
+                                    key={p.id}
+                                    onClick={() => void toggleGearAssignment(trip.id, p.id, g.id)}
+                                    className={`rounded-full border px-2 py-0.5 text-xs ${
+                                      on
+                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        : 'border-gray-300 text-gray-500 hover:border-gray-400'
+                                    }`}
+                                  >
+                                    {p.name}
+                                  </button>
                                 )
                               })}
-                              {carriers.length === 0 && (
-                                <span className="text-gray-400">nobody yet</span>
-                              )}
                             </div>
                           )}
+
+                          {/* One control line per carrier: quantity, worn, carries. */}
+                          <div className="mt-1.5 space-y-1.5">
+                            {carriers.map((p) => (
+                              <CarrierControls
+                                key={p.id}
+                                trip={trip}
+                                g={g}
+                                a={assignmentByKey.get(`${p.id}|${g.id}`)!}
+                                personName={multi ? p.name : undefined}
+                                carryOptions={perCarry ? carryOptions : []}
+                              />
+                            ))}
+                          </div>
                         </li>
                       )
                     })}
@@ -340,54 +294,75 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
   )
 }
 
-// Compact quantity + worn steppers for one assignment. Worn is a per-trip,
-// whole-unit choice available on any item: a single unit shows a checkbox, more
-// than one a count (how many are worn; the rest ride in the pack as base weight).
-function QtyWorn({
+// One person's controls for one item: quantity, how many are worn, and (when the
+// trip has more than one carry) which carries it rides. Everything on this line
+// belongs to this one person, so there's no ambiguity about what a control means.
+function CarrierControls({
   trip,
-  personId,
   g,
-  qty,
-  worn,
+  a,
+  personName,
+  carryOptions,
 }: {
   trip: Trip
-  personId: string
   g: GearItem
-  qty: number
-  worn: number
+  a: GearAssignment
+  /** Set on multi-person trips to label whose line this is. */
+  personName?: string
+  /** Empty when the trip has a single carry (then carry-pinning is hidden). */
+  carryOptions: CarryOption[]
 }) {
+  const qty = a.quantity ?? 1
+  const worn = a.wornQuantity ?? defaultWornQuantity(g, qty)
+  const active = new Set(a.carryKeys ?? [])
+  const everyCarry = active.size === 0
+
+  function toggleCarry(key: string) {
+    const next = new Set(active)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    void setGearCarries(trip.id, a.personId, g.id, [...next])
+  }
+
   return (
-    <>
-      <span className="flex items-center gap-1 text-xs text-gray-500">
-        ×
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+      {personName && (
+        <span className="w-16 shrink-0 truncate font-medium text-gray-700">{personName}</span>
+      )}
+
+      <span className="flex items-center gap-1" title="How many this person carries">
+        <span className="text-gray-400">×</span>
         <input
           type="number"
           min={1}
           className="w-12 rounded border border-gray-300 px-1 py-0.5"
           value={qty}
           onChange={(e) =>
-            void setGearQuantity(trip.id, personId, g.id, Number(e.target.value) || 1)
+            void setGearQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 1)
           }
         />
       </span>
+
       {qty === 1 ? (
         <label
-          className="flex items-center gap-1 text-xs text-gray-500"
+          className="flex items-center gap-1"
           title="Worn on the body (kept out of the pack) rather than packed"
         >
           <input
             type="checkbox"
             checked={worn >= 1}
-            onChange={(e) => void setGearWornQuantity(trip.id, personId, g.id, e.target.checked ? 1 : 0)}
+            onChange={(e) =>
+              void setGearWornQuantity(trip.id, a.personId, g.id, e.target.checked ? 1 : 0)
+            }
           />
           worn
         </label>
       ) : (
         <span
-          className="flex items-center gap-1 text-xs text-gray-500"
+          className="flex items-center gap-1"
           title="How many are worn on the body (the rest are packed = base weight)"
         >
-          worn
+          <span className="text-gray-400">worn</span>
           <input
             type="number"
             min={0}
@@ -395,11 +370,45 @@ function QtyWorn({
             className="w-12 rounded border border-gray-300 px-1 py-0.5"
             value={worn}
             onChange={(e) =>
-              void setGearWornQuantity(trip.id, personId, g.id, Number(e.target.value) || 0)
+              void setGearWornQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 0)
             }
           />
         </span>
       )}
-    </>
+
+      {carryOptions.length > 1 && (
+        <span className="flex flex-wrap items-center gap-1">
+          <span className="text-gray-400">carries</span>
+          <button
+            onClick={() => void setGearCarries(trip.id, a.personId, g.id, [])}
+            title="Rides every carry"
+            className={`rounded-full border px-2 py-0.5 ${
+              everyCarry
+                ? 'border-indigo-600 bg-indigo-600 text-white'
+                : 'border-gray-300 text-gray-500 hover:border-gray-400'
+            }`}
+          >
+            Every
+          </button>
+          {carryOptions.map((o) => {
+            const on = active.has(o.key)
+            return (
+              <button
+                key={o.key}
+                onClick={() => toggleCarry(o.key)}
+                title={o.full}
+                className={`rounded-full border px-2 py-0.5 ${
+                  on
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-gray-300 text-gray-500 hover:border-gray-400'
+                }`}
+              >
+                {o.short.replace('Carry ', '')}
+              </button>
+            )
+          })}
+        </span>
+      )}
+    </div>
   )
 }
