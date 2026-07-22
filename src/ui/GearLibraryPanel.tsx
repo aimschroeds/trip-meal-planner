@@ -4,6 +4,7 @@ import { db } from '../store/db'
 import { categoryLabel, isBigThree } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
+import { OwnerPills } from './OwnerPills'
 
 // A hideable fly-in side panel listing the whole gear library to select from.
 // Shared by the trip gear tab and the collection builder so "what's available"
@@ -120,11 +121,7 @@ export function GearLibraryPanel({
                             {g.name}
                           </span>
                           <span className="tabular-nums text-gray-400">{fmtGrams(g.weightG)}</span>
-                          {g.owners?.length ? (
-                            <span className="rounded bg-violet-100 px-1 text-xs text-violet-800">
-                              {g.owners.join(', ')}
-                            </span>
-                          ) : null}
+                          <OwnerPills owners={g.owners} />
                           {g.shared && (
                             <span className="rounded bg-sky-100 px-1 text-xs text-sky-800">
                               shared
