@@ -111,6 +111,14 @@ export function carryEndpoints(
   }))
 }
 
+/** Stable key identifying a carry across re-derivations, for anchoring per-carry
+ *  gear (GearAssignment.carryKey). A carry is identified by where it starts: its
+ *  start-resupply id, or 'start' for the first carry. Adding/removing resupplies
+ *  can still shift what a key refers to — that's inherent to derived carries. */
+export function carryKey(carry: Carry): string {
+  return carry.startResupplyId ?? 'start'
+}
+
 export function carryStart(carry: Carry): SlotRef {
   return carry.slots[0]
 }

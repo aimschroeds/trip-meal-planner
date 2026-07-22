@@ -170,6 +170,35 @@ export function personGearTotals(
   return totals
 }
 
+/** Whether an assignment rides a given carry: unscoped gear (no carryKey) rides
+ *  every carry; scoped gear only rides its own. */
+export function assignmentOnCarry(
+  a: Pick<GearAssignment, 'carryKey'>,
+  carryKey: string,
+): boolean {
+  return a.carryKey === undefined || a.carryKey === carryKey
+}
+
+/** The base/worn/consumable a person carries on one specific carry — trip-wide
+ *  gear plus anything pinned to that carry (a heavier rain shell, extra soap). */
+export function personGearTotalsForCarry(
+  assignments: Pick<
+    GearAssignment,
+    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKey'
+  >[],
+  gearById: ReadonlyMap<string, GearItem>,
+  personId: string,
+  carryKey: string,
+): GearTotals {
+  let totals = ZERO_GEAR_TOTALS
+  for (const a of assignments) {
+    if (a.personId !== personId || !assignmentOnCarry(a, carryKey)) continue
+    const item = gearById.get(a.gearItemId)
+    if (item) totals = addGearTotals(totals, assignmentGearTotals(item, a.quantity, a.wornQuantity))
+  }
+  return totals
+}
+
 /** Full pack weight for one carry: the constant gear (base + its consumable,
  *  e.g. fuel) plus that carry's food (also consumable). Worn weight is on the
  *  body, not in the pack, so it's excluded. */
