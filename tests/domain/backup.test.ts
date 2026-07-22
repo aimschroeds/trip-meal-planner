@@ -94,6 +94,7 @@ function fullData(): BackupData {
     planEntries: [entry],
     gear: [tent],
     gearCollections: [],
+    tripConsumables: [],
   }
 }
 
@@ -106,6 +107,7 @@ const emptyData: BackupData = {
   planEntries: [],
   gear: [],
   gearCollections: [],
+  tripConsumables: [],
 }
 
 describe('serializeBackup', () => {

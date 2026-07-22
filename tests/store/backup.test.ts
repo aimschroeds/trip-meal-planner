@@ -43,6 +43,17 @@ function fullData(): BackupData {
     ],
     gear: [gaz],
     gearCollections: [],
+    tripConsumables: [
+      {
+        id: 'consumable-1',
+        tripId: 'trip-1',
+        personId: 'person-1',
+        name: 'Soap',
+        category: 'hygiene',
+        baseG: 5,
+        consumableG: 13,
+      },
+    ],
   }
 }
 
@@ -56,9 +67,16 @@ const gaz: GearItem = {
 
 async function clearAll() {
   await Promise.all(
-    [db.trips, db.people, db.items, db.meals, db.resupplies, db.planEntries, db.gear].map((t) =>
-      t.clear(),
-    ),
+    [
+      db.trips,
+      db.people,
+      db.items,
+      db.meals,
+      db.resupplies,
+      db.planEntries,
+      db.gear,
+      db.tripConsumables,
+    ].map((t) => t.clear()),
   )
 }
 
@@ -82,6 +100,7 @@ describe('backup store', () => {
       planEntries: [],
       gear: [],
       gearCollections: [],
+      tripConsumables: [],
     })
   })
 
@@ -128,6 +147,7 @@ describe('backup store', () => {
       planEntries: [],
       gear: [],
       gearCollections: [],
+      tripConsumables: [],
     })
     expect(await db.items.count()).toBe(0)
     expect(await db.trips.count()).toBe(0)
