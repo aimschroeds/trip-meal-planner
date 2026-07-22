@@ -22,6 +22,7 @@ const TABLE_LABELS: Record<(typeof BACKUP_TABLES)[number], string> = {
   planEntries: 'plan entries',
   gear: 'gear',
   gearCollections: 'gear collections',
+  tripConsumables: 'trip consumables',
 }
 
 function summarize(counts: Record<(typeof BACKUP_TABLES)[number], number>): string {
@@ -39,6 +40,7 @@ export function BackupPage() {
       planEntries: await db.planEntries.count(),
       gear: await db.gear.count(),
       gearCollections: await db.gearCollections.count(),
+      tripConsumables: await db.tripConsumables.count(),
     }),
     [],
   )
