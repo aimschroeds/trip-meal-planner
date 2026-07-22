@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  assignmentOnCarry,
   baseWeightG,
   carryPackWeightG,
   fairShareBreakdown,
   categoryLabel,
+  personGearTotalsForCarry,
   defaultWornQuantity,
   gearWeightSplit,
   isBigThree,
@@ -127,6 +129,37 @@ describe('isWearable / defaultWornQuantity', () => {
   it('treats a plain item as not worn by default', () => {
     expect(isWearable({})).toBe(false)
     expect(defaultWornQuantity({}, 2)).toBe(0)
+  })
+})
+
+describe('personGearTotalsForCarry', () => {
+  const map = new Map([
+    ['jacket', { id: 'jacket', name: 'Rain shell', category: 'clothing', weightG: 300 }],
+    ['soap', { id: 'soap', name: 'Big soap', category: 'hygiene', weightG: 120 }],
+  ] as [string, GearItem][])
+
+  it('rides unscoped gear on every carry, scoped gear only on its carry', () => {
+    const assignments = [
+      { personId: 'a', gearItemId: 'jacket' }, // every carry
+      { personId: 'a', gearItemId: 'soap', carryKey: 'c1' }, // only carry c1
+    ]
+    // Carry c1: jacket + soap. Carry c2: jacket only.
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c1')).toEqual({
+      baseG: 420,
+      wornG: 0,
+      consumableG: 0,
+    })
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c2')).toEqual({
+      baseG: 300,
+      wornG: 0,
+      consumableG: 0,
+    })
+  })
+
+  it('assignmentOnCarry: undefined scope is everywhere, else exact match', () => {
+    expect(assignmentOnCarry({}, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryKey: 'c1' }, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryKey: 'c1' }, 'c2')).toBe(false)
   })
 })
 

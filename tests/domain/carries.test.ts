@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carryEnd, carryEndpoints, carryStart, deriveCarries } from '../../src/domain/carries'
+import { carryEnd, carryEndpoints, carryKey, carryStart, deriveCarries } from '../../src/domain/carries'
 import { makeTrip, toggleMainSlot, withSnackCount } from '../../src/domain/trip'
 import type { Resupply, ResupplyTiming } from '../../src/domain/types'
 
@@ -213,5 +213,10 @@ describe('resupply locations on carries', () => {
       { from: undefined, to: undefined },
       { from: undefined, to: undefined },
     ])
+  })
+
+  it('keys each carry by its start resupply, with "start" for the first', () => {
+    const carries = deriveCarries(trip, [vizzavona, corte])
+    expect(carries.map(carryKey)).toEqual(['start', 'r-viz', 'r-corte'])
   })
 })
