@@ -4,6 +4,7 @@
 
 import { db, type MarkRow } from './db'
 import { calorieDensity } from '../domain/density'
+import { defaultWornQuantity } from '../domain/gear'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
 import type { GearFields } from '../domain/csv/gear'
@@ -255,22 +256,26 @@ export async function setGearQuantity(
   quantity: number,
 ): Promise<void> {
   const id = gearAssignmentId(tripId, personId, gearItemId)
-  await db.transaction('rw', db.gearAssignments, async () => {
+  await db.transaction('rw', db.gearAssignments, db.gear, async () => {
     const a = await db.gearAssignments.get(id)
     if (!a) return
+    const g = await db.gear.get(gearItemId)
     const q = Math.max(1, Math.round(quantity))
-    // Worn can't exceed the new quantity; drop it if it now means "all worn".
+    // Worn can't exceed the new quantity; drop it once it matches the item's
+    // default (all-worn for wearables, none otherwise) so the record stays lean.
     const worn = a.wornQuantity !== undefined ? Math.min(a.wornQuantity, q) : undefined
+    const def = g ? defaultWornQuantity(g, q) : q
     await db.gearAssignments.put({
       ...a,
       quantity: q > 1 ? q : undefined,
-      wornQuantity: worn !== undefined && worn < q ? worn : undefined,
+      wornQuantity: worn !== undefined && worn !== def ? worn : undefined,
     })
   })
 }
 
 /** Set how many of a person's units of a gear item are worn (the rest packed).
- *  Equal to the quantity ("all worn") clears it back to the default. */
+ *  Worn is a per-trip, whole-unit choice for any item. Matching the item's
+ *  default (all-worn for wearables, none otherwise) clears it back to undefined. */
 export async function setGearWornQuantity(
   tripId: string,
   personId: string,
@@ -278,12 +283,14 @@ export async function setGearWornQuantity(
   wornQuantity: number,
 ): Promise<void> {
   const id = gearAssignmentId(tripId, personId, gearItemId)
-  await db.transaction('rw', db.gearAssignments, async () => {
+  await db.transaction('rw', db.gearAssignments, db.gear, async () => {
     const a = await db.gearAssignments.get(id)
     if (!a) return
+    const g = await db.gear.get(gearItemId)
     const total = Math.max(1, a.quantity ?? 1)
     const worn = Math.min(Math.max(0, Math.round(wornQuantity)), total)
-    await db.gearAssignments.put({ ...a, wornQuantity: worn < total ? worn : undefined })
+    const def = g ? defaultWornQuantity(g, total) : total
+    await db.gearAssignments.put({ ...a, wornQuantity: worn !== def ? worn : undefined })
   })
 }
 
