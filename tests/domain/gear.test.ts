@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assignmentOnCarry,
+  assignmentQuantityOnCarry,
   baseWeightG,
   carryPackWeightG,
   fairShareBreakdown,
@@ -167,6 +168,31 @@ describe('personGearTotalsForCarry', () => {
     expect(assignmentOnCarry({ carryKeys: ['c1'] }, 'c1')).toBe(true)
     expect(assignmentOnCarry({ carryKeys: ['c1'] }, 'c2')).toBe(false)
     expect(assignmentOnCarry({ carryKeys: ['c1', 'c3'] }, 'c3')).toBe(true)
+  })
+
+  it('carries a different amount per carry when carryQuantities is set', () => {
+    // 2 pairs of socks on c1, 3 on c2, none on c3.
+    const socks = new Map([
+      ['socks', { id: 'socks', name: 'Socks', category: 'clothing', weightG: 35 }],
+    ] as [string, GearItem][])
+    const assignments = [
+      { personId: 'a', gearItemId: 'socks', carryQuantities: { c1: 2, c2: 3 } },
+    ]
+    expect(personGearTotalsForCarry(assignments, socks, 'a', 'c1').baseG).toBe(70)
+    expect(personGearTotalsForCarry(assignments, socks, 'a', 'c2').baseG).toBe(105)
+    expect(personGearTotalsForCarry(assignments, socks, 'a', 'c3').baseG).toBe(0)
+  })
+
+  it('assignmentQuantityOnCarry: per-carry override, else quantity where it rides', () => {
+    expect(assignmentQuantityOnCarry({ quantity: 2 }, 'c1')).toBe(2) // every carry
+    expect(assignmentQuantityOnCarry({ quantity: 2, carryKeys: ['c1'] }, 'c2')).toBe(0)
+    expect(assignmentQuantityOnCarry({ carryQuantities: { c1: 2, c2: 3 } }, 'c2')).toBe(3)
+    expect(assignmentQuantityOnCarry({ carryQuantities: { c1: 2 } }, 'c3')).toBe(0)
+  })
+
+  it('assignmentOnCarry follows per-carry amounts (rides where amount > 0)', () => {
+    expect(assignmentOnCarry({ carryQuantities: { c1: 2, c2: 0 } }, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryQuantities: { c1: 2, c2: 0 } }, 'c2')).toBe(false)
   })
 })
 
