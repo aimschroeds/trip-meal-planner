@@ -170,13 +170,25 @@ export function personGearTotals(
   return totals
 }
 
-/** Whether an assignment rides a given carry: unscoped gear (no carryKeys, or an
- *  empty list) rides every carry; scoped gear only rides the carries it lists. */
+/** Whether an assignment rides a given carry. Per-carry quantities win when set
+ *  (a carry with a positive amount rides); otherwise unscoped gear (no carryKeys,
+ *  or an empty list) rides every carry and scoped gear only its listed carries. */
 export function assignmentOnCarry(
-  a: Pick<GearAssignment, 'carryKeys'>,
+  a: Pick<GearAssignment, 'carryKeys' | 'carryQuantities'>,
   carryKey: string,
 ): boolean {
+  if (a.carryQuantities) return Math.round(a.carryQuantities[carryKey] ?? 0) > 0
   return !a.carryKeys || a.carryKeys.length === 0 || a.carryKeys.includes(carryKey)
+}
+
+/** How many units this assignment carries on a given carry: a per-carry override
+ *  when set, otherwise the single quantity on the carries it rides (0 if not). */
+export function assignmentQuantityOnCarry(
+  a: Pick<GearAssignment, 'quantity' | 'carryKeys' | 'carryQuantities'>,
+  carryKey: string,
+): number {
+  if (a.carryQuantities) return Math.max(0, Math.round(a.carryQuantities[carryKey] ?? 0))
+  return assignmentOnCarry(a, carryKey) ? Math.max(1, Math.round(a.quantity ?? 1)) : 0
 }
 
 /** The base/worn/consumable a person carries on one specific carry — trip-wide
@@ -184,7 +196,7 @@ export function assignmentOnCarry(
 export function personGearTotalsForCarry(
   assignments: Pick<
     GearAssignment,
-    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKeys'
+    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKeys' | 'carryQuantities'
   >[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
@@ -192,9 +204,12 @@ export function personGearTotalsForCarry(
 ): GearTotals {
   let totals = ZERO_GEAR_TOTALS
   for (const a of assignments) {
-    if (a.personId !== personId || !assignmentOnCarry(a, carryKey)) continue
+    if (a.personId !== personId) continue
     const item = gearById.get(a.gearItemId)
-    if (item) totals = addGearTotals(totals, assignmentGearTotals(item, a.quantity, a.wornQuantity))
+    if (!item) continue
+    const qty = assignmentQuantityOnCarry(a, carryKey)
+    if (qty <= 0) continue
+    totals = addGearTotals(totals, assignmentGearTotals(item, qty, a.wornQuantity))
   }
   return totals
 }
