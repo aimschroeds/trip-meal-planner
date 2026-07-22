@@ -9,6 +9,7 @@ import type {
   PlanEntry,
   Resupply,
   Trip,
+  TripConsumable,
 } from '../domain/types'
 import type { SyncKind } from '../domain/sync'
 
@@ -61,6 +62,7 @@ export const db = new Dexie('hiking-meal-planner') as Dexie & {
   gear: EntityTable<GearItem, 'id'>
   gearAssignments: EntityTable<GearAssignment, 'id'>
   gearCollections: EntityTable<GearCollection, 'id'>
+  tripConsumables: EntityTable<TripConsumable, 'id'>
   marks: EntityTable<MarkRow, 'id'>
   syncMeta: EntityTable<SyncMetaRow, 'key'>
   syncState: EntityTable<SyncStateRow, 'id'>
@@ -148,3 +150,9 @@ db.version(10).upgrade((tx) =>
       }
     }),
 )
+
+// Trip consumables: soap/fuel/sunscreen that deplete on the trail — trip- and
+// leg-specific, so kept out of the reusable gear library.
+db.version(11).stores({
+  tripConsumables: 'id, tripId, [tripId+personId]',
+})

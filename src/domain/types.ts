@@ -151,6 +151,43 @@ export interface GearItem {
   owners?: string[]
 }
 
+/** Container + depleting amount of a consumable on one carry (Trip consumables).
+ *  base is the non-depleting container/packaging; consumable is what runs down. */
+export interface ConsumableLoad {
+  baseG: number
+  consumableG: number
+}
+
+/** A trip-specific consumable that depletes on the trail — soap, fuel-canister
+ *  gas, sunscreen, DEET. Deliberately kept OUT of the reusable gear library:
+ *  its fill is specific to this trip, and often to each leg (a fuller soap
+ *  bottle on the first section). Belongs to one carrier and rides one or more
+ *  carries; the load (container + amount) can differ per carry. Flows into pack
+ *  weight, the category breakdown, and fair share just like gear's base +
+ *  consumable, so the numbers stay honest without polluting the library. */
+export interface TripConsumable {
+  id: string
+  tripId: string
+  /** Who carries it. */
+  personId: string
+  name: string
+  /** Groups it in the pack breakdown; defaults to 'consumables'. */
+  category: string
+  /** Group consumable shared across the party (fuel) → split evenly in fair
+   *  share; personal to its carrier otherwise. */
+  shared?: boolean
+  /** Default load on each carry it rides. */
+  baseG: number
+  consumableG: number
+  /** Which carries it rides; empty/undefined = every carry. Carry keys come from
+   *  carryKey() in domain/carries.ts. */
+  carryKeys?: string[]
+  /** Per-carry load overrides. When present this fully determines which carries
+   *  it rides (a carry absent isn't carried) and each leg's load, superseding
+   *  baseG/consumableG/carryKeys — mirrors GearAssignment.carryQuantities. */
+  carryLoads?: Record<string, ConsumableLoad>
+}
+
 /** A named, reusable set of gear (Gear epic): "Solo weekend", "Group rainy".
  *  An item may belong to several collections (it just appears in each list).
  *  On a trip, applying a collection adds all its items; you can still add more
