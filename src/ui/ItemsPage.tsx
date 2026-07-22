@@ -80,9 +80,13 @@ function draftBounds(draft: Draft): { minGrams?: number; maxGrams?: number } | n
   return { minGrams, maxGrams }
 }
 
-/** Blank → no unit; otherwise the weight must be a positive number. */
+/** Blank → no unit; otherwise the weight must be a positive number. A piece name
+ *  is meaningless without a piece weight (units are grams-per-piece), so a name
+ *  typed with no weight is incomplete (null) rather than silently dropped. */
 function draftUnit(draft: Draft): { unitWeightG?: number; unitName?: string } | null {
-  if (draft.unitWeightG.trim() === '') return {}
+  if (draft.unitWeightG.trim() === '') {
+    return draft.unitName.trim() === '' ? {} : null
+  }
   const n = Number(draft.unitWeightG)
   if (!Number.isFinite(n) || n <= 0) return null
   return { unitWeightG: n, unitName: draft.unitName.trim() || undefined }
@@ -376,6 +380,11 @@ export function ItemsPage() {
               value={draft.unitName}
               onChange={(e) => setDraft({ ...draft, unitName: e.target.value })}
             />
+            {draft.unitName.trim() !== '' && draft.unitWeightG.trim() === '' && (
+              <span className="mt-1 block w-24 text-xs text-red-700">
+                Add a piece weight to name pieces
+              </span>
+            )}
           </label>
           <div
             className="block"
