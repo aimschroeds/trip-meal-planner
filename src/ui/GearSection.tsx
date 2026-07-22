@@ -7,10 +7,33 @@ import {
   setGearWornQuantity,
   toggleGearAssignment,
 } from '../store/repos'
-import { categoryLabel, gearTotalG, isBigThree, ownerPersonIds, personGearTotals } from '../domain/gear'
+import {
+  addGearTotals,
+  assignmentGearTotals,
+  categoryLabel,
+  defaultWornQuantity,
+  gearTotalG,
+  isBigThree,
+  ownerPersonIds,
+  personGearTotals,
+  ZERO_GEAR_TOTALS,
+} from '../domain/gear'
+import type { GearTotals } from '../domain/gear'
 import type { GearAssignment, GearCollection, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
 import { GearLibraryPanel } from './GearLibraryPanel'
+
+// The packed/worn/consumable split under a row's total — shown only when it's
+// more than plain packed base weight (i.e. something is worn or depletes), so
+// ordinary gear stays uncluttered.
+function splitLabel(t: GearTotals): string | null {
+  if (t.wornG === 0 && t.consumableG === 0) return null
+  const parts: string[] = []
+  if (t.baseG > 0) parts.push(`${fmtGrams(t.baseG)} packed`)
+  if (t.wornG > 0) parts.push(`${fmtGrams(t.wornG)} worn`)
+  if (t.consumableG > 0) parts.push(`${fmtGrams(t.consumableG)} consumable`)
+  return parts.join(' · ')
+}
 
 // Inline gear manager for the trip's Gear tab: the gear on this trip is always
 // visible (grouped by category, with carrier/qty/worn controls); add more from
@@ -28,10 +51,23 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
   const gearById = new Map(gear.map((g) => [g.id, g]))
   const assigned = new Set(assignments.map((a) => `${a.personId}|${a.gearItemId}`))
   const qtyByKey = new Map(assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.quantity ?? 1]))
-  const wornByKey = new Map(
-    assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.wornQuantity ?? a.quantity ?? 1]),
+  // Raw worn count per assignment (undefined = "use the item's default"), so the
+  // effective worn value is resolved per row with defaultWornQuantity().
+  const wornRawByKey = new Map(
+    assignments.map((a) => [`${a.personId}|${a.gearItemId}`, a.wornQuantity]),
   )
   const onTripIds = new Set(assignments.map((a) => a.gearItemId))
+
+  // Total base/worn/consumable an item contributes across everyone carrying it —
+  // the row headline reflects quantity (and worn/consumable), not the unit weight.
+  const itemTotals = (g: GearItem): GearTotals => {
+    let t = ZERO_GEAR_TOTALS
+    for (const a of assignments) {
+      if (a.gearItemId !== g.id) continue
+      t = addGearTotals(t, assignmentGearTotals(g, a.quantity, a.wornQuantity))
+    }
+    return t
+  }
   const defaultCarrier = people[0]?.id
   const multi = people.length > 1
 
@@ -105,8 +141,9 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                   </h4>
                   <ul className="space-y-1">
                     {grouped.get(cat)!.map((g) => {
-                      const wearable = (g.wornWeightG ?? 0) > 0
                       const carriers = people.filter((p) => assigned.has(`${p.id}|${g.id}`))
+                      const totals = itemTotals(g)
+                      const split = splitLabel(totals)
                       return (
                         <li key={g.id} className="text-sm">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -124,17 +161,27 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                                 </span>
                               )}
                             </span>
-                            <span className="tabular-nums text-gray-400">{fmtGrams(g.weightG)}</span>
-                            {!multi && defaultCarrier && (
-                              <QtyWorn
-                                trip={trip}
-                                personId={defaultCarrier}
-                                g={g}
-                                qty={qtyByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
-                                worn={wornByKey.get(`${defaultCarrier}|${g.id}`) ?? 1}
-                                wearable={wearable}
-                              />
-                            )}
+                            <span className="flex flex-col items-end leading-tight">
+                              <span className="tabular-nums text-gray-700">
+                                {fmtGrams(gearTotalG(totals))}
+                              </span>
+                              {split && <span className="text-xs text-gray-400">{split}</span>}
+                            </span>
+                            {!multi &&
+                              defaultCarrier &&
+                              (() => {
+                                const key = `${defaultCarrier}|${g.id}`
+                                const qty = qtyByKey.get(key) ?? 1
+                                return (
+                                  <QtyWorn
+                                    trip={trip}
+                                    personId={defaultCarrier}
+                                    g={g}
+                                    qty={qty}
+                                    worn={wornRawByKey.get(key) ?? defaultWornQuantity(g, qty)}
+                                  />
+                                )
+                              })()}
                             <button
                               className="text-red-700"
                               title="remove from trip"
@@ -160,16 +207,20 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                                       />
                                       {p.name}
                                     </label>
-                                    {on && (
-                                      <QtyWorn
-                                        trip={trip}
-                                        personId={p.id}
-                                        g={g}
-                                        qty={qtyByKey.get(`${p.id}|${g.id}`) ?? 1}
-                                        worn={wornByKey.get(`${p.id}|${g.id}`) ?? 1}
-                                        wearable={wearable}
-                                      />
-                                    )}
+                                    {on &&
+                                      (() => {
+                                        const key = `${p.id}|${g.id}`
+                                        const qty = qtyByKey.get(key) ?? 1
+                                        return (
+                                          <QtyWorn
+                                            trip={trip}
+                                            personId={p.id}
+                                            g={g}
+                                            qty={qty}
+                                            worn={wornRawByKey.get(key) ?? defaultWornQuantity(g, qty)}
+                                          />
+                                        )
+                                      })()}
                                   </span>
                                 )
                               })}
@@ -232,21 +283,21 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
   )
 }
 
-// Compact quantity (and worn, for wearable items) steppers for one assignment.
+// Compact quantity + worn steppers for one assignment. Worn is a per-trip,
+// whole-unit choice available on any item: a single unit shows a checkbox, more
+// than one a count (how many are worn; the rest ride in the pack as base weight).
 function QtyWorn({
   trip,
   personId,
   g,
   qty,
   worn,
-  wearable,
 }: {
   trip: Trip
   personId: string
   g: GearItem
   qty: number
   worn: number
-  wearable: boolean
 }) {
   return (
     <>
@@ -262,7 +313,19 @@ function QtyWorn({
           }
         />
       </span>
-      {wearable && (
+      {qty === 1 ? (
+        <label
+          className="flex items-center gap-1 text-xs text-gray-500"
+          title="Worn on the body (kept out of the pack) rather than packed"
+        >
+          <input
+            type="checkbox"
+            checked={worn >= 1}
+            onChange={(e) => void setGearWornQuantity(trip.id, personId, g.id, e.target.checked ? 1 : 0)}
+          />
+          worn
+        </label>
+      ) : (
         <span
           className="flex items-center gap-1 text-xs text-gray-500"
           title="How many are worn on the body (the rest are packed = base weight)"
