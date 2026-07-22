@@ -14,6 +14,7 @@ const ALL_TABLES = [
   db.planEntries,
   db.gear,
   db.gearCollections,
+  db.tripConsumables,
 ]
 
 export async function exportBackup(): Promise<BackupData> {
@@ -26,6 +27,7 @@ export async function exportBackup(): Promise<BackupData> {
     planEntries: await db.planEntries.toArray(),
     gear: await db.gear.toArray(),
     gearCollections: await db.gearCollections.toArray(),
+    tripConsumables: await db.tripConsumables.toArray(),
   }))
 }
 
@@ -45,6 +47,7 @@ export async function mergeBackup(data: BackupData): Promise<void> {
     await db.planEntries.bulkPut(data.planEntries.map(normalizePlanEntry))
     await db.gear.bulkPut(data.gear ?? [])
     await db.gearCollections.bulkPut(data.gearCollections ?? [])
+    await db.tripConsumables.bulkPut(data.tripConsumables ?? [])
   })
 }
 
@@ -61,5 +64,6 @@ export async function restoreBackup(data: BackupData): Promise<void> {
     await db.planEntries.bulkAdd(data.planEntries.map(normalizePlanEntry))
     await db.gear.bulkAdd(data.gear ?? [])
     await db.gearCollections.bulkAdd(data.gearCollections ?? [])
+    await db.tripConsumables.bulkAdd(data.tripConsumables ?? [])
   })
 }

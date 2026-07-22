@@ -43,6 +43,7 @@ beforeEach(async () => {
     db.resupplies.clear(),
     db.planEntries.clear(),
     db.marks.clear(),
+    db.tripConsumables.clear(),
     db.syncMeta.clear(),
     db.syncState.clear(),
   ])
@@ -70,6 +71,35 @@ describe('reconcile', () => {
 
     expect(result.applied).toBe(1)
     expect(await db.items.get('i1')).toMatchObject({ name: 'Cloud oats' })
+  })
+
+  it('syncs trip consumables both ways', async () => {
+    // A local consumable pushes up…
+    await db.tripConsumables.add({
+      id: 'c1',
+      tripId: 't1',
+      personId: 'p1',
+      name: 'Soap',
+      category: 'hygiene',
+      baseG: 5,
+      consumableG: 13,
+    })
+    const t = memoryTransport([
+      // …and a remote-only one comes down.
+      {
+        kind: 'tripConsumable',
+        id: 'c2',
+        payload: { id: 'c2', tripId: 't1', personId: 'p2', name: 'Fuel', category: 'cooking', baseG: 100, consumableG: 200 },
+        updatedAt: 500,
+        deleted: false,
+      },
+    ])
+
+    const result = await reconcile(t, 1000)
+
+    expect(result).toEqual({ applied: 1, pushed: 1 })
+    expect(t.store.get('tripConsumable:c1')?.payload).toMatchObject({ name: 'Soap' })
+    expect(await db.tripConsumables.get('c2')).toMatchObject({ name: 'Fuel' })
   })
 
   it('keeps the newer local edit and pushes it over an older cloud copy', async () => {

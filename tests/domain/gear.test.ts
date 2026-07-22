@@ -4,8 +4,11 @@ import {
   assignmentQuantityOnCarry,
   baseWeightG,
   carryPackWeightG,
+  consumableLoadOnCarry,
+  consumableMaxLoad,
   fairShareBreakdown,
   categoryLabel,
+  personConsumableTotalsForCarry,
   personGearTotalsForCarry,
   defaultWornQuantity,
   gearWeightSplit,
@@ -230,6 +233,67 @@ describe('personGearTotals', () => {
       wornG: 0,
       consumableG: 0,
     })
+  })
+})
+
+describe('trip consumables', () => {
+  it('consumableLoadOnCarry: default load where it rides, null otherwise', () => {
+    const soap = { baseG: 5, consumableG: 13 } // rides every carry
+    expect(consumableLoadOnCarry(soap, 'c1')).toEqual({ baseG: 5, wornG: 0, consumableG: 13 })
+    const pinned = { baseG: 5, consumableG: 13, carryKeys: ['c1'] }
+    expect(consumableLoadOnCarry(pinned, 'c1')).toEqual({ baseG: 5, wornG: 0, consumableG: 13 })
+    expect(consumableLoadOnCarry(pinned, 'c2')).toBeNull()
+  })
+
+  it('consumableLoadOnCarry: per-carry override wins; absent carry = not carried', () => {
+    const soap = {
+      baseG: 5,
+      consumableG: 13,
+      carryLoads: { c1: { baseG: 5, consumableG: 13 }, c2: { baseG: 7, consumableG: 20 } },
+    }
+    expect(consumableLoadOnCarry(soap, 'c1')).toEqual({ baseG: 5, wornG: 0, consumableG: 13 })
+    expect(consumableLoadOnCarry(soap, 'c2')).toEqual({ baseG: 7, wornG: 0, consumableG: 20 })
+    expect(consumableLoadOnCarry(soap, 'c3')).toBeNull()
+  })
+
+  it('personConsumableTotalsForCarry sums a person’s consumables on a carry', () => {
+    const list = [
+      { personId: 'a', baseG: 5, consumableG: 13, carryLoads: { c1: { baseG: 5, consumableG: 13 } } },
+      { personId: 'a', baseG: 100, consumableG: 200 }, // fuel, every carry
+      { personId: 'b', baseG: 9, consumableG: 9 }, // someone else
+    ]
+    expect(personConsumableTotalsForCarry(list, 'a', 'c1')).toEqual({
+      baseG: 105,
+      wornG: 0,
+      consumableG: 213,
+    })
+    // c2: the soap isn't carried there, only the fuel.
+    expect(personConsumableTotalsForCarry(list, 'a', 'c2')).toEqual({
+      baseG: 100,
+      wornG: 0,
+      consumableG: 200,
+    })
+  })
+
+  it('consumableMaxLoad picks the heaviest leg', () => {
+    const soap = {
+      baseG: 0,
+      consumableG: 0,
+      carryLoads: { c1: { baseG: 5, consumableG: 13 }, c2: { baseG: 7, consumableG: 20 } },
+    }
+    expect(consumableMaxLoad(soap, ['c1', 'c2'])).toEqual({ baseG: 7, wornG: 0, consumableG: 20 })
+  })
+
+  it('fairShareBreakdown folds in shared vs personal consumable extras', () => {
+    // Alice carries shared fuel (300); Bob carries personal soap (18).
+    const fair = fairShareBreakdown([], new Map(), ['alice', 'bob'], [
+      { personId: 'alice', weightG: 300, shared: true },
+      { personId: 'bob', weightG: 18 },
+    ])
+    expect(fair.sharedTotalG).toBe(300)
+    expect(fair.perPersonSharedG).toBe(150)
+    expect(fair.rows[0]).toEqual({ personId: 'alice', personalG: 0, physicalG: 300, fairG: 150 })
+    expect(fair.rows[1]).toEqual({ personId: 'bob', personalG: 18, physicalG: 18, fairG: 168 })
   })
 })
 

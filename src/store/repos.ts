@@ -18,6 +18,7 @@ import type {
   Person,
   PlanEntry,
   PlanPart,
+  TripConsumable,
 } from '../domain/types'
 
 export class ItemInUseError extends Error {
@@ -399,6 +400,47 @@ export async function deleteGear(id: string): Promise<void> {
   })
 }
 
+// --- Trip consumables (soap, fuel, sunscreen): trip-scoped, not in the library.
+
+export async function createTripConsumable(
+  tripId: string,
+  personId: string,
+): Promise<string> {
+  const c: TripConsumable = {
+    id: crypto.randomUUID(),
+    tripId,
+    personId,
+    name: '',
+    category: 'consumables',
+    baseG: 0,
+    consumableG: 0,
+  }
+  await db.tripConsumables.add(c)
+  return c.id
+}
+
+/** Patch a trip consumable — the UI builds the patch (name, load, carries, the
+ *  per-carry carryLoads map, etc.). A key set to undefined clears that optional
+ *  field (get + put, so the property is actually removed). */
+export async function updateTripConsumable(
+  id: string,
+  patch: Partial<Omit<TripConsumable, 'id' | 'tripId'>>,
+): Promise<void> {
+  await db.transaction('rw', db.tripConsumables, async () => {
+    const c = await db.tripConsumables.get(id)
+    if (!c) return
+    const next = { ...c, ...patch } as TripConsumable
+    for (const k of Object.keys(patch) as (keyof typeof patch)[]) {
+      if (patch[k] === undefined) delete (next as unknown as Record<string, unknown>)[k]
+    }
+    await db.tripConsumables.put(next)
+  })
+}
+
+export async function deleteTripConsumable(id: string): Promise<void> {
+  await db.tripConsumables.delete(id)
+}
+
 export async function createGearCollection(name: string): Promise<string> {
   const collection: GearCollection = { id: crypto.randomUUID(), name: name.trim(), gearItemIds: [] }
   await db.gearCollections.add(collection)
@@ -490,7 +532,15 @@ export async function createTrip(name: string, numDays: number): Promise<string>
 export async function deleteTrip(id: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.trips, db.people, db.resupplies, db.planEntries, db.marks, db.gearAssignments],
+    [
+      db.trips,
+      db.people,
+      db.resupplies,
+      db.planEntries,
+      db.marks,
+      db.gearAssignments,
+      db.tripConsumables,
+    ],
     async () => {
       const trip = await db.trips.get(id)
       if (!trip) return
@@ -499,6 +549,7 @@ export async function deleteTrip(id: string): Promise<void> {
       await db.planEntries.where('tripId').equals(id).delete()
       await db.marks.where('tripId').equals(id).delete()
       await db.gearAssignments.where('tripId').equals(id).delete()
+      await db.tripConsumables.where('tripId').equals(id).delete()
       await db.trips.delete(id)
     },
   )
@@ -531,7 +582,7 @@ export async function updatePerson(
 export async function removePersonFromTrip(tripId: string, personId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.trips, db.people, db.planEntries, db.gearAssignments],
+    [db.trips, db.people, db.planEntries, db.gearAssignments, db.tripConsumables],
     async () => {
       const trip = await db.trips.get(tripId)
       if (trip) {
@@ -542,6 +593,7 @@ export async function removePersonFromTrip(tripId: string, personId: string): Pr
       }
       await db.planEntries.where('[tripId+personId]').equals([tripId, personId]).delete()
       await db.gearAssignments.where('[tripId+personId]').equals([tripId, personId]).delete()
+      await db.tripConsumables.where('[tripId+personId]').equals([tripId, personId]).delete()
       await db.people.delete(personId)
     },
   )

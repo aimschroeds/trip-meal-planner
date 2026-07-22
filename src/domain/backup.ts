@@ -13,6 +13,7 @@ import type {
   PlanEntry,
   Resupply,
   Trip,
+  TripConsumable,
 } from './types'
 
 export const BACKUP_FORMAT = 'hiking-meal-planner-backup'
@@ -28,6 +29,7 @@ export interface BackupData {
   planEntries: PlanEntry[]
   gear: GearItem[]
   gearCollections: GearCollection[]
+  tripConsumables: TripConsumable[]
 }
 
 export interface BackupFile {
@@ -46,11 +48,12 @@ export const BACKUP_TABLES = [
   'planEntries',
   'gear',
   'gearCollections',
+  'tripConsumables',
 ] as const
 
 /** Tables added after v1; a backup taken before they existed simply omits
  *  them, so parse treats a missing one as empty rather than an error. */
-const OPTIONAL_BACKUP_TABLES = new Set<string>(['gear', 'gearCollections'])
+const OPTIONAL_BACKUP_TABLES = new Set<string>(['gear', 'gearCollections', 'tripConsumables'])
 
 export function serializeBackup(data: BackupData, exportedAt: Date): string {
   const file: BackupFile = {
@@ -132,6 +135,17 @@ const checkGear: EntityCheck = (e) =>
 const checkGearCollection: EntityCheck = (e) =>
   firstError(str(e, 'id'), str(e, 'name'), arr(e, 'gearItemIds'))
 
+const checkTripConsumable: EntityCheck = (e) =>
+  firstError(
+    str(e, 'id'),
+    str(e, 'tripId'),
+    str(e, 'personId'),
+    str(e, 'name'),
+    str(e, 'category'),
+    num(e, 'baseG'),
+    num(e, 'consumableG'),
+  )
+
 const ENTITY_CHECKS: Record<(typeof BACKUP_TABLES)[number], EntityCheck> = {
   trips: checkTrip,
   people: checkPerson,
@@ -141,6 +155,7 @@ const ENTITY_CHECKS: Record<(typeof BACKUP_TABLES)[number], EntityCheck> = {
   planEntries: checkPlanEntry,
   gear: checkGear,
   gearCollections: checkGearCollection,
+  tripConsumables: checkTripConsumable,
 }
 
 /** Migrate a plan entry from the pre-Epic-13 shape (one meal per slot, via

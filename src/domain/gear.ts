@@ -2,7 +2,7 @@
 // stored — mirrors how food roll-ups and carries work. The trip-level roll-ups
 // (per person, per carry, food + gear combined) build on baseWeightG.
 
-import type { GearAssignment, GearItem } from './types'
+import type { GearAssignment, GearItem, TripConsumable } from './types'
 
 /** Curated categories offered in the picker; custom strings are also allowed.
  *  Order roughly heaviest-first / Big-3-first for a sensible default listing. */
@@ -214,6 +214,64 @@ export function personGearTotalsForCarry(
   return totals
 }
 
+/** The load a trip consumable contributes on a given carry, or null if it isn't
+ *  carried there. Per-carry overrides (carryLoads) win; otherwise the default
+ *  load applies on the carries it rides (every carry when unscoped). */
+export function consumableLoadOnCarry(
+  c: Pick<TripConsumable, 'baseG' | 'consumableG' | 'carryKeys' | 'carryLoads'>,
+  carryKey: string,
+): GearTotals | null {
+  if (c.carryLoads) {
+    const l = c.carryLoads[carryKey]
+    return l
+      ? { baseG: Math.max(0, l.baseG), wornG: 0, consumableG: Math.max(0, l.consumableG) }
+      : null
+  }
+  const rides = !c.carryKeys || c.carryKeys.length === 0 || c.carryKeys.includes(carryKey)
+  return rides
+    ? { baseG: Math.max(0, c.baseG), wornG: 0, consumableG: Math.max(0, c.consumableG) }
+    : null
+}
+
+/** Base + consumable a person's trip consumables add on one carry. */
+export function personConsumableTotalsForCarry(
+  consumables: Pick<
+    TripConsumable,
+    'personId' | 'baseG' | 'consumableG' | 'carryKeys' | 'carryLoads'
+  >[],
+  personId: string,
+  carryKey: string,
+): GearTotals {
+  let t = ZERO_GEAR_TOTALS
+  for (const c of consumables) {
+    if (c.personId !== personId) continue
+    const load = consumableLoadOnCarry(c, carryKey)
+    if (load) t = addGearTotals(t, load)
+  }
+  return t
+}
+
+/** The heaviest load a consumable reaches across the given carries (or its
+ *  default load when no carries are derived yet) — for at-a-glance summaries. */
+export function consumableMaxLoad(
+  c: Pick<TripConsumable, 'baseG' | 'consumableG' | 'carryKeys' | 'carryLoads'>,
+  carryKeys: readonly string[],
+): GearTotals {
+  if (carryKeys.length === 0) {
+    return { baseG: Math.max(0, c.baseG), wornG: 0, consumableG: Math.max(0, c.consumableG) }
+  }
+  let best = ZERO_GEAR_TOTALS
+  let bestTotal = -1
+  for (const k of carryKeys) {
+    const load = consumableLoadOnCarry(c, k)
+    if (load && gearTotalG(load) > bestTotal) {
+      best = load
+      bestTotal = gearTotalG(load)
+    }
+  }
+  return best
+}
+
 /** Full pack weight for one carry: the constant gear (base + its consumable,
  *  e.g. fuel) plus that carry's food (also consumable). Worn weight is on the
  *  body, not in the pack, so it's excluded. */
@@ -249,18 +307,24 @@ export function fairShareBreakdown(
   assignments: Pick<GearAssignment, 'personId' | 'gearItemId' | 'quantity'>[],
   gearById: ReadonlyMap<string, GearItem>,
   personIds: readonly string[],
+  /** Extra weights not backed by a library item — e.g. trip consumables'
+   *  load on the relevant carry. Split evenly when shared, personal otherwise. */
+  extras: readonly { personId: string; weightG: number; shared?: boolean }[] = [],
 ): FairShare {
   let sharedTotalG = 0
   const personal = new Map<string, number>()
   const physical = new Map<string, number>()
+  const add = (personId: string, weightG: number, shared: boolean | undefined) => {
+    physical.set(personId, (physical.get(personId) ?? 0) + weightG)
+    if (shared) sharedTotalG += weightG
+    else personal.set(personId, (personal.get(personId) ?? 0) + weightG)
+  }
   for (const a of assignments) {
     const g = gearById.get(a.gearItemId)
     if (!g) continue
-    const w = g.weightG * (a.quantity ?? 1)
-    physical.set(a.personId, (physical.get(a.personId) ?? 0) + w)
-    if (g.shared) sharedTotalG += w
-    else personal.set(a.personId, (personal.get(a.personId) ?? 0) + w)
+    add(a.personId, g.weightG * (a.quantity ?? 1), g.shared)
   }
+  for (const e of extras) add(e.personId, e.weightG, e.shared)
   const perPersonSharedG = personIds.length > 0 ? sharedTotalG / personIds.length : 0
   const rows = personIds.map((personId) => {
     const personalG = personal.get(personId) ?? 0
