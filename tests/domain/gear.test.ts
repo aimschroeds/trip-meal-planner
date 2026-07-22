@@ -4,8 +4,10 @@ import {
   carryPackWeightG,
   fairShareBreakdown,
   categoryLabel,
+  defaultWornQuantity,
   gearWeightSplit,
   isBigThree,
+  isWearable,
   assignmentGearTotals,
   ownerPersonIds,
   parseOwners,
@@ -92,6 +94,39 @@ describe('assignmentGearTotals (worn count)', () => {
   it('keeps consumable per unit regardless of worn', () => {
     const fuel = { weightG: 220, consumableWeightG: 100 }
     expect(assignmentGearTotals(fuel, 2, 0)).toEqual({ baseG: 240, wornG: 0, consumableG: 200 })
+  })
+
+  it('wears the whole (non-consumable) weight of a plain item marked worn per trip', () => {
+    // A 35 g sock with no library worn split: 2 pairs, 1 worn on the body → the
+    // worn pair is 35 g worn, the other 35 g packed as base.
+    const sock = { weightG: 35 }
+    expect(assignmentGearTotals(sock, 2, 1)).toEqual({ baseG: 35, wornG: 35, consumableG: 0 })
+  })
+
+  it('defaults a plain (non-wearable) item to fully packed', () => {
+    expect(assignmentGearTotals({ weightG: 35 }, 2, undefined)).toEqual({
+      baseG: 70,
+      wornG: 0,
+      consumableG: 0,
+    })
+  })
+
+  it('wears only the non-depleting part of a worn unit (fuel-in-a-worn-pouch edge)', () => {
+    // Solid part rides on the body when worn; the consumable still depletes.
+    const item = { weightG: 220, consumableWeightG: 100 }
+    expect(assignmentGearTotals(item, 1, 1)).toEqual({ baseG: 0, wornG: 120, consumableG: 100 })
+  })
+})
+
+describe('isWearable / defaultWornQuantity', () => {
+  it('treats an item with worn weight as wearable (worn by default)', () => {
+    expect(isWearable({ wornWeightG: 300 })).toBe(true)
+    expect(defaultWornQuantity({ wornWeightG: 300 }, 2)).toBe(2)
+  })
+
+  it('treats a plain item as not worn by default', () => {
+    expect(isWearable({})).toBe(false)
+    expect(defaultWornQuantity({}, 2)).toBe(0)
   })
 })
 
