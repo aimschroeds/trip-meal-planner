@@ -170,13 +170,13 @@ export function personGearTotals(
   return totals
 }
 
-/** Whether an assignment rides a given carry: unscoped gear (no carryKey) rides
- *  every carry; scoped gear only rides its own. */
+/** Whether an assignment rides a given carry: unscoped gear (no carryKeys, or an
+ *  empty list) rides every carry; scoped gear only rides the carries it lists. */
 export function assignmentOnCarry(
-  a: Pick<GearAssignment, 'carryKey'>,
+  a: Pick<GearAssignment, 'carryKeys'>,
   carryKey: string,
 ): boolean {
-  return a.carryKey === undefined || a.carryKey === carryKey
+  return !a.carryKeys || a.carryKeys.length === 0 || a.carryKeys.includes(carryKey)
 }
 
 /** The base/worn/consumable a person carries on one specific carry — trip-wide
@@ -184,7 +184,7 @@ export function assignmentOnCarry(
 export function personGearTotalsForCarry(
   assignments: Pick<
     GearAssignment,
-    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKey'
+    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKeys'
   >[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,

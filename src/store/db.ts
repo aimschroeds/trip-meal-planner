@@ -133,3 +133,18 @@ db.version(8).stores({
 db.version(9).stores({
   gearCollections: 'id, name',
 })
+
+// Per-carry gear: a single carryKey becomes a set (carryKeys) so an item can
+// ride a subset of carries, not just one. Fold any existing single key into a
+// one-element list. No index change; upgrade only rewrites the field.
+db.version(10).upgrade((tx) =>
+  tx
+    .table('gearAssignments')
+    .toCollection()
+    .modify((a: Record<string, unknown>) => {
+      if (a.carryKey !== undefined) {
+        a.carryKeys = [a.carryKey]
+        delete a.carryKey
+      }
+    }),
+)

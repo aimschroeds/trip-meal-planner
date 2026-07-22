@@ -138,28 +138,35 @@ describe('personGearTotalsForCarry', () => {
     ['soap', { id: 'soap', name: 'Big soap', category: 'hygiene', weightG: 120 }],
   ] as [string, GearItem][])
 
-  it('rides unscoped gear on every carry, scoped gear only on its carry', () => {
+  it('rides unscoped gear on every carry, scoped gear only on its carries', () => {
     const assignments = [
       { personId: 'a', gearItemId: 'jacket' }, // every carry
-      { personId: 'a', gearItemId: 'soap', carryKey: 'c1' }, // only carry c1
+      { personId: 'a', gearItemId: 'soap', carryKeys: ['c1', 'c2'] }, // carries c1 & c2 only
     ]
-    // Carry c1: jacket + soap. Carry c2: jacket only.
+    // Carries c1/c2: jacket + soap. Carry c3: jacket only.
     expect(personGearTotalsForCarry(assignments, map, 'a', 'c1')).toEqual({
       baseG: 420,
       wornG: 0,
       consumableG: 0,
     })
     expect(personGearTotalsForCarry(assignments, map, 'a', 'c2')).toEqual({
+      baseG: 420,
+      wornG: 0,
+      consumableG: 0,
+    })
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c3')).toEqual({
       baseG: 300,
       wornG: 0,
       consumableG: 0,
     })
   })
 
-  it('assignmentOnCarry: undefined scope is everywhere, else exact match', () => {
+  it('assignmentOnCarry: no/empty scope is everywhere, else membership', () => {
     expect(assignmentOnCarry({}, 'c1')).toBe(true)
-    expect(assignmentOnCarry({ carryKey: 'c1' }, 'c1')).toBe(true)
-    expect(assignmentOnCarry({ carryKey: 'c1' }, 'c2')).toBe(false)
+    expect(assignmentOnCarry({ carryKeys: [] }, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryKeys: ['c1'] }, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryKeys: ['c1'] }, 'c2')).toBe(false)
+    expect(assignmentOnCarry({ carryKeys: ['c1', 'c3'] }, 'c3')).toBe(true)
   })
 })
 
