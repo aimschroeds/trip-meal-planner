@@ -2,8 +2,8 @@
 // cloud workspace through a transport, using the pure last-write-wins core in
 // domain/sync.ts. IndexedDB stays the source of truth (PLAN.md §10).
 //
-// Change capture is diff-based, not hook-based: every sync scans the six tables
-// and compares each row against the snapshot stored in `syncMeta`. This catches
+// Change capture is diff-based, not hook-based: every sync scans the synced
+// tables and compares each row against the snapshot stored in `syncMeta`. Catches
 // edits from any write path (repos, CSV import, JSON restore, direct UI writes)
 // without touching write sites, and the dataset is small enough that a full
 // scan is cheap. Likewise, pulls fetch the whole workspace rather than a delta,
@@ -44,6 +44,7 @@ const TABLE_NAME: Record<SyncKind, string> = {
   gearItem: 'gear',
   gearAssignment: 'gearAssignments',
   gearCollection: 'gearCollections',
+  tripConsumable: 'tripConsumables',
 }
 
 // db.table(name) is typed Table<any, any>; the engine only uses id-keyed
