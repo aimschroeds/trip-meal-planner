@@ -8,7 +8,6 @@ import {
   assignmentGearTotals,
   assignmentOnCarry,
   assignmentQuantityOnCarry,
-  carryPackWeightG,
   categoryLabel,
   consumableLoadOnCarry,
   gearTotalG,
@@ -32,12 +31,35 @@ import type {
 } from '../domain/types'
 import { fmtCalories, fmtGrams } from './format'
 
-// Summary-first food + gear pack view. Most gear rides every carry, but some is
-// pinned to one carry (a heavier rain shell, extra soap), so gear is summed per
-// carry; food is consumed, so it varies too — pack weight for a carry = that
-// carry's gear base + gear consumable (fuel) + its food + its packaging. Worn is
-// on the body, shown separately. The headline is base weight and the heaviest
-// pack; the per-carry table and category breakdown are the supporting detail.
+// Per-carry pack-weight view, framed around the questions a hiker actually asks:
+//   S1 how heavy does it get?  → the summary strip (heaviest pack per person)
+//   S2 how does it change leg to leg?  → the per-carry rows read top-to-bottom
+//   S3 what's fixed vs what I'll burn?  → base / consumable / worn columns
+//   S4 am I carrying my fair share?  → the fair-share table
+//   S5 where's my base weight?  → the category breakdown
+// Pack = base + consumable; worn rides on the body and is shown apart. Base here
+// includes food packaging (a wrapper doesn't deplete); consumable is food + fuel
+// + soap. Gear and consumables can vary per carry, so base and consumable both
+// move leg to leg — which is exactly what the per-carry tables surface.
+
+/** One person's (or the group's) weight broken down per carry. */
+interface PackSeries {
+  key: string
+  label: string
+  packByCarry: number[]
+  baseByCarry: number[]
+  consumableByCarry: number[]
+  wornByCarry: number[]
+  calByCarry: number[]
+  /** Index into `carries` of the heaviest pack, or -1 when nothing is planned. */
+  heaviestIdx: number
+  /** The heaviest pack and its split (falls back to notional gear when no carries). */
+  hPack: number
+  hBase: number
+  hConsumable: number
+  hWorn: number
+}
+
 export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }) {
   const items = useLiveQuery(() => db.items.toArray(), [], [] as Item[])
   const meals = useLiveQuery(() => db.meals.toArray(), [], [] as Meal[])
@@ -76,39 +98,82 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
     carryTotals({ carry, personIds, entriesByKey, mealsById, itemsById }),
   )
 
-  const rows = people.map((p) => {
-    // Gear + trip consumables are summed per carry, so items pinned to one leg
-    // (and per-leg consumable loads) count only there.
+  const argmax = (xs: number[]): number => (xs.length ? xs.indexOf(Math.max(...xs)) : -1)
+
+  const personSeries: PackSeries[] = people.map((p) => {
+    // Gear + trip consumables summed per carry (pinned items count only on their
+    // leg). Base = gear base + food packaging; consumable = gear consumable
+    // (fuel) + food; worn rides on the body.
     const gearByCarry = carryKeys.map((k) =>
       addGearTotals(
         personGearTotalsForCarry(assignments, gearById, p.id, k),
         personConsumableTotalsForCarry(consumables, p.id, k),
       ),
     )
-    const packByCarry = perCarry.map((c, i) => {
-      const foodG = c.perPerson.get(p.id)?.weightG ?? 0
-      const packagingG = packagingBaseG(carries[i].slots, [p.id], entriesByKey, mealsById, itemsById)
-      return carryPackWeightG(gearByCarry[i], foodG) + packagingG
-    })
-    const foodCalByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.calories ?? 0)
-    // No carries yet (nothing planned): all gear rides the one notional pack;
-    // consumables fall back to their default load.
+    const baseByCarry = carries.map(
+      (c, i) =>
+        gearByCarry[i].baseG +
+        packagingBaseG(c.slots, [p.id], entriesByKey, mealsById, itemsById),
+    )
+    const consumableByCarry = carries.map(
+      (_, i) => gearByCarry[i].consumableG + (perCarry[i].perPerson.get(p.id)?.weightG ?? 0),
+    )
+    const wornByCarry = gearByCarry.map((g) => g.wornG)
+    const packByCarry = baseByCarry.map((b, i) => b + consumableByCarry[i])
+    const calByCarry = perCarry.map((c) => c.perPerson.get(p.id)?.calories ?? 0)
+
+    // Nothing planned yet: fall back to the notional pack (all gear, one leg).
     const gearAll = addGearTotals(
       personGearTotals(assignments, gearById, p.id),
       personConsumableTotalsForCarry(consumables, p.id, '__none__'),
     )
-    const heaviestPack = packByCarry.length
-      ? Math.max(...packByCarry)
-      : gearAll.baseG + gearAll.consumableG
-    const heaviestIdx = packByCarry.length ? packByCarry.indexOf(heaviestPack) : -1
-    // Base/worn come from the gear on the heaviest carry; everything else in
-    // that pack (food + fuel + packaging) is consumable. Worn is on the body.
-    const gearAtHeaviest = heaviestIdx >= 0 ? gearByCarry[heaviestIdx] : gearAll
-    const base = gearAtHeaviest.baseG
-    const worn = gearAtHeaviest.wornG
-    const consumable = heaviestPack - base
-    return { person: p, base, worn, consumable, heaviestPack, heaviestIdx, packByCarry, foodCalByCarry }
+    const heaviestIdx = argmax(packByCarry)
+    return {
+      key: p.id,
+      label: p.name,
+      packByCarry,
+      baseByCarry,
+      consumableByCarry,
+      wornByCarry,
+      calByCarry,
+      heaviestIdx,
+      hPack: heaviestIdx >= 0 ? packByCarry[heaviestIdx] : gearAll.baseG + gearAll.consumableG,
+      hBase: heaviestIdx >= 0 ? baseByCarry[heaviestIdx] : gearAll.baseG,
+      hConsumable: heaviestIdx >= 0 ? consumableByCarry[heaviestIdx] : gearAll.consumableG,
+      hWorn: heaviestIdx >= 0 ? wornByCarry[heaviestIdx] : gearAll.wornG,
+    }
   })
+
+  const showGroup = people.length > 1
+  const sumByCarry = (pick: (s: PackSeries) => number[]) =>
+    carries.map((_, i) => personSeries.reduce((n, s) => n + pick(s)[i], 0))
+
+  const groupSeries: PackSeries = (() => {
+    const packByCarry = sumByCarry((s) => s.packByCarry)
+    const baseByCarry = sumByCarry((s) => s.baseByCarry)
+    const consumableByCarry = sumByCarry((s) => s.consumableByCarry)
+    const wornByCarry = sumByCarry((s) => s.wornByCarry)
+    const calByCarry = sumByCarry((s) => s.calByCarry)
+    const heaviestIdx = argmax(packByCarry)
+    const at = (xs: number[], fallback: number) => (heaviestIdx >= 0 ? xs[heaviestIdx] : fallback)
+    const sumH = (pick: (s: PackSeries) => number) => personSeries.reduce((n, s) => n + pick(s), 0)
+    return {
+      key: '__group__',
+      label: 'Group',
+      packByCarry,
+      baseByCarry,
+      consumableByCarry,
+      wornByCarry,
+      calByCarry,
+      heaviestIdx,
+      hPack: at(packByCarry, sumH((s) => s.hPack)),
+      hBase: at(baseByCarry, sumH((s) => s.hBase)),
+      hConsumable: at(consumableByCarry, sumH((s) => s.hConsumable)),
+      hWorn: at(wornByCarry, sumH((s) => s.hWorn)),
+    }
+  })()
+
+  const allSeries = showGroup ? [...personSeries, groupSeries] : personSeries
 
   if (
     gear.length === 0 &&
@@ -118,25 +183,17 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   )
     return null
 
-  const showGroup = people.length > 1
   const personName = new Map(people.map((p) => [p.id, p.name]))
-  const groupCarry = carries.map((_, i) => rows.reduce((n, r) => n + r.packByCarry[i], 0))
-  const groupCal = carries.map((_, i) => rows.reduce((n, r) => n + r.foodCalByCarry[i], 0))
-  const groupHeaviest = groupCarry.length ? Math.max(...groupCarry) : 0
 
-  // Category breakdown and fair share describe the pack that drives the
-  // headline — the group's heaviest carry — so per-carry swaps aren't
-  // double-counted. With no pinned gear this is identical to every carry.
-  const groupHeaviestIdx = groupCarry.length ? groupCarry.indexOf(groupHeaviest) : -1
-  const activeKey = groupHeaviestIdx >= 0 ? carryKeys[groupHeaviestIdx] : undefined
+  // Category breakdown and fair share describe the pack that drives the headline
+  // — the group's heaviest carry — so per-carry swaps aren't double-counted.
+  const activeKey = groupSeries.heaviestIdx >= 0 ? carryKeys[groupSeries.heaviestIdx] : undefined
   const activeAssignments =
     activeKey === undefined
       ? assignments
       : assignments
           .filter((a) => assignmentOnCarry(a, activeKey))
           .map((a) => ({ ...a, quantity: assignmentQuantityOnCarry(a, activeKey) }))
-  // Trip consumables on the heaviest carry, as {load, category} for the same
-  // breakdowns. On a no-carry trip they contribute their default load.
   const activeConsumables = consumables
     .map((c) => ({ c, load: consumableLoadOnCarry(c, activeKey ?? '__none__') }))
     .filter((x): x is { c: TripConsumable; load: GearTotals } => x.load !== null)
@@ -151,8 +208,6 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
     })),
   )
 
-  // Group base weight by gear category (the LighterPack-style breakdown),
-  // including trip consumables' base on the heaviest carry.
   const byCategory = new Map<string, number>()
   for (const { c, load } of activeConsumables) {
     byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + load.baseG)
@@ -172,100 +227,139 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   const bigThreeBase = categoryRows.filter(([c]) => isBigThree(c)).reduce((n, [, g]) => n + g, 0)
   const totalBase = categoryRows.reduce((n, [, g]) => n + g, 0)
 
+  const carryLabel = (i: number) =>
+    endpoints[i].from || endpoints[i].to
+      ? `${endpoints[i].from ?? 'start'} → ${endpoints[i].to ?? 'finish'}`
+      : null
+
   return (
-    <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+    <section className="space-y-5 rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="font-semibold text-gray-800">Pack weight — food + gear</h3>
 
-      {/* Headline: the numbers you actually care about, per person. */}
-      <div className="flex flex-wrap gap-3">
-        {rows.map((r) => (
-          <div key={r.person.id} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
-            <div className="font-medium text-gray-800">{r.person.name}</div>
-            <div className="tabular-nums text-lg font-semibold text-emerald-800">
-              {fmtGrams(r.heaviestPack)}
-              <span className="ml-1 text-xs font-normal text-gray-500">
-                pack
-                {r.heaviestIdx >= 0 && carries.length > 1 && ` (heaviest, carry ${carries[r.heaviestIdx].index})`}
-              </span>
-            </div>
-            <div className="tabular-nums text-gray-600">
-              base {fmtGrams(r.base)} · consumable {fmtGrams(r.consumable)}
-              {r.worn ? ` · worn ${fmtGrams(r.worn)}` : ''}
-            </div>
-          </div>
-        ))}
-        {showGroup && (
-          <div className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
-            <div className="font-medium text-gray-800">Group</div>
-            <div className="tabular-nums text-lg font-semibold text-emerald-800">
-              {fmtGrams(rows.reduce((n, r) => n + r.heaviestPack, 0))}
-              <span className="ml-1 text-xs font-normal text-gray-500">pack (per-person heaviest)</span>
-            </div>
-            <div className="tabular-nums text-gray-600">
-              base {fmtGrams(rows.reduce((n, r) => n + r.base, 0))} · consumable{' '}
-              {fmtGrams(rows.reduce((n, r) => n + r.consumable, 0))}
-              {rows.some((r) => r.worn) ? ` · worn ${fmtGrams(rows.reduce((n, r) => n + r.worn, 0))}` : ''}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* One per-carry table: pack weight (top) + that carry's food calories. */}
+      {/* S1 — heaviest pack per person, compared at a glance. Pack = base +
+          consumable; worn is on the body, kept apart from the pack number. */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full max-w-2xl border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-300 text-left text-gray-600">
-              <th className="py-1 pr-2">Carry</th>
-              {people.map((p) => (
-                <th key={p.id} className="py-1 pr-2 text-right">
-                  {p.name}
-                </th>
-              ))}
-              {showGroup && <th className="py-1 pr-2 text-right">Group</th>}
+            <tr className="border-b border-gray-200 text-left text-xs tracking-wide text-gray-500 uppercase">
+              <th className="py-1 pr-3 font-medium">Heaviest pack</th>
+              <th className="py-1 pr-3 text-right font-medium">total</th>
+              <th className="py-1 pr-3 text-right font-medium">base</th>
+              <th className="py-1 pr-3 text-right font-medium">consumable</th>
+              <th className="py-1 text-right font-medium">worn (on body)</th>
             </tr>
           </thead>
           <tbody>
-            {carries.map((carry, i) => (
-              <tr key={carry.index} className="border-b border-gray-100">
-                <td className="py-1.5 pr-2">
-                  <span className="font-medium text-gray-800">Carry {carry.index}</span>
-                  {(endpoints[i].from || endpoints[i].to) && (
-                    <span className="block text-xs text-gray-500">
-                      {endpoints[i].from ?? 'start'} → {endpoints[i].to ?? 'finish'}
+            {allSeries.map((s) => (
+              <tr
+                key={s.key}
+                className={`border-b border-gray-100 ${s.key === '__group__' ? 'text-gray-800' : ''}`}
+              >
+                <td className="py-1.5 pr-3 font-medium text-gray-800">
+                  {s.label}
+                  {s.heaviestIdx >= 0 && carries.length > 1 && (
+                    <span className="ml-1 text-xs font-normal text-gray-400">
+                      carry {carries[s.heaviestIdx].index}
                     </span>
                   )}
                 </td>
-                {rows.map((r) => (
-                  <td key={r.person.id} className="py-1.5 pr-2 text-right tabular-nums">
-                    <div className={r.heaviestIdx === i ? 'font-semibold text-gray-800' : ''}>
-                      {fmtGrams(r.packByCarry[i])}
-                    </div>
-                    <div className="text-xs text-gray-400">{fmtCalories(r.foodCalByCarry[i])}</div>
-                  </td>
-                ))}
-                {showGroup && (
-                  <td className="py-1.5 pr-2 text-right tabular-nums">
-                    <div>{fmtGrams(groupCarry[i])}</div>
-                    <div className="text-xs text-gray-400">{fmtCalories(groupCal[i])}</div>
-                  </td>
-                )}
+                <td className="py-1.5 pr-3 text-right tabular-nums text-lg font-semibold text-emerald-800">
+                  {fmtGrams(s.hPack)}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-gray-600">
+                  {fmtGrams(s.hBase)}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-gray-600">
+                  {fmtGrams(s.hConsumable)}
+                </td>
+                <td className="py-1.5 text-right tabular-nums text-gray-400">
+                  {s.hWorn ? fmtGrams(s.hWorn) : '—'}
+                </td>
               </tr>
             ))}
-            {showGroup && carries.length > 1 && (
-              <tr className="font-medium">
-                <td className="py-1.5 pr-2">Heaviest</td>
-                {rows.map((r) => (
-                  <td key={r.person.id} className="py-1.5 pr-2 text-right tabular-nums">
-                    {fmtGrams(r.heaviestPack)}
-                  </td>
-                ))}
-                <td className="py-1.5 pr-2 text-right tabular-nums">{fmtGrams(groupHeaviest)}</td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
+      {/* S2 + S3 — one table per person (and the group): read a column top to
+          bottom to watch consumable burn down and spot the resupply spikes. */}
+      {carries.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          Plan days and meals to see how weight changes carry by carry.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {allSeries.map((s) => (
+            <div key={s.key}>
+              <h4 className="mb-1 text-sm font-medium text-gray-700">
+                {s.label}
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  heaviest {fmtGrams(s.hPack)}
+                  {s.heaviestIdx >= 0 && carries.length > 1
+                    ? ` · carry ${carries[s.heaviestIdx].index}`
+                    : ''}
+                </span>
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-300 text-xs tracking-wide text-gray-500 uppercase">
+                      <th className="py-1 pr-2 text-left font-medium">Carry</th>
+                      <th className="py-1 px-2 text-right font-medium">Pack</th>
+                      <th className="py-1 px-2 text-right font-medium">Base</th>
+                      <th className="py-1 px-2 text-right font-medium">Consumable</th>
+                      <th className="py-1 px-2 text-right font-medium">Worn</th>
+                      <th className="py-1 pl-2 text-right font-medium">Cal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {carries.map((carry, i) => {
+                      const heavy = s.heaviestIdx === i
+                      const label = carryLabel(i)
+                      return (
+                        <tr
+                          key={carry.index}
+                          className={`border-b border-gray-100 ${heavy ? 'bg-emerald-50/60' : ''}`}
+                        >
+                          <td className="py-1.5 pr-2">
+                            <span
+                              className={`font-medium ${heavy ? 'text-emerald-900' : 'text-gray-800'}`}
+                            >
+                              Carry {carry.index}
+                            </span>
+                            {label && <span className="block text-xs text-gray-500">{label}</span>}
+                          </td>
+                          <td
+                            className={`py-1.5 px-2 text-right tabular-nums ${
+                              heavy ? 'font-semibold text-emerald-900' : 'text-gray-800'
+                            }`}
+                          >
+                            {fmtGrams(s.packByCarry[i])}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums text-gray-600">
+                            {fmtGrams(s.baseByCarry[i])}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums text-gray-600">
+                            {fmtGrams(s.consumableByCarry[i])}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums text-gray-400">
+                            {s.wornByCarry[i] ? fmtGrams(s.wornByCarry[i]) : '—'}
+                          </td>
+                          <td className="py-1.5 pl-2 text-right tabular-nums text-gray-400">
+                            {fmtCalories(s.calByCarry[i])}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* S4 — fair share of shared group gear (measured on the heaviest carry). */}
       {showGroup && fair.sharedTotalG > 0 && (
         <div>
           <h4 className="mb-1 text-sm font-medium text-gray-700">
@@ -311,14 +405,15 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
             </table>
           </div>
           <p className="mt-1 text-xs text-gray-500">
-            Shared gear ({fmtGrams(fair.sharedTotalG)}) is split evenly, so over-packing personal
-            kit is that person's own burden. “Carrying” is what each holds now — a red +N means
-            they're carrying more than their fair total (hand some shared gear to someone with a
-            green −N).
+            Measured on the heaviest carry. Shared gear ({fmtGrams(fair.sharedTotalG)}) is split
+            evenly, so over-packing personal kit is that person's own burden. “Carrying” is what each
+            holds now — a red +N means more than their fair total (hand some shared gear to someone
+            with a green −N).
           </p>
         </div>
       )}
 
+      {/* S5 — where the base weight lives (the LighterPack lens for trimming). */}
       {categoryRows.length > 0 && (
         <details>
           <summary className="cursor-pointer text-sm font-medium text-gray-700">
@@ -353,9 +448,9 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
       )}
 
       <p className="text-xs text-gray-500">
-        Pack weight = that carry’s gear base + consumables (fuel, soap) + its food + its packaging.
-        Gear and trip consumables pinned to a carry (on the Gear tab) count only there. Calories are
-        that carry’s food. Worn weight is on the body, not counted.
+        Pack = base + consumable. Base is gear base + food packaging (a wrapper doesn't deplete);
+        consumable is food + fuel + soap, which burns down between resupplies. Worn weight rides on
+        the body and isn't in the pack. Gear and consumables pinned to a carry count only there.
       </p>
     </section>
   )
