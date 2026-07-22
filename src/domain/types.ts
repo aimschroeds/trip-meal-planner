@@ -184,6 +184,12 @@ export interface GearAssignment {
    *  default). Each value is a carry's key from carryKey() in domain/carries.ts
    *  (its start-resupply id, or 'start' for the first carry). */
   carryKeys?: string[]
+  /** Per-carry quantity overrides for items whose amount changes by leg — e.g.
+   *  2 pairs of socks on one carry, 3 on another. Keyed by carry key; a carry
+   *  absent (or set to 0) isn't carried on that leg. When present this fully
+   *  determines the per-carry amount and supersedes quantity/carryKeys; absent =
+   *  the single `quantity` applies on the carries in `carryKeys`. */
+  carryQuantities?: Record<string, number>
 }
 
 export interface MealComponent {

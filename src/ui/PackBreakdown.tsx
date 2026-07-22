@@ -6,6 +6,7 @@ import { packagingBaseG } from '../domain/units'
 import {
   assignmentGearTotals,
   assignmentOnCarry,
+  assignmentQuantityOnCarry,
   carryPackWeightG,
   categoryLabel,
   isBigThree,
@@ -102,7 +103,11 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   const groupHeaviestIdx = groupCarry.length ? groupCarry.indexOf(groupHeaviest) : -1
   const activeKey = groupHeaviestIdx >= 0 ? carryKeys[groupHeaviestIdx] : undefined
   const activeAssignments =
-    activeKey === undefined ? assignments : assignments.filter((a) => assignmentOnCarry(a, activeKey))
+    activeKey === undefined
+      ? assignments
+      : assignments
+          .filter((a) => assignmentOnCarry(a, activeKey))
+          .map((a) => ({ ...a, quantity: assignmentQuantityOnCarry(a, activeKey) }))
   const fair = fairShareBreakdown(activeAssignments, gearById, personIds)
 
   // Group base weight by gear category (the LighterPack-style breakdown).
