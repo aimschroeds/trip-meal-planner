@@ -294,6 +294,22 @@ export async function setGearWornQuantity(
   })
 }
 
+/** Pin a person's gear assignment to a single carry, or clear it back to riding
+ *  every carry (carryKey = undefined). No-op if not assigned. */
+export async function setGearCarryScope(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  carryKey: string | undefined,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    await db.gearAssignments.put({ ...a, carryKey: carryKey || undefined })
+  })
+}
+
 /** Remove a gear item from a trip entirely (every carrier). */
 export async function removeGearFromTrip(tripId: string, gearItemId: string): Promise<void> {
   await db.gearAssignments
