@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
+  flattenGearCarries,
   removeGearFromTrip,
   setGearCarries,
+  setGearCarryQuantities,
   setGearQuantity,
   setGearWornQuantity,
   toggleGearAssignment,
@@ -11,6 +13,7 @@ import {
 import {
   addGearTotals,
   assignmentGearTotals,
+  assignmentQuantityOnCarry,
   categoryLabel,
   defaultWornQuantity,
   gearTotalG,
@@ -88,11 +91,16 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
   // Total base/worn/consumable an item contributes across everyone carrying it —
   // the header weight reflects quantity (and worn/consumable), not unit weight.
+  // With per-carry amounts it shows the heaviest leg (like the pack headline).
   const itemTotals = (g: GearItem): GearTotals => {
     let t = ZERO_GEAR_TOTALS
     for (const a of assignments) {
       if (a.gearItemId !== g.id) continue
-      t = addGearTotals(t, assignmentGearTotals(g, a.quantity, a.wornQuantity))
+      const qty = a.carryQuantities
+        ? Math.max(0, ...Object.values(a.carryQuantities).map((v) => Math.round(v)))
+        : a.quantity
+      if (a.carryQuantities && (qty ?? 0) <= 0) continue
+      t = addGearTotals(t, assignmentGearTotals(g, qty, a.wornQuantity))
     }
     return t
   }
@@ -294,6 +302,8 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
 // One person's controls for one item: quantity, how many are worn, and (when the
 // trip has more than one carry) which carries it rides. Everything on this line
 // belongs to this one person, so there's no ambiguity about what a control means.
+// "vary by carry" swaps the single quantity for a per-carry amount (2 socks on
+// one leg, 3 on another); it's opt-in so the common case stays a single line.
 function CarrierControls({
   trip,
   g,
@@ -306,19 +316,39 @@ function CarrierControls({
   a: GearAssignment
   /** Set on multi-person trips to label whose line this is. */
   personName?: string
-  /** Empty when the trip has a single carry (then carry-pinning is hidden). */
+  /** Empty when the trip has a single carry (then carry controls are hidden). */
   carryOptions: CarryOption[]
 }) {
-  const qty = a.quantity ?? 1
-  const worn = a.wornQuantity ?? defaultWornQuantity(g, qty)
+  const varying = a.carryQuantities !== undefined
   const active = new Set(a.carryKeys ?? [])
   const everyCarry = active.size === 0
+  // Largest amount on any leg — the ceiling for the (single) worn count.
+  const maxQty = Math.max(1, a.quantity ?? 1, ...Object.values(a.carryQuantities ?? {}))
+  const qty = a.quantity ?? 1
+  const worn = a.wornQuantity ?? defaultWornQuantity(g, varying ? maxQty : qty)
 
   function toggleCarry(key: string) {
     const next = new Set(active)
     if (next.has(key)) next.delete(key)
     else next.add(key)
     void setGearCarries(trip.id, a.personId, g.id, [...next])
+  }
+  function startVary() {
+    const seed: Record<string, number> = {}
+    for (const o of carryOptions) seed[o.key] = assignmentQuantityOnCarry(a, o.key)
+    void setGearCarryQuantities(trip.id, a.personId, g.id, seed)
+  }
+  function stopVary() {
+    const map = a.carryQuantities ?? {}
+    const kept = carryOptions.filter((o) => Math.round(map[o.key] ?? 0) > 0)
+    const flatQty = Math.max(1, ...carryOptions.map((o) => Math.round(map[o.key] ?? 0)))
+    const every = kept.length === carryOptions.length
+    void flattenGearCarries(trip.id, a.personId, g.id, flatQty, every ? [] : kept.map((o) => o.key))
+  }
+  function setCarryQty(key: string, val: number) {
+    const map = { ...(a.carryQuantities ?? {}) }
+    map[key] = Math.max(0, Math.round(val))
+    void setGearCarryQuantities(trip.id, a.personId, g.id, map)
   }
 
   return (
@@ -327,20 +357,22 @@ function CarrierControls({
         <span className="w-16 shrink-0 truncate font-medium text-gray-700">{personName}</span>
       )}
 
-      <span className="flex items-center gap-1" title="How many this person carries">
-        <span className="text-gray-400">×</span>
-        <input
-          type="number"
-          min={1}
-          className="w-12 rounded border border-gray-300 px-1 py-0.5"
-          value={qty}
-          onChange={(e) =>
-            void setGearQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 1)
-          }
-        />
-      </span>
+      {!varying && (
+        <span className="flex items-center gap-1" title="How many this person carries">
+          <span className="text-gray-400">×</span>
+          <input
+            type="number"
+            min={1}
+            className="w-12 rounded border border-gray-300 px-1 py-0.5"
+            value={qty}
+            onChange={(e) =>
+              void setGearQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 1)
+            }
+          />
+        </span>
+      )}
 
-      {qty === 1 ? (
+      {!varying && qty === 1 ? (
         <label
           className="flex items-center gap-1"
           title="Worn on the body (kept out of the pack) rather than packed"
@@ -363,7 +395,7 @@ function CarrierControls({
           <input
             type="number"
             min={0}
-            max={qty}
+            max={maxQty}
             className="w-12 rounded border border-gray-300 px-1 py-0.5"
             value={worn}
             onChange={(e) =>
@@ -373,7 +405,7 @@ function CarrierControls({
         </span>
       )}
 
-      {carryOptions.length > 1 && (
+      {carryOptions.length > 1 && !varying && (
         <span className="flex flex-wrap items-center gap-1">
           <span className="text-gray-400">carries</span>
           <button
@@ -404,6 +436,38 @@ function CarrierControls({
               </button>
             )
           })}
+          <button
+            onClick={startVary}
+            title="Carry a different amount on different carries"
+            className="text-gray-400 underline hover:text-gray-600"
+          >
+            vary by carry
+          </button>
+        </span>
+      )}
+
+      {carryOptions.length > 1 && varying && (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-gray-400">amount per carry</span>
+          {carryOptions.map((o) => (
+            <span key={o.key} className="flex items-center gap-1" title={o.full}>
+              <span className="text-gray-400">{o.short.replace('Carry ', 'C')}</span>
+              <input
+                type="number"
+                min={0}
+                className="w-11 rounded border border-gray-300 px-1 py-0.5"
+                value={Math.round(a.carryQuantities?.[o.key] ?? 0)}
+                onChange={(e) => setCarryQty(o.key, Number(e.target.value) || 0)}
+              />
+            </span>
+          ))}
+          <button
+            onClick={stopVary}
+            title="Use one amount on every carry"
+            className="text-gray-400 underline hover:text-gray-600"
+          >
+            same for all
+          </button>
         </span>
       )}
     </div>
