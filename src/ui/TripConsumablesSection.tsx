@@ -41,7 +41,12 @@ export function TripConsumablesSection({ trip, people }: { trip: Trip; people: P
   })
   const defaultPerson = people[0]?.id
 
-  const sorted = [...consumables].sort((a, b) => a.name.localeCompare(b.name))
+  // Order by insertion (newest first), NOT by name — so the row you're typing
+  // into stays put instead of jumping around as its name changes. New items land
+  // at the top, right under the Add button.
+  const sorted = [...consumables].sort(
+    (a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0) || a.id.localeCompare(b.id),
+  )
 
   return (
     <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -57,6 +62,14 @@ export function TripConsumablesSection({ trip, people }: { trip: Trip; people: P
         <p className="text-sm text-gray-500">Add people in the Setup view first.</p>
       ) : (
         <>
+          <button
+            className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            disabled={!defaultPerson}
+            onClick={() => defaultPerson && void createTripConsumable(trip.id, defaultPerson)}
+          >
+            ➕ Add consumable
+          </button>
+
           {sorted.length > 0 && (
             <ul className="space-y-1.5">
               {sorted.map((c) => (
@@ -70,14 +83,6 @@ export function TripConsumablesSection({ trip, people }: { trip: Trip; people: P
               ))}
             </ul>
           )}
-
-          <button
-            className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-            disabled={!defaultPerson}
-            onClick={() => defaultPerson && void createTripConsumable(trip.id, defaultPerson)}
-          >
-            ➕ Add consumable
-          </button>
         </>
       )}
     </section>

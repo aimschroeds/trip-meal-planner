@@ -414,6 +414,7 @@ export async function createTripConsumable(
     category: 'consumables',
     baseG: 0,
     consumableG: 0,
+    createdAt: Date.now(),
   }
   await db.tripConsumables.add(c)
   return c.id

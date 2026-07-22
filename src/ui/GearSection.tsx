@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
@@ -62,6 +62,18 @@ function splitLabel(t: GearTotals): string | null {
 // fly-in library panel or by applying a collection.
 export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) {
   const [browsing, setBrowsing] = useState(false)
+  // When the library panel closes after adding exactly one item, scroll the
+  // on-trip list to it (and briefly highlight it) so it's easy to find.
+  const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
+  const onTripBeforeAdd = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!scrollTargetId) return
+    document
+      .getElementById(`trip-gear-${scrollTargetId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setScrollTargetId(null), 1600)
+    return () => clearTimeout(t)
+  }, [scrollTargetId])
   const gear = useLiveQuery(() => db.gear.toArray(), [], [] as GearItem[])
   const assignments = useLiveQuery(
     () => db.gearAssignments.where('tripId').equals(trip.id).toArray(),
@@ -130,6 +142,15 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
       if (g) addToTrip(g)
     }
   }
+  function openLibrary() {
+    onTripBeforeAdd.current = new Set(onTripIds)
+    setBrowsing(true)
+  }
+  function closeLibrary() {
+    const added = [...onTripIds].filter((id) => !onTripBeforeAdd.current.has(id))
+    setBrowsing(false)
+    if (added.length === 1) setScrollTargetId(added[0])
+  }
 
   // Group the on-trip gear by category for display.
   const grouped = new Map<string, GearItem[]>()
@@ -151,6 +172,35 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
         <p className="text-sm text-gray-500">Add people in the Setup view first.</p>
       ) : (
         <>
+          {/* Add controls up top, so they're the first thing you reach. */}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white"
+              onClick={openLibrary}
+            >
+              ➕ Add gear from library
+            </button>
+            {collections.length > 0 && (
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                or a collection:
+                <select
+                  className="rounded border border-gray-300 px-1 py-1 text-sm"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) applyCollection(e.target.value)
+                  }}
+                >
+                  <option value="">— pick a kit —</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.gearItemIds.length})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
           {multi && onTrip.length > 0 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
               {people.map((p) => {
@@ -166,7 +216,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
           {onTrip.length === 0 ? (
             <p className="text-sm text-gray-500">
-              Nothing added yet — use “Add gear from library” below.
+              Nothing added yet — use “Add gear from library” above.
             </p>
           ) : (
             <div className="space-y-3">
@@ -181,7 +231,15 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                       const split = splitLabel(totals)
                       const carriers = people.filter((p) => assignmentByKey.has(`${p.id}|${g.id}`))
                       return (
-                        <li key={g.id} className="rounded-md border border-gray-100 bg-gray-50/40 px-2.5 py-2">
+                        <li
+                          key={g.id}
+                          id={`trip-gear-${g.id}`}
+                          className={`rounded-md border px-2.5 py-2 transition-colors ${
+                            scrollTargetId === g.id
+                              ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300'
+                              : 'border-gray-100 bg-gray-50/40'
+                          }`}
+                        >
                           {/* Header: name + badges on the left, weight on the right. */}
                           <div className="flex items-baseline gap-2">
                             <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
@@ -253,34 +311,6 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
               ))}
             </div>
           )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white"
-              onClick={() => setBrowsing(true)}
-            >
-              ➕ Add gear from library
-            </button>
-            {collections.length > 0 && (
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                or a collection:
-                <select
-                  className="rounded border border-gray-300 px-1 py-1 text-sm"
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) applyCollection(e.target.value)
-                  }}
-                >
-                  <option value="">— pick a kit —</option>
-                  {collections.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.gearItemIds.length})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
         </>
       )}
 
@@ -288,7 +318,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
         <GearLibraryPanel
           title={`Add gear — ${trip.name}`}
           subtitle="Check items to add them to this trip"
-          onClose={() => setBrowsing(false)}
+          onClose={closeLibrary}
           isSelected={(g) => onTripIds.has(g.id)}
           onToggle={(g) =>
             onTripIds.has(g.id) ? void removeGearFromTrip(trip.id, g.id) : addToTrip(g)
