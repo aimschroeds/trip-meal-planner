@@ -171,6 +171,9 @@ export interface TripConsumable {
   /** Who carries it. */
   personId: string
   name: string
+  /** Insertion time (epoch ms) — the list is ordered by this, not by name, so it
+   *  keeps a stable order while you type instead of re-sorting alphabetically. */
+  createdAt?: number
   /** Groups it in the pack breakdown; defaults to 'consumables'. */
   category: string
   /** Group consumable shared across the party (fuel) → split evenly in fair
