@@ -287,10 +287,57 @@ export async function setGearWornQuantity(
     const a = await db.gearAssignments.get(id)
     if (!a) return
     const g = await db.gear.get(gearItemId)
-    const total = Math.max(1, a.quantity ?? 1)
+    // Clamp to the largest amount carried on any leg, so worn works with
+    // per-carry quantities too (the per-carry math clamps worn per leg).
+    const total = Math.max(
+      1,
+      a.quantity ?? 1,
+      ...Object.values(a.carryQuantities ?? {}).map((v) => Math.round(v)),
+    )
     const worn = Math.min(Math.max(0, Math.round(wornQuantity)), total)
     const def = g ? defaultWornQuantity(g, total) : total
     await db.gearAssignments.put({ ...a, wornQuantity: worn !== def ? worn : undefined })
+  })
+}
+
+/** Set per-carry quantity overrides for an assignment (2 pairs of socks on one
+ *  carry, 3 on another), or clear them (undefined) back to a single quantity.
+ *  A carry mapped to 0 isn't carried on that leg. No-op if not assigned. */
+export async function setGearCarryQuantities(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  carryQuantities: Record<string, number> | undefined,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    const clean = carryQuantities && Object.keys(carryQuantities).length ? carryQuantities : undefined
+    await db.gearAssignments.put({ ...a, carryQuantities: clean })
+  })
+}
+
+/** Collapse per-carry quantities back to a single quantity + carry subset (the
+ *  UI computes both from the current per-carry amounts), clearing the overrides. */
+export async function flattenGearCarries(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  quantity: number,
+  carryKeys: string[],
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    const q = Math.max(1, Math.round(quantity))
+    await db.gearAssignments.put({
+      ...a,
+      quantity: q > 1 ? q : undefined,
+      carryKeys: carryKeys.length ? carryKeys : undefined,
+      carryQuantities: undefined,
+    })
   })
 }
 
