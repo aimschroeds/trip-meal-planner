@@ -178,12 +178,12 @@ export interface GearAssignment {
    *  e.g. 2 pairs of socks, 1 worn + 1 in the pack. Undefined = the item's
    *  default (all worn for a wearable item, none otherwise). */
   wornQuantity?: number
-  /** Restrict this item to a single carry (trip segment between resupplies) —
-   *  e.g. a heavy rain shell on one leg, a light one on another, or a big soap
-   *  bottle for the first section only. Undefined = rides every carry (the
-   *  default). The value is the carry's key from carryKey() in domain/carries.ts
+  /** Restrict this item to a subset of carries (trip segments between
+   *  resupplies) — e.g. a heavy rain shell on the alpine legs, a big soap bottle
+   *  for the first two sections. Undefined or empty = rides every carry (the
+   *  default). Each value is a carry's key from carryKey() in domain/carries.ts
    *  (its start-resupply id, or 'start' for the first carry). */
-  carryKey?: string
+  carryKeys?: string[]
 }
 
 export interface MealComponent {
