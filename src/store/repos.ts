@@ -315,12 +315,33 @@ export async function setGearCarryQuantities(
     const a = await db.gearAssignments.get(id)
     if (!a) return
     const clean = carryQuantities && Object.keys(carryQuantities).length ? carryQuantities : undefined
-    await db.gearAssignments.put({ ...a, carryQuantities: clean })
+    // Count and weight per-carry overrides are mutually exclusive.
+    await db.gearAssignments.put({ ...a, carryQuantities: clean, carryWeights: undefined })
   })
 }
 
-/** Collapse per-carry quantities back to a single quantity + carry subset (the
- *  UI computes both from the current per-carry amounts), clearing the overrides. */
+/** Set per-carry *weight* overrides (grams) for an assignment — a map that's
+ *  19 g on one section, 15 g on another — or clear them (undefined). A carry
+ *  mapped to 0 isn't carried there. No-op if not assigned. */
+export async function setGearCarryWeights(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  carryWeights: Record<string, number> | undefined,
+): Promise<void> {
+  const id = gearAssignmentId(tripId, personId, gearItemId)
+  await db.transaction('rw', db.gearAssignments, async () => {
+    const a = await db.gearAssignments.get(id)
+    if (!a) return
+    const clean = carryWeights && Object.keys(carryWeights).length ? carryWeights : undefined
+    // Count and weight per-carry overrides are mutually exclusive.
+    await db.gearAssignments.put({ ...a, carryWeights: clean, carryQuantities: undefined })
+  })
+}
+
+/** Collapse per-carry overrides back to a single quantity + carry subset (the
+ *  UI computes both from the current per-carry amounts), clearing both the
+ *  per-carry quantity and per-carry weight overrides. */
 export async function flattenGearCarries(
   tripId: string,
   personId: string,
@@ -338,6 +359,7 @@ export async function flattenGearCarries(
       quantity: q > 1 ? q : undefined,
       carryKeys: carryKeys.length ? carryKeys : undefined,
       carryQuantities: undefined,
+      carryWeights: undefined,
     })
   })
 }
