@@ -8,6 +8,7 @@ import {
   assignmentGearTotals,
   assignmentOnCarry,
   assignmentQuantityOnCarry,
+  assignmentTotalsOnCarry,
   categoryLabel,
   consumableLoadOnCarry,
   gearTotalG,
@@ -188,29 +189,44 @@ export function PackBreakdown({ trip, people }: { trip: Trip; people: Person[] }
   // Category breakdown and fair share describe the pack that drives the headline
   // — the group's heaviest carry — so per-carry swaps aren't double-counted.
   const activeKey = groupSeries.heaviestIdx >= 0 ? carryKeys[groupSeries.heaviestIdx] : undefined
+  const key = activeKey ?? '__none__'
+  // Count-based gear on the heaviest carry; weight-varied gear (a map that
+  // changes grams per leg) is folded in as extras below, like consumables.
   const activeAssignments =
     activeKey === undefined
-      ? assignments
+      ? assignments.filter((a) => !a.carryWeights)
       : assignments
-          .filter((a) => assignmentOnCarry(a, activeKey))
+          .filter((a) => !a.carryWeights && assignmentOnCarry(a, activeKey))
           .map((a) => ({ ...a, quantity: assignmentQuantityOnCarry(a, activeKey) }))
   const activeConsumables = consumables
-    .map((c) => ({ c, load: consumableLoadOnCarry(c, activeKey ?? '__none__') }))
+    .map((c) => ({ c, load: consumableLoadOnCarry(c, key) }))
     .filter((x): x is { c: TripConsumable; load: GearTotals } => x.load !== null)
-  const fair = fairShareBreakdown(
-    activeAssignments,
-    gearById,
-    personIds,
-    activeConsumables.map(({ c, load }) => ({
+  const activeWeightGear = assignments.flatMap((a) => {
+    if (!a.carryWeights) return []
+    const item = gearById.get(a.gearItemId)
+    if (!item) return []
+    const load = assignmentTotalsOnCarry(item, a, key)
+    return gearTotalG(load) > 0 ? [{ a, item, load }] : []
+  })
+  const fair = fairShareBreakdown(activeAssignments, gearById, personIds, [
+    ...activeConsumables.map(({ c, load }) => ({
       personId: c.personId,
       weightG: gearTotalG(load),
       shared: c.shared,
     })),
-  )
+    ...activeWeightGear.map(({ a, item, load }) => ({
+      personId: a.personId,
+      weightG: gearTotalG(load),
+      shared: item.shared,
+    })),
+  ])
 
   const byCategory = new Map<string, number>()
   for (const { c, load } of activeConsumables) {
     byCategory.set(c.category, (byCategory.get(c.category) ?? 0) + load.baseG)
+  }
+  for (const { item, load } of activeWeightGear) {
+    byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + load.baseG)
   }
   for (const a of activeAssignments) {
     const item = gearById.get(a.gearItemId)

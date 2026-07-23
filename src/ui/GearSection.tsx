@@ -6,6 +6,7 @@ import {
   removeGearFromTrip,
   setGearCarries,
   setGearCarryQuantities,
+  setGearCarryWeights,
   setGearQuantity,
   setGearWornQuantity,
   toggleGearAssignment,
@@ -20,6 +21,7 @@ import {
   isBigThree,
   ownerPersonIds,
   personGearTotals,
+  scaledGearTotals,
   ZERO_GEAR_TOTALS,
 } from '../domain/gear'
 import type { GearTotals } from '../domain/gear'
@@ -103,11 +105,16 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
   // Total base/worn/consumable an item contributes across everyone carrying it —
   // the header weight reflects quantity (and worn/consumable), not unit weight.
-  // With per-carry amounts it shows the heaviest leg (like the pack headline).
+  // With per-carry amounts (count or weight) it shows the heaviest leg.
   const itemTotals = (g: GearItem): GearTotals => {
     let t = ZERO_GEAR_TOTALS
     for (const a of assignments) {
       if (a.gearItemId !== g.id) continue
+      if (a.carryWeights) {
+        const w = Math.max(0, ...Object.values(a.carryWeights))
+        if (w > 0) t = addGearTotals(t, scaledGearTotals(g, w))
+        continue
+      }
       const qty = a.carryQuantities
         ? Math.max(0, ...Object.values(a.carryQuantities).map((v) => Math.round(v)))
         : a.quantity
@@ -349,13 +356,16 @@ function CarrierControls({
   /** Empty when the trip has a single carry (then carry controls are hidden). */
   carryOptions: CarryOption[]
 }) {
-  const varying = a.carryQuantities !== undefined
+  const varyingQty = a.carryQuantities !== undefined
+  const varyingWeight = a.carryWeights !== undefined
+  const varying = varyingQty || varyingWeight
   const active = new Set(a.carryKeys ?? [])
   const everyCarry = active.size === 0
-  // Largest amount on any leg — the ceiling for the (single) worn count.
+  const unitW = Math.max(0, g.weightG)
+  // Largest count on any leg — the ceiling for the (single) worn count.
   const maxQty = Math.max(1, a.quantity ?? 1, ...Object.values(a.carryQuantities ?? {}))
   const qty = a.quantity ?? 1
-  const worn = a.wornQuantity ?? defaultWornQuantity(g, varying ? maxQty : qty)
+  const worn = a.wornQuantity ?? defaultWornQuantity(g, varyingQty ? maxQty : qty)
 
   function toggleCarry(key: string) {
     const next = new Set(active)
@@ -363,12 +373,33 @@ function CarrierControls({
     else next.add(key)
     void setGearCarries(trip.id, a.personId, g.id, [...next])
   }
-  function startVary() {
+  // Enter / switch modes, seeding from the current values so nothing jumps.
+  function toCountMode() {
     const seed: Record<string, number> = {}
-    for (const o of carryOptions) seed[o.key] = assignmentQuantityOnCarry(a, o.key)
+    for (const o of carryOptions) {
+      seed[o.key] = a.carryWeights
+        ? unitW > 0
+          ? Math.round((a.carryWeights[o.key] ?? 0) / unitW)
+          : 0
+        : assignmentQuantityOnCarry(a, o.key)
+    }
     void setGearCarryQuantities(trip.id, a.personId, g.id, seed)
   }
+  function toWeightMode() {
+    const seed: Record<string, number> = {}
+    for (const o of carryOptions) {
+      const count = a.carryQuantities
+        ? Math.max(0, Math.round(a.carryQuantities[o.key] ?? 0))
+        : assignmentQuantityOnCarry(a, o.key)
+      seed[o.key] = Math.round(count * unitW)
+    }
+    void setGearCarryWeights(trip.id, a.personId, g.id, seed)
+  }
   function stopVary() {
+    if (varyingWeight) {
+      void setGearCarryWeights(trip.id, a.personId, g.id, undefined) // back to × 1 every carry
+      return
+    }
     const map = a.carryQuantities ?? {}
     const kept = carryOptions.filter((o) => Math.round(map[o.key] ?? 0) > 0)
     const flatQty = Math.max(1, ...carryOptions.map((o) => Math.round(map[o.key] ?? 0)))
@@ -380,6 +411,34 @@ function CarrierControls({
     map[key] = Math.max(0, Math.round(val))
     void setGearCarryQuantities(trip.id, a.personId, g.id, map)
   }
+  function setCarryWeight(key: string, val: number) {
+    const map = { ...(a.carryWeights ?? {}) }
+    map[key] = Math.max(0, Math.round(val))
+    void setGearCarryWeights(trip.id, a.personId, g.id, map)
+  }
+
+  const modeToggle = (
+    <span className="flex items-center gap-1">
+      <button
+        onClick={toCountMode}
+        title="Vary how many of this item you carry per leg"
+        className={`rounded border px-1.5 py-0.5 ${
+          varyingQty ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 text-gray-500'
+        }`}
+      >
+        count ×
+      </button>
+      <button
+        onClick={toWeightMode}
+        title="Vary the item's weight (grams) per leg — e.g. a map with different sheets"
+        className={`rounded border px-1.5 py-0.5 ${
+          varyingWeight ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 text-gray-500'
+        }`}
+      >
+        weight g
+      </button>
+    </span>
+  )
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
@@ -388,7 +447,10 @@ function CarrierControls({
       )}
 
       {!varying && (
-        <span className="flex items-center gap-1" title="How many this person carries">
+        <span
+          className="flex items-center gap-1"
+          title={`Quantity — how many of this item (each ${fmtGrams(unitW)})`}
+        >
           <span className="text-gray-400">×</span>
           <input
             type="number"
@@ -402,38 +464,39 @@ function CarrierControls({
         </span>
       )}
 
-      {!varying && qty === 1 ? (
-        <label
-          className="flex items-center gap-1"
-          title="Worn on the body (kept out of the pack) rather than packed"
-        >
-          <input
-            type="checkbox"
-            checked={worn >= 1}
-            onChange={(e) =>
-              void setGearWornQuantity(trip.id, a.personId, g.id, e.target.checked ? 1 : 0)
-            }
-          />
-          worn
-        </label>
-      ) : (
-        <span
-          className="flex items-center gap-1"
-          title="How many are worn on the body (the rest are packed = base weight)"
-        >
-          <span className="text-gray-400">worn</span>
-          <input
-            type="number"
-            min={0}
-            max={maxQty}
-            className="w-12 rounded border border-gray-300 px-1 py-0.5"
-            value={worn}
-            onChange={(e) =>
-              void setGearWornQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 0)
-            }
-          />
-        </span>
-      )}
+      {!varyingWeight &&
+        (!varying && qty === 1 ? (
+          <label
+            className="flex items-center gap-1"
+            title="Worn on the body (kept out of the pack) rather than packed"
+          >
+            <input
+              type="checkbox"
+              checked={worn >= 1}
+              onChange={(e) =>
+                void setGearWornQuantity(trip.id, a.personId, g.id, e.target.checked ? 1 : 0)
+              }
+            />
+            worn
+          </label>
+        ) : (
+          <span
+            className="flex items-center gap-1"
+            title="How many are worn on the body (the rest are packed = base weight)"
+          >
+            <span className="text-gray-400">worn</span>
+            <input
+              type="number"
+              min={0}
+              max={maxQty}
+              className="w-12 rounded border border-gray-300 px-1 py-0.5"
+              value={worn}
+              onChange={(e) =>
+                void setGearWornQuantity(trip.id, a.personId, g.id, Number(e.target.value) || 0)
+              }
+            />
+          </span>
+        ))}
 
       {carryOptions.length > 1 && !varying && (
         <span className="flex flex-wrap items-center gap-1">
@@ -467,21 +530,29 @@ function CarrierControls({
             )
           })}
           <button
-            onClick={startVary}
-            title="Carry a different amount on different carries"
+            onClick={toCountMode}
+            title="Carry a different number of this item per leg (e.g. 2 vs 3 pairs of socks)"
             className="text-gray-400 underline hover:text-gray-600"
           >
-            vary by carry
+            vary count/carry
+          </button>
+          <button
+            onClick={toWeightMode}
+            title="Carry a different weight of this item per leg (e.g. a map: 19 g vs 15 g of sheets)"
+            className="text-gray-400 underline hover:text-gray-600"
+          >
+            vary weight/carry
           </button>
         </span>
       )}
 
-      {carryOptions.length > 1 && varying && (
+      {carryOptions.length > 1 && varyingQty && (
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-gray-400">amount per carry</span>
+          <span className="text-gray-400">count per carry</span>
+          {modeToggle}
           {carryOptions.map((o) => (
             <span key={o.key} className="flex items-center gap-1" title={o.full}>
-              <span className="text-gray-400">{o.short.replace('Carry ', 'C')}</span>
+              <span className="text-gray-400">{o.short.replace('Carry ', 'C')} ×</span>
               <input
                 type="number"
                 min={0}
@@ -489,6 +560,33 @@ function CarrierControls({
                 value={Math.round(a.carryQuantities?.[o.key] ?? 0)}
                 onChange={(e) => setCarryQty(o.key, Number(e.target.value) || 0)}
               />
+            </span>
+          ))}
+          <button
+            onClick={stopVary}
+            title="Use one amount on every carry"
+            className="text-gray-400 underline hover:text-gray-600"
+          >
+            same for all
+          </button>
+        </span>
+      )}
+
+      {carryOptions.length > 1 && varyingWeight && (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-gray-400">weight per carry (g)</span>
+          {modeToggle}
+          {carryOptions.map((o) => (
+            <span key={o.key} className="flex items-center gap-1" title={o.full}>
+              <span className="text-gray-400">{o.short.replace('Carry ', 'C')}</span>
+              <input
+                type="number"
+                min={0}
+                className="w-14 rounded border border-gray-300 px-1 py-0.5"
+                value={Math.round(a.carryWeights?.[o.key] ?? 0)}
+                onChange={(e) => setCarryWeight(o.key, Number(e.target.value) || 0)}
+              />
+              <span className="text-gray-400">g</span>
             </span>
           ))}
           <button
