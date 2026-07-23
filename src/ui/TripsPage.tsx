@@ -94,10 +94,17 @@ export function TripsPage({
       </form>
 
       {trips.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          No trips yet. Create one above, then add who’s coming and their calorie targets and plan
-          each day. Tip: add a few Foods (and optionally Meals) first so there’s food to plan with.
-        </p>
+        <div className="space-y-2 text-sm text-gray-500">
+          <p>
+            No trips yet. Create one above, then add who’s coming and their calorie targets and plan
+            each day. Tip: add a few Foods (and optionally Meals) first so there’s food to plan with.
+          </p>
+          <p>
+            Already have a <span className="font-medium">shared plan</span> on another device (or
+            just installed this app)? Open the <span className="font-medium">Backup</span> tab and
+            paste your share link to sync it here.
+          </p>
+        </div>
       ) : (
         <ul className="space-y-2">
           {trips.map((trip) => (
