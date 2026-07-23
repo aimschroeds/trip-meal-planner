@@ -46,12 +46,16 @@ export interface SupabaseTransport extends SyncTransport {
 export function supabaseTransport(workspaceId: string): SupabaseTransport {
   return {
     async push(records) {
-      if (records.length === 0) return
+      if (records.length === 0) return []
       const supabase = await getSupabase()
-      const { error } = await supabase
+      // .select() returns the rows as stored, with the server-stamped updated_at
+      // (a trigger sets it), so the caller can adopt the authoritative timestamp.
+      const { data, error } = await supabase
         .from('records')
         .upsert(records.map((r) => toRow(workspaceId, r)), { onConflict: 'workspace_id,kind,id' })
+        .select()
       if (error) throw new Error(error.message)
+      return (data as RecordRow[]).map(fromRow)
     },
 
     async pullAll() {
