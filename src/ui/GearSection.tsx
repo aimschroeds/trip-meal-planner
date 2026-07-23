@@ -226,12 +226,23 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
               Nothing added yet — use “Add gear from library” above.
             </p>
           ) : (
-            <div className="space-y-3">
-              {[...grouped.keys()].map((cat) => (
+            <div className="space-y-4">
+              {[...grouped.keys()].map((cat) => {
+                const catItems = grouped.get(cat)!
+                const catTotal = catItems.reduce((n, g) => n + gearTotalG(itemTotals(g)), 0)
+                return (
                 <div key={cat}>
-                  <h4 className="mb-1 text-xs font-medium tracking-wide text-gray-500 uppercase">
-                    {categoryLabel(cat)}
-                  </h4>
+                  <div className="mb-1.5 flex items-baseline gap-2 border-b border-gray-200 pb-1">
+                    <h4 className="text-sm font-semibold text-gray-800">{categoryLabel(cat)}</h4>
+                    {isBigThree(cat) && (
+                      <span className="rounded bg-emerald-50 px-1 text-xs font-medium text-emerald-800">
+                        big 3
+                      </span>
+                    )}
+                    <span className="text-xs tabular-nums text-gray-500">
+                      {catItems.length} · {fmtGrams(catTotal)}
+                    </span>
+                  </div>
                   <ul className="space-y-1.5">
                     {grouped.get(cat)!.map((g) => {
                       const totals = itemTotals(g)
@@ -315,7 +326,8 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                     })}
                   </ul>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </>
