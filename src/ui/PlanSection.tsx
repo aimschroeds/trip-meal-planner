@@ -864,7 +864,7 @@ function DayCard({
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="mb-2 flex items-center gap-3">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <h4 className="font-semibold text-gray-800">
           Day {day.index}
           {tripDayDate(trip.startDate, day.index) && (
@@ -877,7 +877,7 @@ function DayCard({
           </span>
         </h4>
         <span
-          className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[totals.status]}`}
+          className={`rounded-full px-2 py-0.5 text-xs font-medium sm:ml-auto ${STATUS_STYLES[totals.status]}`}
         >
           {STATUS_LABELS[totals.status]} · {fmtCalories(totals.calories)} (
           {totals.delta >= 0 ? '+' : ''}
