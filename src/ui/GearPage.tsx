@@ -226,12 +226,6 @@ export function GearPage() {
                 <option key={o} value={o} />
               ))}
             </datalist>
-            {/* Live preview so comma-separated names clearly read as several owners. */}
-            {parseOwners(draft.owner).length > 0 && (
-              <span className="mt-1 flex flex-wrap items-center gap-y-1">
-                <OwnerPills owners={parseOwners(draft.owner)} />
-              </span>
-            )}
           </label>
           <label className="block">
             <span className="block text-sm text-gray-600">Category</span>
@@ -295,6 +289,16 @@ export function GearPage() {
             <span title="Group gear one person carries for everyone (tent, pot)">shared</span>
           </label>
         </div>
+        {/* Owner preview on its own line, so comma-separated names read as several
+            owners without disturbing the field row's alignment. */}
+        {parseOwners(draft.owner).length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+            <span className="text-gray-400">
+              owner{parseOwners(draft.owner).length > 1 ? 's' : ''}:
+            </span>
+            <OwnerPills owners={parseOwners(draft.owner)} />
+          </div>
+        )}
         {split && (
           <p className="text-xs text-gray-500">
             Base {fmtGrams(split.baseG)} · worn {fmtGrams(split.wornG)} · consumable{' '}
