@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { deleteGear, GearInUseError, setGearOwners } from '../store/repos'
+import {
+  deleteGear,
+  GearInUseError,
+  renameGearCategory,
+  setGearCategory,
+  setGearOwners,
+} from '../store/repos'
 import {
   GEAR_CATEGORIES,
   categoryLabel,
@@ -69,6 +75,9 @@ export function GearPage() {
   const [ownerFilter, setOwnerFilter] = useState('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkOwner, setBulkOwner] = useState('')
+  const [dragOverCat, setDragOverCat] = useState<string | null>(null)
+  const [renamingCat, setRenamingCat] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -406,25 +415,90 @@ export function GearPage() {
             const list = byCategory.get(category)!
             const catTotal = list.reduce((n, g) => n + g.weightG, 0)
             return (
-              <div key={category}>
+              <div
+                key={category}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  if (dragOverCat !== category) setDragOverCat(category)
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverCat((c) => (c === category ? null : c))
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const id = e.dataTransfer.getData('text/plain')
+                  setDragOverCat(null)
+                  if (id) void setGearCategory(id, category)
+                }}
+                className={`rounded ${
+                  dragOverCat === category ? 'bg-emerald-50 ring-2 ring-emerald-300' : ''
+                }`}
+              >
                 <div className="mb-1 flex items-baseline gap-2 border-b border-gray-200 pb-0.5">
-                  <h3 className="font-medium text-gray-800">
-                    {categoryLabel(category)}
-                    {isBigThree(category) && (
-                      <span className="ml-1 rounded bg-emerald-50 px-1 text-xs text-emerald-800">
-                        big 3
+                  {renamingCat === category ? (
+                    <>
+                      <input
+                        className="rounded border border-gray-300 px-2 py-0.5 text-sm"
+                        value={renameText}
+                        autoFocus
+                        onChange={(e) => setRenameText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            void renameGearCategory(category, renameText)
+                            setRenamingCat(null)
+                          } else if (e.key === 'Escape') setRenamingCat(null)
+                        }}
+                      />
+                      <button
+                        className="text-xs text-emerald-700 underline"
+                        onClick={() => {
+                          void renameGearCategory(category, renameText)
+                          setRenamingCat(null)
+                        }}
+                      >
+                        save
+                      </button>
+                      <button
+                        className="text-xs text-gray-500 underline"
+                        onClick={() => setRenamingCat(null)}
+                      >
+                        cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-medium text-gray-800">
+                        {categoryLabel(category)}
+                        {isBigThree(category) && (
+                          <span className="ml-1 rounded bg-emerald-50 px-1 text-xs text-emerald-800">
+                            big 3
+                          </span>
+                        )}
+                      </h3>
+                      <span className="text-xs text-gray-500 tabular-nums">
+                        {list.length} · {fmtGrams(catTotal)}
                       </span>
-                    )}
-                  </h3>
-                  <span className="text-xs text-gray-500 tabular-nums">
-                    {list.length} · {fmtGrams(catTotal)}
-                  </span>
-                  <button
-                    className="ml-auto text-xs text-emerald-700 underline"
-                    onClick={() => addInCategory(category)}
-                  >
-                    + add here
-                  </button>
+                      <button
+                        className="ml-auto text-xs text-gray-500 underline"
+                        title="Rename this category (moves every item in it)"
+                        onClick={() => {
+                          setRenamingCat(category)
+                          setRenameText(category)
+                        }}
+                      >
+                        rename
+                      </button>
+                      <button
+                        className="text-xs text-emerald-700 underline"
+                        onClick={() => addInCategory(category)}
+                      >
+                        + add here
+                      </button>
+                    </>
+                  )}
                 </div>
                 <table className="w-full border-collapse text-sm">
                   <tbody>
@@ -433,11 +507,23 @@ export function GearPage() {
                       return (
                         <tr
                           key={g.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', g.id)
+                            e.dataTransfer.effectAllowed = 'move'
+                          }}
+                          onDragEnd={() => setDragOverCat(null)}
                           className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
                           onClick={() => edit(g)}
-                          title="Edit this gear"
+                          title="Edit this gear · drag onto another category to reclassify"
                         >
                           <td className="py-1.5 pr-2">
+                            <span
+                              className="mr-1 cursor-grab align-middle text-gray-300 select-none"
+                              aria-hidden
+                            >
+                              ⠿
+                            </span>
                             <input
                               type="checkbox"
                               className="mr-2 align-middle"
