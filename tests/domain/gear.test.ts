@@ -10,6 +10,7 @@ import {
   categoryLabel,
   personConsumableTotalsForCarry,
   personGearTotalsForCarry,
+  scaledGearTotals,
   defaultWornQuantity,
   gearWeightSplit,
   isBigThree,
@@ -196,6 +197,46 @@ describe('personGearTotalsForCarry', () => {
   it('assignmentOnCarry follows per-carry amounts (rides where amount > 0)', () => {
     expect(assignmentOnCarry({ carryQuantities: { c1: 2, c2: 0 } }, 'c1')).toBe(true)
     expect(assignmentOnCarry({ carryQuantities: { c1: 2, c2: 0 } }, 'c2')).toBe(false)
+  })
+
+  it('carries a different WEIGHT per carry when carryWeights is set (a map)', () => {
+    // A 15 g map that's 19 g of sheets on c1, 15 g on c2, not carried on c3.
+    const map = new Map([
+      ['map', { id: 'map', name: 'Map', category: 'misc', weightG: 15 }],
+    ] as [string, GearItem][])
+    const assignments = [{ personId: 'a', gearItemId: 'map', carryWeights: { c1: 19, c2: 15 } }]
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c1')).toEqual({
+      baseG: 19,
+      wornG: 0,
+      consumableG: 0,
+    })
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c2')).toEqual({
+      baseG: 15,
+      wornG: 0,
+      consumableG: 0,
+    })
+    expect(personGearTotalsForCarry(assignments, map, 'a', 'c3')).toEqual({
+      baseG: 0,
+      wornG: 0,
+      consumableG: 0,
+    })
+  })
+
+  it('scaledGearTotals splits a target weight in the item’s proportions', () => {
+    // Plain item → all base.
+    expect(scaledGearTotals({ weightG: 15 }, 19)).toEqual({ baseG: 19, wornG: 0, consumableG: 0 })
+    // Fuel: 220 g = 120 base + 100 consumable; 110 g scales to half each.
+    expect(scaledGearTotals({ weightG: 220, consumableWeightG: 100 }, 110)).toEqual({
+      baseG: 60,
+      wornG: 0,
+      consumableG: 50,
+    })
+  })
+
+  it('assignmentQuantityOnCarry is 0 for weight-varied items (measured in grams)', () => {
+    expect(assignmentQuantityOnCarry({ carryWeights: { c1: 19 } }, 'c1')).toBe(0)
+    expect(assignmentOnCarry({ carryWeights: { c1: 19, c2: 0 } }, 'c1')).toBe(true)
+    expect(assignmentOnCarry({ carryWeights: { c1: 19, c2: 0 } }, 'c2')).toBe(false)
   })
 })
 
