@@ -200,40 +200,45 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <button className="text-sm text-gray-500 underline" onClick={onBack}>
-          ← trips
-        </button>
-        <h2 className="text-xl font-bold text-gray-800">{trip.name}</h2>
-        <nav className="flex gap-2">
-          {(['setup', 'days', 'plan', 'shopping', 'gear', 'carries'] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={
-                v === view
-                  ? 'rounded bg-emerald-700 px-3 py-1 text-sm font-medium text-white'
-                  : 'rounded border border-gray-300 px-3 py-1 text-sm text-gray-600'
-              }
-            >
-              {v}
-            </button>
-          ))}
-        </nav>
-        {view === 'days' && (
-          <label className="ml-auto flex items-center gap-2 text-sm text-gray-600">
-            days
-            <input
-              className="w-16 rounded border border-gray-300 px-2 py-1"
-              inputMode="numeric"
-              value={trip.days.length}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                if (Number.isInteger(n) && n >= 1 && n <= 60) void update(withDayCount(trip, n))
-              }}
-            />
-          </label>
-        )}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <button className="shrink-0 text-sm text-gray-500 underline" onClick={onBack}>
+            ← trips
+          </button>
+          <h2 className="truncate text-xl font-bold text-gray-800">{trip.name}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Sub-tabs on their own row, scrollable so none get cut off on a phone. */}
+          <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {(['setup', 'days', 'plan', 'shopping', 'gear', 'carries'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`shrink-0 rounded px-3 py-1 text-sm ${
+                  v === view
+                    ? 'bg-emerald-700 font-medium text-white'
+                    : 'border border-gray-300 text-gray-600'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </nav>
+          {view === 'days' && (
+            <label className="ml-auto flex shrink-0 items-center gap-2 text-sm text-gray-600">
+              days
+              <input
+                className="w-16 rounded border border-gray-300 px-2 py-1"
+                inputMode="numeric"
+                value={trip.days.length}
+                onChange={(e) => {
+                  const n = Number(e.target.value)
+                  if (Number.isInteger(n) && n >= 1 && n <= 60) void update(withDayCount(trip, n))
+                }}
+              />
+            </label>
+          )}
+        </div>
       </div>
 
       {view === 'setup' && (
