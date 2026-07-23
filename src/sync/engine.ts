@@ -3,16 +3,23 @@
 // domain/sync.ts. IndexedDB stays the source of truth (PLAN.md §10).
 //
 // Change capture is diff-based, not hook-based: every sync scans the synced
-// tables and compares each row against the snapshot stored in `syncMeta`. Catches
-// edits from any write path (repos, CSV import, JSON restore, direct UI writes)
-// without touching write sites, and the dataset is small enough that a full
-// scan is cheap. Likewise, pulls fetch the whole workspace rather than a delta,
-// which sidesteps cross-device clock-skew in an incremental cursor; realtime
-// handles live, incremental updates.
+// tables and compares each row against the snapshot stored in `syncMeta`, so it
+// catches edits from any write path (repos, CSV import, JSON restore, direct UI
+// writes) without touching write sites, and the dataset is small enough that a
+// full scan is cheap. Pulls fetch the whole workspace; realtime handles live
+// incremental updates.
+//
+// Timestamps are SERVER-authoritative: the server stamps `updated_at` on every
+// write and the client adopts that value (returned from push, or seen on pull).
+// So last-write-wins never depends on a device's wall clock — which drifts
+// between devices and used to revert a fresh edit whose local clock ran behind
+// the workspace copy. On top of that, an un-pushed local edit ("dirty") is
+// protected: incoming remote records never overwrite it, so realtime can't
+// clobber a change you just made before it has synced up.
 
 import { db, type SyncMetaRow } from '../store/db'
 import {
-  mergeRecords,
+  pickWinner,
   recordKey,
   SYNC_KINDS,
   type SyncKind,
@@ -22,8 +29,9 @@ import {
 /** How the engine talks to the cloud. Implemented over Supabase in
  *  supabaseTransport.ts; an in-memory version drives the unit tests. */
 export interface SyncTransport {
-  /** Upsert these records (including tombstones) into the workspace. */
-  push(records: SyncRecord[]): Promise<void>
+  /** Upsert these records (including tombstones); the server stamps each one's
+   *  updated_at and the stamped rows are returned so the client can adopt them. */
+  push(records: SyncRecord[]): Promise<SyncRecord[]>
   /** Every record in the workspace. */
   pullAll(): Promise<SyncRecord[]>
 }
@@ -48,7 +56,7 @@ const TABLE_NAME: Record<SyncKind, string> = {
 }
 
 // db.table(name) is typed Table<any, any>; the engine only uses id-keyed
-// toArray/put/delete, which is uniform across the six tables.
+// toArray/put/delete, which is uniform across the synced tables.
 function tableFor(kind: SyncKind) {
   return db.table(TABLE_NAME[kind])
 }
@@ -61,14 +69,21 @@ function sameVersion(a: SyncRecord | undefined, b: SyncRecord): boolean {
   return !!a && a.updatedAt === b.updatedAt && a.deleted === b.deleted
 }
 
-/** Snapshot the local database as SyncRecords. A row whose serialized form
- *  still matches its `syncMeta` snapshot carries its known timestamp; a new or
- *  edited row (or a row deleted since the last sync) is stamped `now` so it
- *  wins last-write-wins against the older cloud copy. */
-async function collectLocalRecords(now: number): Promise<SyncRecord[]> {
+interface LocalRecord {
+  record: SyncRecord
+  /** Edited (or newly created/deleted) since the last sync — not yet on the
+   *  server. Protected: remote never overwrites it, and it's pushed. */
+  dirty: boolean
+}
+
+/** Snapshot the local database as SyncRecords, flagging which have un-synced
+ *  local edits. A clean row carries its last known SERVER timestamp (from
+ *  `syncMeta`); a dirty row's timestamp is a placeholder — it wins by being
+ *  dirty and gets a real server timestamp when pushed. */
+async function collectLocalRecords(): Promise<LocalRecord[]> {
   const metaByKey = new Map((await db.syncMeta.toArray()).map((m) => [m.key, m]))
   const seen = new Set<string>()
-  const out: SyncRecord[] = []
+  const out: LocalRecord[] = []
 
   for (const kind of SYNC_KINDS) {
     const rows = await tableFor(kind).toArray()
@@ -76,22 +91,21 @@ async function collectLocalRecords(now: number): Promise<SyncRecord[]> {
       const id = String(row.id)
       const key = `${kind}:${id}`
       seen.add(key)
-      const snapshot = snapshotOf(row)
       const meta = metaByKey.get(key)
-      const unchanged = !!meta && !meta.deleted && meta.snapshot === snapshot
-      out.push({ kind, id, payload: row, updatedAt: unchanged ? meta.updatedAt : now, deleted: false })
+      const clean = !!meta && !meta.deleted && meta.snapshot === snapshotOf(row)
+      out.push({
+        record: { kind, id, payload: row, updatedAt: meta?.updatedAt ?? 0, deleted: false },
+        dirty: !clean,
+      })
     }
   }
 
-  // Rows that have meta but no live object were deleted locally.
+  // Rows with meta but no live object were deleted locally.
   for (const meta of metaByKey.values()) {
     if (seen.has(meta.key)) continue
     out.push({
-      kind: meta.kind,
-      id: meta.id,
-      payload: null,
-      updatedAt: meta.deleted ? meta.updatedAt : now,
-      deleted: true,
+      record: { kind: meta.kind, id: meta.id, payload: null, updatedAt: meta.updatedAt, deleted: true },
+      dirty: !meta.deleted, // a fresh local delete is dirty; an already-synced tombstone is clean
     })
   }
 
@@ -107,9 +121,10 @@ async function applyLocally(records: SyncRecord[]): Promise<void> {
   }
 }
 
-/** Record the reconciled version of each record so the next scan can tell
- *  what changed and won't re-push what's already in sync. */
+/** Record the reconciled version of each record so the next scan can tell what
+ *  changed and won't re-push what's already in sync. */
 async function writeMeta(records: SyncRecord[]): Promise<void> {
+  if (records.length === 0) return
   const rows: SyncMetaRow[] = records.map((r) => ({
     key: recordKey(r),
     kind: r.kind,
@@ -124,36 +139,59 @@ async function writeMeta(records: SyncRecord[]): Promise<void> {
 async function reconcileCore(
   remote: SyncRecord[],
   transport: SyncTransport | null,
-  now: number,
 ): Promise<SyncResult> {
-  const local = await collectLocalRecords(now)
-  const merged = mergeRecords(local, remote)
-  const localByKey = new Map(local.map((r) => [recordKey(r), r]))
+  const localList = await collectLocalRecords()
+  const localByKey = new Map(localList.map((l) => [recordKey(l.record), l]))
   const remoteByKey = new Map(remote.map((r) => [recordKey(r), r]))
+  const keys = new Set([...localByKey.keys(), ...remoteByKey.keys()])
 
   const toApply: SyncRecord[] = []
   const toPush: SyncRecord[] = []
-  for (const win of merged) {
-    const key = recordKey(win)
-    if (!sameVersion(localByKey.get(key), win)) toApply.push(win)
-    if (transport && !sameVersion(remoteByKey.get(key), win)) toPush.push(win)
+  for (const key of keys) {
+    const l = localByKey.get(key)
+    const r = remoteByKey.get(key)
+    if (l?.dirty) {
+      // An un-pushed local edit wins and is always pushed (its timestamp is a
+      // placeholder equal to the last-synced one, so a version check can't tell
+      // it apart from the remote — but the payload has changed).
+      if (transport) toPush.push(l.record)
+    } else if (l && r) {
+      const win = pickWinner(l.record, r) // server-timestamp LWW
+      if (!sameVersion(l.record, win)) toApply.push(win)
+      if (transport && !sameVersion(r, win)) toPush.push(win)
+    } else {
+      const win = (l?.record ?? r) as SyncRecord
+      if (!l) toApply.push(win) // remote-only → apply locally
+      if (transport && !r) toPush.push(win) // local-only → push
+    }
   }
 
   await applyLocally(toApply)
-  if (transport && toPush.length > 0) await transport.push(toPush)
-  await writeMeta(merged)
-  return { applied: toApply.length, pushed: toPush.length }
+
+  // Meta is written only for rows we applied (adopting the server timestamp) or
+  // pushed (adopting the server's freshly-stamped timestamp). An un-pushed dirty
+  // row is deliberately left untracked so it stays dirty until it syncs up.
+  const written = new Map<string, SyncRecord>()
+  for (const w of toApply) written.set(recordKey(w), w)
+  if (transport && toPush.length > 0) {
+    const stamped = await transport.push(toPush)
+    const stampedByKey = new Map(stamped.map((s) => [recordKey(s), s]))
+    for (const w of toPush) written.set(recordKey(w), stampedByKey.get(recordKey(w)) ?? w)
+  }
+  await writeMeta([...written.values()])
+
+  return { applied: toApply.length, pushed: transport ? toPush.length : 0 }
 }
 
-/** Full two-way sync: pull the whole workspace, resolve last-write-wins
- *  against local state, apply winners locally, and push the ones we own. */
-export async function reconcile(transport: SyncTransport, now = Date.now()): Promise<SyncResult> {
+/** Full two-way sync: pull the whole workspace, resolve last-write-wins against
+ *  local state, apply winners locally, and push local edits (server-stamped). */
+export async function reconcile(transport: SyncTransport): Promise<SyncResult> {
   const remote = await transport.pullAll()
-  return reconcileCore(remote, transport, now)
+  return reconcileCore(remote, transport)
 }
 
-/** Apply a realtime batch from another device (LWW against local state). Does
- *  not push; any newer local edits go up on the next reconcile. */
-export async function applyIncoming(remote: SyncRecord[], now = Date.now()): Promise<SyncResult> {
-  return reconcileCore(remote, null, now)
+/** Apply a realtime batch from another device. Does not push; a remote record
+ *  never overwrites an un-pushed local edit (those go up on the next reconcile). */
+export async function applyIncoming(remote: SyncRecord[]): Promise<SyncResult> {
+  return reconcileCore(remote, null)
 }
