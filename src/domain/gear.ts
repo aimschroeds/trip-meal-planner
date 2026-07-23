@@ -174,21 +174,55 @@ export function personGearTotals(
  *  (a carry with a positive amount rides); otherwise unscoped gear (no carryKeys,
  *  or an empty list) rides every carry and scoped gear only its listed carries. */
 export function assignmentOnCarry(
-  a: Pick<GearAssignment, 'carryKeys' | 'carryQuantities'>,
+  a: Pick<GearAssignment, 'carryKeys' | 'carryQuantities' | 'carryWeights'>,
   carryKey: string,
 ): boolean {
+  if (a.carryWeights) return Math.max(0, a.carryWeights[carryKey] ?? 0) > 0
   if (a.carryQuantities) return Math.round(a.carryQuantities[carryKey] ?? 0) > 0
   return !a.carryKeys || a.carryKeys.length === 0 || a.carryKeys.includes(carryKey)
 }
 
 /** How many units this assignment carries on a given carry: a per-carry override
- *  when set, otherwise the single quantity on the carries it rides (0 if not). */
+ *  when set, otherwise the single quantity on the carries it rides (0 if not).
+ *  Zero for weight-varied items (they're measured in grams, not units). */
 export function assignmentQuantityOnCarry(
-  a: Pick<GearAssignment, 'quantity' | 'carryKeys' | 'carryQuantities'>,
+  a: Pick<GearAssignment, 'quantity' | 'carryKeys' | 'carryQuantities' | 'carryWeights'>,
   carryKey: string,
 ): number {
+  if (a.carryWeights) return 0
   if (a.carryQuantities) return Math.max(0, Math.round(a.carryQuantities[carryKey] ?? 0))
   return assignmentOnCarry(a, carryKey) ? Math.max(1, Math.round(a.quantity ?? 1)) : 0
+}
+
+/** Split a target total weight into base/worn/consumable in the item's library
+ *  proportions — used when an assignment overrides an item's weight per carry.
+ *  A plain item (all base, e.g. a map) stays all base. */
+export function scaledGearTotals(
+  item: Pick<GearItem, 'weightG' | 'wornWeightG' | 'consumableWeightG'>,
+  totalG: number,
+): GearTotals {
+  const w = Math.max(0, totalG)
+  const unit = gearWeightSplit(item)
+  const denom = unit.baseG + unit.wornG + unit.consumableG
+  if (denom <= 0) return { baseG: w, wornG: 0, consumableG: 0 }
+  const f = w / denom
+  return { baseG: unit.baseG * f, wornG: unit.wornG * f, consumableG: unit.consumableG * f }
+}
+
+/** The base/worn/consumable one assignment contributes on a given carry —
+ *  handling per-carry weight (grams) and per-carry / trip-wide quantity (count)
+ *  uniformly. Zero when the item isn't carried on that leg. */
+export function assignmentTotalsOnCarry(
+  item: Pick<GearItem, 'weightG' | 'wornWeightG' | 'consumableWeightG'>,
+  a: Pick<GearAssignment, 'quantity' | 'wornQuantity' | 'carryKeys' | 'carryQuantities' | 'carryWeights'>,
+  carryKey: string,
+): GearTotals {
+  if (a.carryWeights) {
+    const w = Math.max(0, a.carryWeights[carryKey] ?? 0)
+    return w > 0 ? scaledGearTotals(item, w) : ZERO_GEAR_TOTALS
+  }
+  const qty = assignmentQuantityOnCarry(a, carryKey)
+  return qty > 0 ? assignmentGearTotals(item, qty, a.wornQuantity) : ZERO_GEAR_TOTALS
 }
 
 /** The base/worn/consumable a person carries on one specific carry — trip-wide
@@ -196,7 +230,13 @@ export function assignmentQuantityOnCarry(
 export function personGearTotalsForCarry(
   assignments: Pick<
     GearAssignment,
-    'personId' | 'gearItemId' | 'quantity' | 'wornQuantity' | 'carryKeys' | 'carryQuantities'
+    | 'personId'
+    | 'gearItemId'
+    | 'quantity'
+    | 'wornQuantity'
+    | 'carryKeys'
+    | 'carryQuantities'
+    | 'carryWeights'
   >[],
   gearById: ReadonlyMap<string, GearItem>,
   personId: string,
@@ -207,9 +247,7 @@ export function personGearTotalsForCarry(
     if (a.personId !== personId) continue
     const item = gearById.get(a.gearItemId)
     if (!item) continue
-    const qty = assignmentQuantityOnCarry(a, carryKey)
-    if (qty <= 0) continue
-    totals = addGearTotals(totals, assignmentGearTotals(item, qty, a.wornQuantity))
+    totals = addGearTotals(totals, assignmentTotalsOnCarry(item, a, carryKey))
   }
   return totals
 }
