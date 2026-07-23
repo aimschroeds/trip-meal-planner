@@ -544,6 +544,30 @@ export async function setGearOwners(
   })
 }
 
+/** Reclassify a gear item into a different category (e.g. drag-and-drop in the
+ *  library). No-op when the item is missing or already in that category. */
+export async function setGearCategory(id: string, category: string): Promise<void> {
+  const c = category.trim()
+  if (!c) return
+  await db.transaction('rw', db.gear, async () => {
+    const g = await db.gear.get(id)
+    if (!g || g.category === c) return
+    await db.gear.put({ ...g, category: c })
+  })
+}
+
+/** Rename a category: move every gear item from `from` to `to`. No-op when the
+ *  new name is blank or unchanged. */
+export async function renameGearCategory(from: string, to: string): Promise<void> {
+  const target = to.trim()
+  if (!target || target === from) return
+  await db.transaction('rw', db.gear, async () => {
+    const items = await db.gear.where('category').equals(from).toArray()
+    if (items.length === 0) return
+    await db.gear.bulkPut(items.map((g) => ({ ...g, category: target })))
+  })
+}
+
 export async function createTrip(name: string, numDays: number): Promise<string> {
   const trip = makeTrip(crypto.randomUUID(), name, numDays)
   await db.trips.add(trip)
