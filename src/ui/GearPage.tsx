@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
@@ -76,6 +76,9 @@ export function GearPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkOwner, setBulkOwner] = useState('')
   const [dragOverCat, setDragOverCat] = useState<string | null>(null)
+  // The dragged item id is tracked in a ref, not dataTransfer — reliable across
+  // browsers and doesn't depend on drag payload serialisation.
+  const dragItemId = useRef<string | null>(null)
   const [renamingCat, setRenamingCat] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
 
@@ -429,7 +432,8 @@ export function GearPage() {
                 }}
                 onDrop={(e) => {
                   e.preventDefault()
-                  const id = e.dataTransfer.getData('text/plain')
+                  const id = dragItemId.current ?? e.dataTransfer.getData('text/plain')
+                  dragItemId.current = null
                   setDragOverCat(null)
                   if (id) void setGearCategory(id, category)
                 }}
@@ -509,10 +513,14 @@ export function GearPage() {
                           key={g.id}
                           draggable
                           onDragStart={(e) => {
+                            dragItemId.current = g.id
                             e.dataTransfer.setData('text/plain', g.id)
                             e.dataTransfer.effectAllowed = 'move'
                           }}
-                          onDragEnd={() => setDragOverCat(null)}
+                          onDragEnd={() => {
+                            dragItemId.current = null
+                            setDragOverCat(null)
+                          }}
                           className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
                           onClick={() => edit(g)}
                           title="Edit this gear · drag onto another category to reclassify"
