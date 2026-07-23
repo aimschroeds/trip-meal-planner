@@ -3,7 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type MarkRow } from '../store/db'
 import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot, toggleMark } from '../store/repos'
 import {
+  carryEnd,
   carryEndpoints,
+  carryStart,
   deriveCarries,
   keyedSlots,
   type KeyedSlot,
@@ -277,6 +279,33 @@ export function PlanSection({
             ✨ generate all days
           </button>
         </div>
+      )}
+
+      {section === 'plan' && carries.length > 1 && (
+        <section className="rounded-lg border border-gray-200 bg-white p-3">
+          <h4 className="mb-2 text-xs font-medium tracking-wide text-gray-500 uppercase">
+            Carries — how these days split at resupplies
+          </h4>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {carries.map((carry, i) => {
+              const { from, to } = endpoints[i]
+              const startDay = carryStart(carry).dayIndex
+              const endDay = carryEnd(carry).dayIndex
+              const dayRange = startDay === endDay ? `Day ${startDay}` : `Day ${startDay}–${endDay}`
+              return (
+                <span
+                  key={carry.index}
+                  className="rounded-full border border-gray-300 px-2.5 py-1 text-gray-700"
+                >
+                  <span className="font-medium text-gray-800">Carry {carry.index}</span> ·{' '}
+                  {dayRange}
+                  {(from || to) && ` · ${from ?? 'start'} → ${to ?? 'finish'}`} ·{' '}
+                  {fmtGrams(perCarry[i].group.weightG)}
+                </span>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       {section === 'plan' && (
