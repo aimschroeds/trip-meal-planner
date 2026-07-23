@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type MarkRow } from '../store/db'
 import { applyPlanWrites, clearPlanEntry, setPlanEntry, setPlannedSlot, toggleMark } from '../store/repos'
@@ -109,9 +109,11 @@ export function PlanSection({
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
   const prepped = new Set(marks.filter((m) => m.scope === 'prep').map((m) => m.ref))
 
-  // Tick keys include the amount so changing how much you need un-checks the
-  // item — but honor a legacy (amount-less) key so ticks made before amounts
-  // were added stay checked. Toggling migrates to the new key.
+  // Tick keys include the amount, so changing how much you need un-checks the
+  // item. Legacy ticks (from before the amount was in the key) carry no amount,
+  // so they'd match ANY amount and never un-check. A migration effect below
+  // rewrites each to an amount key at its current amount, so it stays checked now
+  // but a later change to that amount then un-checks it.
   const isMarked = (set: Set<string>, key: string, legacy: string) =>
     set.has(key) || set.has(legacy)
   const toggleMarked = (scope: MarkRow['scope'], set: Set<string>, key: string, legacy: string) => {
@@ -134,6 +136,52 @@ export function PlanSection({
     [trip.id],
     [] as PlanEntry[],
   )
+
+  // Migrate legacy (amount-less) buy/pack ticks to amount keys, once, at their
+  // current amount — so long-standing ticks stay checked but start responding to
+  // amount changes. Re-derives keys from the raw data (runs before the early
+  // return, so it can't sit after the derived maps below).
+  const migrated = useRef(new Set<string>())
+  useEffect(() => {
+    const boughtSet = new Set(marks.filter((m) => m.scope === 'buy').map((m) => m.ref))
+    const packedSet = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
+    if (boughtSet.size === 0 && packedSet.size === 0) return
+    const itemsById = new Map(items.map((i) => [i.id, i]))
+    const mealsById = new Map(meals.map((m) => [m.id, m]))
+    const entriesByKey = new Map(allEntries.map((e) => [planKey(e.personId, e.dayIndex, e.slotKey), e]))
+    const carries = deriveCarries(trip, resupplies)
+    const personIds = people.map((p) => p.id)
+    const migrate = (scope: MarkRow['scope'], legacy: string, key: string) => {
+      const once = `${scope}:${legacy}`
+      const set = scope === 'buy' ? boughtSet : packedSet
+      if (key === legacy || migrated.current.has(once) || !set.has(legacy) || set.has(key)) return
+      migrated.current.add(once)
+      void toggleMark(trip.id, scope, key) // add the amount key first (stays checked)
+      void toggleMark(trip.id, scope, legacy) // then drop the amount-less key
+    }
+    for (const s of tripShoppingList({ carries, personIds, entriesByKey, mealsById, itemsById })) {
+      migrate('buy', s.item.id, `${s.item.id}:${Math.round(s.grams)}`)
+    }
+    for (const carry of carries) {
+      for (const l of carryShoppingList({ carry, personIds, entriesByKey, mealsById, itemsById })) {
+        const legacy = `${carry.index}:${l.item.id}`
+        migrate('pack', legacy, `${legacy}:${Math.round(l.grams)}`)
+      }
+      for (const ref of carry.slots) {
+        for (const pid of personIds) {
+          const lines = entryItemLines(
+            entriesByKey.get(planKey(pid, ref.dayIndex, ref.key)),
+            mealsById,
+            itemsById,
+          )
+          for (const l of lines) {
+            const legacy = `${carry.index}:${ref.dayIndex}:${ref.key}:${pid}:${l.item.id}`
+            migrate('pack', legacy, `${legacy}:${Math.round(l.grams)}`)
+          }
+        }
+      }
+    }
+  }, [marks, items, meals, allEntries, resupplies, people, trip])
 
   const person = people.find((p) => p.id === personId) ?? people[0]
   if (!person) {
