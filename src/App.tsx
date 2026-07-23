@@ -27,9 +27,25 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center gap-8 px-6 py-4">
-          <h1 className="text-lg font-bold text-emerald-800">Hiking Trip Meal &amp; Gear Planner</h1>
-          <nav className="flex gap-4">
+        <div className="mx-auto max-w-4xl px-4 py-3 sm:px-6">
+          {/* Top row: title + actions. Title truncates so it never pushes the
+              buttons off-screen on a phone. */}
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="truncate text-base font-bold text-emerald-800 sm:text-lg">
+              Hiking Trip Meal &amp; Gear Planner
+            </h1>
+            <div className="flex shrink-0 items-center gap-3">
+              <PwaInstallButton />
+              <button
+                className="text-sm text-gray-500 hover:text-gray-800"
+                onClick={() => setShowHelp(true)}
+              >
+                Help
+              </button>
+            </div>
+          </div>
+          {/* Nav on its own row, horizontally scrollable so tabs never get cut. */}
+          <nav className="-mb-px mt-2 flex gap-5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => (
               <button
                 key={t}
@@ -38,28 +54,19 @@ function App() {
                   // Clicking "Trips" always returns to the trip list.
                   if (t === 'Trips') setSelectedTripId(null)
                 }}
-                className={
+                className={`shrink-0 border-b-2 pb-1 ${
                   t === tab
-                    ? 'border-b-2 border-emerald-700 font-medium text-emerald-800'
-                    : 'text-gray-500 hover:text-gray-800'
-                }
+                    ? 'border-emerald-700 font-medium text-emerald-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
               >
                 {t}
               </button>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <PwaInstallButton />
-            <button
-              className="text-sm text-gray-500 hover:text-gray-800"
-              onClick={() => setShowHelp(true)}
-            >
-              Help
-            </button>
-          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl space-y-6 px-6 py-6">
+      <main className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
         {showHelp && (
           <HelpPanel
             onDismiss={() => {
