@@ -264,7 +264,7 @@ export function ItemsPage() {
           <label className="block grow">
             <span className="block text-sm text-gray-600">Name</span>
             <input
-              className="mt-1 w-full min-w-72 rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full min-w-0 rounded border border-gray-300 px-2 py-1 sm:min-w-72"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Dal & rice with spinach"

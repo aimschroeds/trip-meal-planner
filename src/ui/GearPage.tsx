@@ -79,6 +79,9 @@ export function GearPage() {
   // The dragged item id is tracked in a ref, not dataTransfer — reliable across
   // browsers and doesn't depend on drag payload serialisation.
   const dragItemId = useRef<string | null>(null)
+  const formRef = useRef<HTMLElement>(null)
+  const scrollToForm = () =>
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const [renamingCat, setRenamingCat] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
 
@@ -117,6 +120,7 @@ export function GearPage() {
     setDraft(toDraft(g))
     setEditingId(g.id)
     setError(null)
+    scrollToForm() // the form is at the top — bring it into view (esp. on mobile)
   }
 
   async function remove(id: string) {
@@ -157,6 +161,7 @@ export function GearPage() {
     setDraft({ ...emptyDraft, category })
     setEditingId(null)
     setError(null)
+    scrollToForm()
   }
 
   // Distinct owners in the library, for the filter dropdown + the form datalist.
@@ -198,13 +203,16 @@ export function GearPage() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+      <section
+        ref={formRef}
+        className="scroll-mt-4 space-y-3 rounded-lg border border-gray-200 bg-white p-4"
+      >
         <h2 className="font-semibold text-gray-800">{editingId ? 'Edit gear' : 'Add gear'}</h2>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="block">
             <span className="block text-sm text-gray-600">Name</span>
             <input
-              className={`${inputClass} w-48`}
+              className={`${inputClass} w-full sm:w-48`}
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Zpacks Duplex"
@@ -213,7 +221,7 @@ export function GearPage() {
           <label className="block">
             <span className="block text-sm text-gray-600">Brand</span>
             <input
-              className={`${inputClass} w-32`}
+              className={`${inputClass} w-full sm:w-32`}
               value={draft.brand}
               onChange={(e) => setDraft({ ...draft, brand: e.target.value })}
               placeholder="optional"
@@ -227,7 +235,7 @@ export function GearPage() {
               Owner(s)
             </span>
             <input
-              className={`${inputClass} w-48`}
+              className={`${inputClass} w-full sm:w-48`}
               list="gear-owners"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
@@ -242,7 +250,7 @@ export function GearPage() {
           <label className="block">
             <span className="block text-sm text-gray-600">Category</span>
             <input
-              className={`${inputClass} w-36`}
+              className={`${inputClass} w-full sm:w-36`}
               list="gear-categories"
               value={draft.category}
               onChange={(e) => setDraft({ ...draft, category: e.target.value })}
@@ -259,7 +267,7 @@ export function GearPage() {
           <label className="block">
             <span className="block text-sm text-gray-600">Total g</span>
             <input
-              className={`${inputClass} w-20`}
+              className={`${inputClass} w-full sm:w-20`}
               inputMode="numeric"
               value={draft.weightG}
               onChange={(e) => setDraft({ ...draft, weightG: e.target.value })}
@@ -270,7 +278,7 @@ export function GearPage() {
               Worn g
             </span>
             <input
-              className={`${inputClass} w-20`}
+              className={`${inputClass} w-full sm:w-20`}
               inputMode="numeric"
               value={draft.wornWeightG}
               onChange={(e) => setDraft({ ...draft, wornWeightG: e.target.value })}
@@ -285,7 +293,7 @@ export function GearPage() {
               Consumable g
             </span>
             <input
-              className={`${inputClass} w-24`}
+              className={`${inputClass} w-full sm:w-24`}
               inputMode="numeric"
               value={draft.consumableWeightG}
               onChange={(e) => setDraft({ ...draft, consumableWeightG: e.target.value })}
