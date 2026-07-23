@@ -471,6 +471,16 @@ export function GearPage() {
                           </td>
                           <td className="py-1.5 pr-2 text-right whitespace-nowrap">
                             <button
+                              className="text-emerald-700 underline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                edit(g)
+                              }}
+                            >
+                              edit
+                            </button>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <button
                               className="text-red-700 underline"
                               onClick={(e) => {
                                 e.stopPropagation()
