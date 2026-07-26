@@ -37,12 +37,20 @@ import { VegBadge } from './VegBadge'
 const DAY_TYPES: DayType[] = ['small', 'average', 'big', 'huge']
 const MAINS: MainMealType[] = ['brekkie', 'lunch', 'dinner']
 
+/** A trip's open sub-tab. Lifted to App so leaving and returning to the trip
+ *  (e.g. a detour to the Gear library) lands back on the same sub-tab. */
+export type TripView = 'setup' | 'days' | 'plan' | 'shopping' | 'gear' | 'carries'
+
 export function TripsPage({
   selectedId,
   onSelect,
+  view,
+  onView,
 }: {
   selectedId: string | null
   onSelect: (id: string | null) => void
+  view: TripView
+  onView: (v: TripView) => void
 }) {
   const trips = useLiveQuery(() => db.trips.toArray(), [], [] as Trip[])
   const [name, setName] = useState('')
@@ -50,7 +58,7 @@ export function TripsPage({
 
   const selected = trips.find((t) => t.id === selectedId)
   if (selected) {
-    return <TripDetail trip={selected} onBack={() => onSelect(null)} />
+    return <TripDetail trip={selected} onBack={() => onSelect(null)} view={view} onView={onView} />
   }
 
   const days = Number(numDays)
@@ -135,10 +143,17 @@ export function TripsPage({
   )
 }
 
-function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
-  const [view, setView] = useState<'setup' | 'days' | 'plan' | 'shopping' | 'gear' | 'carries'>(
-    'setup',
-  )
+function TripDetail({
+  trip,
+  onBack,
+  view,
+  onView,
+}: {
+  trip: Trip
+  onBack: () => void
+  view: TripView
+  onView: (v: TripView) => void
+}) {
   const [descBusy, setDescBusy] = useState(false)
   const [descNote, setDescNote] = useState<string | null>(null)
   const people = useLiveQuery(
@@ -213,7 +228,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
             {(['setup', 'days', 'plan', 'shopping', 'gear', 'carries'] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setView(v)}
+                onClick={() => onView(v)}
                 className={`shrink-0 rounded px-3 py-1 text-sm ${
                   v === view
                     ? 'bg-emerald-700 font-medium text-white'

@@ -4,7 +4,7 @@ import { HelpPanel } from './ui/HelpPanel'
 import { ItemsPage } from './ui/ItemsPage'
 import { GearPage } from './ui/GearPage'
 import { MealsPage } from './ui/MealsPage'
-import { TripsPage } from './ui/TripsPage'
+import { TripsPage, type TripView } from './ui/TripsPage'
 import { ReloadPrompt } from './ui/ReloadPrompt'
 import { PwaInstallButton } from './ui/PwaInstallButton'
 import { readJoinToken } from './sync/workspace'
@@ -18,9 +18,11 @@ function App() {
   // Opening a share link (…#join=<token>) lands on Backup, where the sync
   // panel offers to connect.
   const [tab, setTab] = useState<Tab>(() => (readJoinToken() ? 'Backup' : 'Trips'))
-  // Which trip is open, lifted here so it survives switching to another top
-  // tab and back (see the nav handler below for the "Trips" click behavior).
+  // Which trip is open, and its sub-tab, lifted here so both survive switching
+  // to another top tab and back — so a detour to (say) the Gear library returns
+  // you to the same trip sub-tab in one click (see the nav handler below).
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
+  const [tripView, setTripView] = useState<TripView>('setup')
   // Show the intro until dismissed once; re-openable via the Help button.
   const [showHelp, setShowHelp] = useState(() => localStorage.getItem(HELP_DISMISSED) === null)
 
@@ -78,25 +80,18 @@ function App() {
             }}
           />
         )}
-        {/* Every tab stays mounted (just hidden) once visited, so its
-         *  in-progress state — a trip's setup/gear/etc. sub-tab, a form
-         *  draft, a filter — is still there with one click back, instead of
-         *  resetting on every switch away. */}
-        <div hidden={tab !== 'Trips'}>
-          <TripsPage selectedId={selectedTripId} onSelect={setSelectedTripId} />
-        </div>
-        <div hidden={tab !== 'Food'}>
-          <ItemsPage />
-        </div>
-        <div hidden={tab !== 'Meals'}>
-          <MealsPage />
-        </div>
-        <div hidden={tab !== 'Gear'}>
-          <GearPage />
-        </div>
-        <div hidden={tab !== 'Backup'}>
-          <BackupPage />
-        </div>
+        {tab === 'Trips' && (
+          <TripsPage
+            selectedId={selectedTripId}
+            onSelect={setSelectedTripId}
+            view={tripView}
+            onView={setTripView}
+          />
+        )}
+        {tab === 'Food' && <ItemsPage />}
+        {tab === 'Meals' && <MealsPage />}
+        {tab === 'Gear' && <GearPage />}
+        {tab === 'Backup' && <BackupPage />}
       </main>
       <ReloadPrompt />
     </div>
