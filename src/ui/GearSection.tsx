@@ -38,6 +38,7 @@ import type {
 } from '../domain/types'
 import { fmtGrams } from './format'
 import { OwnerPills } from './OwnerPills'
+import { ownerButtonClass } from './ownerColor'
 import { GearLibraryPanel } from './GearLibraryPanel'
 
 interface CarryOption {
@@ -249,7 +250,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                     onClick={() => setViewPersonId(p.id)}
                     className={`rounded-full border px-2 py-0.5 text-xs tabular-nums ${
                       viewPerson === p.id
-                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        ? ownerButtonClass(p.name)
                         : 'border-gray-300 text-gray-600 hover:border-gray-400'
                     }`}
                   >
@@ -346,7 +347,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                                     onClick={() => void toggleGearAssignment(trip.id, p.id, g.id)}
                                     className={`rounded-full border px-2 py-0.5 text-xs ${
                                       on
-                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        ? ownerButtonClass(p.name)
                                         : 'border-gray-300 text-gray-500 hover:border-gray-400'
                                     }`}
                                   >
