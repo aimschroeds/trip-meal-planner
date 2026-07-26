@@ -66,6 +66,9 @@ function splitLabel(t: GearTotals): string | null {
 // fly-in library panel or by applying a collection.
 export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) {
   const [browsing, setBrowsing] = useState(false)
+  // Whose gear to show: null = everyone, or a person id to see just what that
+  // one hiker carries (their share of the weight, and only their control line).
+  const [viewPersonId, setViewPersonId] = useState<string | null>(null)
   // When the library panel closes after adding exactly one item, scroll the
   // on-trip list to it (and briefly highlight it) so it's easy to find.
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
@@ -113,11 +116,13 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
 
   // Total base/worn/consumable an item contributes across everyone carrying it —
   // the header weight reflects quantity (and worn/consumable), not unit weight.
-  // With per-carry amounts (count or weight) it shows the heaviest leg.
-  const itemTotals = (g: GearItem): GearTotals => {
+  // With per-carry amounts (count or weight) it shows the heaviest leg. Pass a
+  // person id to count only that hiker's share (used by the per-person view).
+  const itemTotals = (g: GearItem, filterPersonId?: string | null): GearTotals => {
     let t = ZERO_GEAR_TOTALS
     for (const a of assignments) {
       if (a.gearItemId !== g.id) continue
+      if (filterPersonId && a.personId !== filterPersonId) continue
       if (a.carryWeights) {
         const w = Math.max(0, ...Object.values(a.carryWeights))
         if (w > 0) t = addGearTotals(t, scaledGearTotals(g, w))
@@ -133,6 +138,8 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
   }
   const defaultCarrier = people[0]?.id
   const multi = people.length > 1
+  // The active person filter, ignoring a stale id (e.g. person just removed).
+  const viewPerson = viewPersonId && people.some((p) => p.id === viewPersonId) ? viewPersonId : null
 
   const byCatName = (a: GearItem, b: GearItem) =>
     Number(isBigThree(b.category)) - Number(isBigThree(a.category)) ||
@@ -142,6 +149,10 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     .map((id) => gearById.get(id))
     .filter((g): g is GearItem => !!g)
     .sort(byCatName)
+  // When viewing one hiker, show only the gear they carry.
+  const visibleOnTrip = viewPerson
+    ? onTrip.filter((g) => assignmentByKey.has(`${viewPerson}|${g.id}`))
+    : onTrip
 
   function addToTrip(g: GearItem) {
     if (onTripIds.has(g.id)) return
@@ -167,9 +178,9 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     if (added.length === 1) setScrollTargetId(added[0])
   }
 
-  // Group the on-trip gear by category for display.
+  // Group the (possibly person-filtered) on-trip gear by category for display.
   const grouped = new Map<string, GearItem[]>()
-  for (const g of onTrip) {
+  for (const g of visibleOnTrip) {
     const list = grouped.get(g.category) ?? []
     list.push(g)
     grouped.set(g.category, list)
@@ -216,14 +227,34 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
             )}
           </div>
 
+          {/* Per-hiker view switch: Everyone, or one person's own gear. */}
           {multi && onTrip.length > 0 && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-gray-400">view</span>
+              <button
+                onClick={() => setViewPersonId(null)}
+                className={`rounded-full border px-2 py-0.5 text-xs tabular-nums ${
+                  viewPerson === null
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                Everyone
+              </button>
               {people.map((p) => {
                 const t = personGearTotals(assignments, gearById, p.id)
                 return (
-                  <span key={p.id} className="tabular-nums">
-                    {p.name}: {fmtGrams(gearTotalG(t))}
-                  </span>
+                  <button
+                    key={p.id}
+                    onClick={() => setViewPersonId(p.id)}
+                    className={`rounded-full border px-2 py-0.5 text-xs tabular-nums ${
+                      viewPerson === p.id
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    {p.name} · {fmtGrams(gearTotalG(t))}
+                  </button>
                 )
               })}
             </div>
@@ -233,11 +264,17 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
             <p className="text-sm text-gray-500">
               Nothing added yet — use “Add gear from library” above.
             </p>
+          ) : visibleOnTrip.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              {people.find((p) => p.id === viewPerson)?.name} isn’t carrying any gear yet — assign
+              some with the “carried by” chips (switch to <span className="font-medium">Everyone</span>{' '}
+              to see the full list).
+            </p>
           ) : (
             <div className="space-y-4">
               {[...grouped.keys()].map((cat) => {
                 const catItems = grouped.get(cat)!
-                const catTotal = catItems.reduce((n, g) => n + gearTotalG(itemTotals(g)), 0)
+                const catTotal = catItems.reduce((n, g) => n + gearTotalG(itemTotals(g, viewPerson)), 0)
                 return (
                 <div key={cat}>
                   <div className="mb-1.5 flex items-baseline gap-2 border-b border-gray-200 pb-1">
@@ -253,9 +290,13 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                   </div>
                   <ul className="space-y-1.5">
                     {grouped.get(cat)!.map((g) => {
-                      const totals = itemTotals(g)
+                      const totals = itemTotals(g, viewPerson)
                       const split = splitLabel(totals)
-                      const carriers = people.filter((p) => assignmentByKey.has(`${p.id}|${g.id}`))
+                      const carriers = people.filter(
+                        (p) =>
+                          assignmentByKey.has(`${p.id}|${g.id}`) &&
+                          (!viewPerson || p.id === viewPerson),
+                      )
                       return (
                         <li
                           key={g.id}
