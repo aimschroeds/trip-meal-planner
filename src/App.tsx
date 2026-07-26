@@ -18,8 +18,8 @@ function App() {
   // Opening a share link (…#join=<token>) lands on Backup, where the sync
   // panel offers to connect.
   const [tab, setTab] = useState<Tab>(() => (readJoinToken() ? 'Backup' : 'Trips'))
-  // Which trip is open, lifted here so clicking the "Trips" nav returns to the
-  // trip list even from inside a trip's Setup/Days/Plan/Carries views.
+  // Which trip is open, lifted here so it survives switching to another top
+  // tab and back (see the nav handler below for the "Trips" click behavior).
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   // Show the intro until dismissed once; re-openable via the Help button.
   const [showHelp, setShowHelp] = useState(() => localStorage.getItem(HELP_DISMISSED) === null)
@@ -50,9 +50,12 @@ function App() {
               <button
                 key={t}
                 onClick={() => {
+                  // Re-clicking "Trips" while already there backs out to the
+                  // trip list; clicking it from elsewhere returns to whatever
+                  // trip (and its setup/gear/etc. sub-tab) you had open — the
+                  // one-click "back" to where you were.
+                  if (t === 'Trips' && tab === 'Trips') setSelectedTripId(null)
                   setTab(t)
-                  // Clicking "Trips" always returns to the trip list.
-                  if (t === 'Trips') setSelectedTripId(null)
                 }}
                 className={`shrink-0 border-b-2 pb-1 ${
                   t === tab
@@ -75,13 +78,25 @@ function App() {
             }}
           />
         )}
-        {tab === 'Trips' && (
+        {/* Every tab stays mounted (just hidden) once visited, so its
+         *  in-progress state — a trip's setup/gear/etc. sub-tab, a form
+         *  draft, a filter — is still there with one click back, instead of
+         *  resetting on every switch away. */}
+        <div hidden={tab !== 'Trips'}>
           <TripsPage selectedId={selectedTripId} onSelect={setSelectedTripId} />
-        )}
-        {tab === 'Food' && <ItemsPage />}
-        {tab === 'Meals' && <MealsPage />}
-        {tab === 'Gear' && <GearPage />}
-        {tab === 'Backup' && <BackupPage />}
+        </div>
+        <div hidden={tab !== 'Food'}>
+          <ItemsPage />
+        </div>
+        <div hidden={tab !== 'Meals'}>
+          <MealsPage />
+        </div>
+        <div hidden={tab !== 'Gear'}>
+          <GearPage />
+        </div>
+        <div hidden={tab !== 'Backup'}>
+          <BackupPage />
+        </div>
       </main>
       <ReloadPrompt />
     </div>
