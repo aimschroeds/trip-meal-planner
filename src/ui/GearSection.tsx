@@ -514,18 +514,6 @@ function CarrierControls({
         <span className="w-16 shrink-0 truncate font-medium text-gray-700">{personName}</span>
       )}
 
-      <label
-        className="flex items-center gap-1"
-        title="Ticked off on the pack checklist (shared with the shopping tab)"
-      >
-        <input
-          type="checkbox"
-          checked={isPacked}
-          onChange={() => void toggleGearPacked(trip.id, a.personId, g.id, qty, packed)}
-        />
-        packed
-      </label>
-
       {!varying && (
         <span
           className="flex items-center gap-1"
@@ -678,6 +666,20 @@ function CarrierControls({
           </button>
         </span>
       )}
+
+      {/* Packed is a pre-trip check-off ("it's in my pack, done"), not a
+       *  property of the item like worn — so it sits apart, at the far right. */}
+      <label
+        className="ml-auto flex shrink-0 items-center gap-1"
+        title="Ticked off on the pack checklist (shared with the shopping tab)"
+      >
+        <input
+          type="checkbox"
+          checked={isPacked}
+          onChange={() => void toggleGearPacked(trip.id, a.personId, g.id, qty, packed)}
+        />
+        packed
+      </label>
     </div>
   )
 }
