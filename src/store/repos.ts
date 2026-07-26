@@ -565,6 +565,63 @@ export async function setGearOwners(
   })
 }
 
+/** Bulk-set the "shared" flag on several gear items at once. */
+export async function setGearShared(ids: string[], shared: boolean): Promise<void> {
+  await db.transaction('rw', db.gear, async () => {
+    const items = await db.gear.bulkGet(ids)
+    const updated = items
+      .filter((g): g is GearItem => !!g)
+      .map((g) => ({ ...g, shared: shared || undefined }))
+    await db.gear.bulkPut(updated)
+  })
+}
+
+/** Bulk-reclassify several gear items into one category. No-op on a blank name. */
+export async function setGearCategoryBulk(ids: string[], category: string): Promise<void> {
+  const c = category.trim()
+  if (!c) return
+  await db.transaction('rw', db.gear, async () => {
+    const items = await db.gear.bulkGet(ids)
+    const updated = items
+      .filter((g): g is GearItem => !!g && g.category !== c)
+      .map((g) => ({ ...g, category: c }))
+    if (updated.length) await db.gear.bulkPut(updated)
+  })
+}
+
+/** Delete several gear items at once. Items assigned to a trip are left in place
+ *  (same delete-block rule as {@link deleteGear}); returns the names of any that
+ *  were kept so the caller can tell the user what didn't delete. */
+export async function deleteGearBulk(ids: string[]): Promise<{ blocked: string[] }> {
+  const blocked: string[] = []
+  await db.transaction('rw', db.gear, db.gearAssignments, db.gearCollections, async () => {
+    const collections = await db.gearCollections.toArray()
+    const toDelete: string[] = []
+    for (const id of ids) {
+      const gear = await db.gear.get(id)
+      if (!gear) continue
+      const assignments = await db.gearAssignments.where('gearItemId').equals(id).toArray()
+      if (new Set(assignments.map((a) => a.tripId)).size > 0) {
+        blocked.push(gear.name)
+        continue
+      }
+      toDelete.push(id)
+    }
+    if (toDelete.length === 0) return
+    const del = new Set(toDelete)
+    await db.gear.bulkDelete(toDelete)
+    for (const c of collections) {
+      if (c.gearItemIds.some((g) => del.has(g))) {
+        await db.gearCollections.put({
+          ...c,
+          gearItemIds: c.gearItemIds.filter((g) => !del.has(g)),
+        })
+      }
+    }
+  })
+  return { blocked }
+}
+
 /** Reclassify a gear item into a different category (e.g. drag-and-drop in the
  *  library). No-op when the item is missing or already in that category. */
 export async function setGearCategory(id: string, category: string): Promise<void> {

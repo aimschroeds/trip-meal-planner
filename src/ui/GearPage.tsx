@@ -3,10 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
 import {
   deleteGear,
+  deleteGearBulk,
   GearInUseError,
   renameGearCategory,
   setGearCategory,
+  setGearCategoryBulk,
   setGearOwners,
+  setGearShared,
 } from '../store/repos'
 import {
   GEAR_CATEGORIES,
@@ -76,6 +79,7 @@ export function GearPage() {
   const [ownerFilter, setOwnerFilter] = useState('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkOwner, setBulkOwner] = useState('')
+  const [bulkCategory, setBulkCategory] = useState('')
   const [dragOverCat, setDragOverCat] = useState<string | null>(null)
   // The dragged item id is tracked in a ref, not dataTransfer — reliable across
   // browsers and doesn't depend on drag payload serialisation.
@@ -95,10 +99,39 @@ export function GearPage() {
     })
   }
 
-  async function applyBulkOwner(owners: string[] | undefined) {
-    await setGearOwners([...selected], owners)
+  function clearSelection() {
     setSelected(new Set())
     setBulkOwner('')
+    setBulkCategory('')
+  }
+
+  async function applyBulkOwner(owners: string[] | undefined) {
+    await setGearOwners([...selected], owners)
+    clearSelection()
+  }
+
+  async function applyBulkShared(shared: boolean) {
+    await setGearShared([...selected], shared)
+    clearSelection()
+  }
+
+  async function applyBulkCategory() {
+    if (!bulkCategory.trim()) return
+    await setGearCategoryBulk([...selected], bulkCategory)
+    clearSelection()
+  }
+
+  async function applyBulkDelete() {
+    const n = selected.size
+    if (!window.confirm(`Delete ${n} selected gear item${n === 1 ? '' : 's'}?`)) return
+    const { blocked } = await deleteGearBulk([...selected])
+    clearSelection()
+    if (blocked.length) {
+      window.alert(
+        `Kept ${blocked.length} item${blocked.length === 1 ? '' : 's'} still assigned to a trip ` +
+          `(remove from the trip first): ${blocked.join(', ')}.`,
+      )
+    }
   }
 
   const weightG = num(draft.weightG)
@@ -385,29 +418,83 @@ export function GearPage() {
           </div>
 
           {selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded border border-violet-300 bg-violet-50 p-2 text-sm">
-              <span className="font-medium text-violet-900">{selected.size} selected</span>
-              <span className="text-violet-900">· set owner(s):</span>
-              <input
-                className="rounded border border-gray-300 px-2 py-1"
-                list="gear-owners"
-                placeholder="e.g. Alice, Bob"
-                value={bulkOwner}
-                onChange={(e) => setBulkOwner(e.target.value)}
-              />
-              <button
-                className="rounded bg-emerald-700 px-2 py-1 font-medium text-white disabled:opacity-50"
-                disabled={parseOwners(bulkOwner).length === 0}
-                onClick={() => void applyBulkOwner(parseOwners(bulkOwner))}
-              >
-                Apply
-              </button>
-              <button className="text-gray-600 underline" onClick={() => void applyBulkOwner(undefined)}>
-                clear owner
-              </button>
-              <button className="ml-auto text-gray-500 underline" onClick={() => setSelected(new Set())}>
-                deselect
-              </button>
+            <div className="space-y-2 rounded border border-violet-300 bg-violet-50 p-2 text-sm">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-medium text-violet-900">{selected.size} selected</span>
+                <button
+                  className="ml-auto text-gray-500 underline"
+                  onClick={() => setSelected(new Set())}
+                >
+                  deselect
+                </button>
+              </div>
+              {/* Shared flag. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-16 shrink-0 text-violet-900">shared:</span>
+                <button
+                  className="rounded border border-sky-300 bg-sky-100 px-2 py-1 font-medium text-sky-800"
+                  onClick={() => void applyBulkShared(true)}
+                >
+                  mark shared
+                </button>
+                <button
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-700"
+                  onClick={() => void applyBulkShared(false)}
+                >
+                  not shared
+                </button>
+              </div>
+              {/* Owner(s). */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-16 shrink-0 text-violet-900">owner(s):</span>
+                <input
+                  className="rounded border border-gray-300 px-2 py-1"
+                  list="gear-owners"
+                  placeholder="e.g. Alice, Bob"
+                  value={bulkOwner}
+                  onChange={(e) => setBulkOwner(e.target.value)}
+                />
+                <button
+                  className="rounded bg-emerald-700 px-2 py-1 font-medium text-white disabled:opacity-50"
+                  disabled={parseOwners(bulkOwner).length === 0}
+                  onClick={() => void applyBulkOwner(parseOwners(bulkOwner))}
+                >
+                  set
+                </button>
+                <button className="text-gray-600 underline" onClick={() => void applyBulkOwner(undefined)}>
+                  clear owner
+                </button>
+              </div>
+              {/* Category (bulk reclassify — the keyboard counterpart to drag). */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-16 shrink-0 text-violet-900">category:</span>
+                <input
+                  className="rounded border border-gray-300 px-2 py-1"
+                  list="gear-categories"
+                  placeholder="e.g. shelter"
+                  value={bulkCategory}
+                  onChange={(e) => setBulkCategory(e.target.value)}
+                />
+                <button
+                  className="rounded bg-emerald-700 px-2 py-1 font-medium text-white disabled:opacity-50"
+                  disabled={!bulkCategory.trim()}
+                  onClick={() => void applyBulkCategory()}
+                >
+                  move
+                </button>
+              </div>
+              {/* Delete. */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-violet-200 pt-2">
+                <button
+                  className="rounded border border-red-300 bg-white px-2 py-1 font-medium text-red-700"
+                  onClick={() => void applyBulkDelete()}
+                >
+                  delete selected
+                </button>
+                <span className="text-xs text-gray-500">
+                  items assigned to a trip are kept
+                </span>
+              </div>
             </div>
           )}
 
