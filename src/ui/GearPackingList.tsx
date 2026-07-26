@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type MarkRow } from '../store/db'
-import { toggleMark } from '../store/repos'
+import { toggleGearPacked } from '../store/repos'
+import { isGearPacked } from '../domain/gear'
 import type { GearAssignment, GearItem, Person, Trip } from '../domain/types'
 import { fmtGrams } from './format'
 
@@ -24,23 +25,10 @@ export function GearPackingList({ trip, people }: { trip: Trip; people: Person[]
 
   const gearById = new Map(gear.map((g) => [g.id, g]))
   const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
-  // Quantity in the key so bumping how many you carry un-ticks the item; honor
-  // the legacy (quantity-less) key so earlier ticks stay checked.
-  const legacyRef = (personId: string, gearItemId: string) => `gear:${personId}:${gearItemId}`
-  const packRef = (personId: string, gearItemId: string, qty: number) =>
-    `${legacyRef(personId, gearItemId)}:${qty}`
   const isPackedFor = (personId: string, gearItemId: string, qty: number) =>
-    packed.has(packRef(personId, gearItemId, qty)) || packed.has(legacyRef(personId, gearItemId))
-  const togglePack = (personId: string, gearItemId: string, qty: number) => {
-    const key = packRef(personId, gearItemId, qty)
-    const legacy = legacyRef(personId, gearItemId)
-    if (packed.has(key) || packed.has(legacy)) {
-      if (packed.has(key)) void toggleMark(trip.id, 'pack', key)
-      if (packed.has(legacy)) void toggleMark(trip.id, 'pack', legacy)
-    } else {
-      void toggleMark(trip.id, 'pack', key)
-    }
-  }
+    isGearPacked(packed, personId, gearItemId, qty)
+  const togglePack = (personId: string, gearItemId: string, qty: number) =>
+    void toggleGearPacked(trip.id, personId, gearItemId, qty, packed)
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4">

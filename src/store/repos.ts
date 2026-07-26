@@ -4,7 +4,7 @@
 
 import { db, type MarkRow } from './db'
 import { calorieDensity } from '../domain/density'
-import { defaultWornQuantity } from '../domain/gear'
+import { defaultWornQuantity, gearPackLegacyRef, gearPackRef } from '../domain/gear'
 import { makeTrip } from '../domain/trip'
 import type { ItemFields, ItemImportPlan } from '../domain/csv/items'
 import type { GearFields } from '../domain/csv/gear'
@@ -227,6 +227,27 @@ export async function toggleMark(
     if (await db.marks.get(id)) await db.marks.delete(id)
     else await db.marks.put({ id, tripId, scope, ref })
   })
+}
+
+/** Toggle a person's pack-checklist tick for a gear item — the 'pack' mark
+ *  scheme shared with the shopping-tab packing list, so a tick made from
+ *  either place stays in sync. `packed` is the caller's current set of ticked
+ *  refs, used to also clear the legacy (quantity-less) key if it's set. */
+export async function toggleGearPacked(
+  tripId: string,
+  personId: string,
+  gearItemId: string,
+  quantity: number,
+  packed: ReadonlySet<string>,
+): Promise<void> {
+  const key = gearPackRef(personId, gearItemId, quantity)
+  const legacy = gearPackLegacyRef(personId, gearItemId)
+  if (packed.has(key) || packed.has(legacy)) {
+    if (packed.has(key)) await toggleMark(tripId, 'pack', key)
+    if (packed.has(legacy)) await toggleMark(tripId, 'pack', legacy)
+  } else {
+    await toggleMark(tripId, 'pack', key)
+  }
 }
 
 function gearAssignmentId(tripId: string, personId: string, gearItemId: string): string {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../store/db'
+import { db, type MarkRow } from '../store/db'
 import {
   flattenGearCarries,
   removeGearFromTrip,
@@ -10,6 +10,7 @@ import {
   setGearQuantity,
   setGearWornQuantity,
   toggleGearAssignment,
+  toggleGearPacked,
 } from '../store/repos'
 import {
   addGearTotals,
@@ -19,6 +20,7 @@ import {
   defaultWornQuantity,
   gearTotalG,
   isBigThree,
+  isGearPacked,
   ownerPersonIds,
   personGearTotals,
   scaledGearTotals,
@@ -88,6 +90,12 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
     [trip.id],
     [] as Resupply[],
   )
+  const marks = useLiveQuery(
+    () => db.marks.where('tripId').equals(trip.id).toArray(),
+    [trip.id],
+    [] as MarkRow[],
+  )
+  const packed = new Set(marks.filter((m) => m.scope === 'pack').map((m) => m.ref))
 
   // The carries this trip splits into — the options for pinning gear to a leg.
   const carries = deriveCarries(trip, resupplies)
@@ -318,6 +326,7 @@ export function GearSection({ trip, people }: { trip: Trip; people: Person[] }) 
                                 a={assignmentByKey.get(`${p.id}|${g.id}`)!}
                                 personName={multi ? p.name : undefined}
                                 carryOptions={perCarry ? carryOptions : []}
+                                packed={packed}
                               />
                             ))}
                           </div>
@@ -359,6 +368,7 @@ function CarrierControls({
   a,
   personName,
   carryOptions,
+  packed,
 }: {
   trip: Trip
   g: GearItem
@@ -367,6 +377,9 @@ function CarrierControls({
   personName?: string
   /** Empty when the trip has a single carry (then carry controls are hidden). */
   carryOptions: CarryOption[]
+  /** This trip's ticked pack-checklist refs — shared with the shopping-tab
+   *  packing list, so ticking here or there stays in sync. */
+  packed: ReadonlySet<string>
 }) {
   const varyingQty = a.carryQuantities !== undefined
   const varyingWeight = a.carryWeights !== undefined
@@ -378,6 +391,7 @@ function CarrierControls({
   const maxQty = Math.max(1, a.quantity ?? 1, ...Object.values(a.carryQuantities ?? {}))
   const qty = a.quantity ?? 1
   const worn = a.wornQuantity ?? defaultWornQuantity(g, varyingQty ? maxQty : qty)
+  const isPacked = isGearPacked(packed, a.personId, g.id, qty)
 
   function toggleCarry(key: string) {
     const next = new Set(active)
@@ -457,6 +471,18 @@ function CarrierControls({
       {personName && (
         <span className="w-16 shrink-0 truncate font-medium text-gray-700">{personName}</span>
       )}
+
+      <label
+        className="flex items-center gap-1"
+        title="Ticked off on the pack checklist (shared with the shopping tab)"
+      >
+        <input
+          type="checkbox"
+          checked={isPacked}
+          onChange={() => void toggleGearPacked(trip.id, a.personId, g.id, qty, packed)}
+        />
+        packed
+      </label>
 
       {!varying && (
         <span

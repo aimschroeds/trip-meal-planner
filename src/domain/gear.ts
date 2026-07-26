@@ -113,6 +113,34 @@ export function defaultWornQuantity(
   return isWearable(item) ? Math.max(1, Math.round(quantity ?? 1)) : 0
 }
 
+/** Key for a person's pack-checklist tick on a gear item — shared between the
+ *  trip Gear tab and the shopping-tab packing list so a tick made in either
+ *  place stays in sync. Quantity is baked in so bumping how many you carry
+ *  un-ticks the item. */
+export function gearPackRef(personId: string, gearItemId: string, quantity: number): string {
+  return `${gearPackLegacyRef(personId, gearItemId)}:${quantity}`
+}
+
+/** Pre-quantity pack-checklist key, kept so ticks made before quantity was
+ *  folded into the key still register as packed. */
+export function gearPackLegacyRef(personId: string, gearItemId: string): string {
+  return `gear:${personId}:${gearItemId}`
+}
+
+/** Whether a person's copies of a gear item are ticked off on the pack
+ *  checklist, honoring both the current and legacy key. */
+export function isGearPacked(
+  packed: ReadonlySet<string>,
+  personId: string,
+  gearItemId: string,
+  quantity: number,
+): boolean {
+  return (
+    packed.has(gearPackRef(personId, gearItemId, quantity)) ||
+    packed.has(gearPackLegacyRef(personId, gearItemId))
+  )
+}
+
 /** The base/worn/consumable one gear assignment contributes. Worn is a
  *  whole-unit, per-trip decision: each worn unit carries its full non-depleting
  *  weight on the body, each packed unit puts that same weight in the pack as
