@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../store/db'
-import { categoryLabel, isBigThree } from '../domain/gear'
+import { GEAR_CATEGORIES, buildGearItem, categoryLabel, isBigThree } from '../domain/gear'
 import type { GearItem } from '../domain/types'
 import { fmtGrams } from './format'
 import { OwnerPills } from './OwnerPills'
+
+interface NewGearDraft {
+  name: string
+  category: string
+  weightG: string
+}
+const emptyNewGear: NewGearDraft = { name: '', category: '', weightG: '' }
 
 // A hideable fly-in side panel listing the whole gear library to select from.
 // Shared by the trip gear tab and the collection builder so "what's available"
@@ -27,6 +34,25 @@ export function GearLibraryPanel({
   const gear = useLiveQuery(() => db.gear.toArray(), [], [] as GearItem[])
   const [query, setQuery] = useState('')
   const [shown, setShown] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [newGear, setNewGear] = useState<NewGearDraft>(emptyNewGear)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  // Create the item in the library and immediately add it to this target set
+  // (the trip or collection this panel is picking for), so you never have to
+  // leave the picker to stock gear you don't have yet.
+  async function addNewGear() {
+    const item = buildGearItem(crypto.randomUUID(), {
+      name: newGear.name,
+      category: newGear.category,
+      weightG: newGear.weightG.trim() === '' ? undefined : Number(newGear.weightG),
+    })
+    if (typeof item === 'string') return setAddError(item)
+    await db.gear.put(item)
+    onToggle(item)
+    setNewGear(emptyNewGear)
+    setAddError(null)
+  }
 
   // Slide in on mount (rAF so it animates from off-screen), Esc to close.
   useEffect(() => {
@@ -94,6 +120,67 @@ export function GearLibraryPanel({
           <p className="text-xs text-gray-500">
             {selectedCount} selected · check to add or remove
           </p>
+          {adding ? (
+            <div className="space-y-1.5 rounded border border-gray-200 bg-gray-50 p-2">
+              <div className="flex flex-wrap gap-1.5">
+                <input
+                  autoFocus
+                  className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                  placeholder="Name"
+                  value={newGear.name}
+                  onChange={(e) => setNewGear({ ...newGear, name: e.target.value })}
+                />
+                <input
+                  className="w-24 rounded border border-gray-300 px-2 py-1 text-sm"
+                  list="quick-add-gear-categories"
+                  placeholder="category"
+                  value={newGear.category}
+                  onChange={(e) => setNewGear({ ...newGear, category: e.target.value })}
+                />
+                <datalist id="quick-add-gear-categories">
+                  {GEAR_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel(c)}
+                    </option>
+                  ))}
+                </datalist>
+                <input
+                  className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
+                  inputMode="numeric"
+                  placeholder="g"
+                  value={newGear.weightG}
+                  onChange={(e) => setNewGear({ ...newGear, weightG: e.target.value })}
+                />
+                <button
+                  className="rounded bg-emerald-700 px-2 py-1 text-sm font-medium text-white"
+                  onClick={() => void addNewGear()}
+                >
+                  Add
+                </button>
+                <button
+                  className="text-sm text-gray-500 underline"
+                  onClick={() => {
+                    setAdding(false)
+                    setNewGear(emptyNewGear)
+                    setAddError(null)
+                  }}
+                >
+                  cancel
+                </button>
+              </div>
+              {addError && <p className="text-xs text-red-700">{addError}</p>}
+              <p className="text-xs text-gray-500">
+                Brand, owner, worn/consumable weight — edit later on the Gear tab.
+              </p>
+            </div>
+          ) : (
+            <button
+              className="text-sm text-emerald-800 underline"
+              onClick={() => setAdding(true)}
+            >
+              + add new gear
+            </button>
+          )}
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-3">

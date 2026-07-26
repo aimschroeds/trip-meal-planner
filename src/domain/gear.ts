@@ -172,6 +172,44 @@ export function parseOwners(text: string): string[] {
   return [...new Set(text.split(/[,;]/).map((s) => s.trim()).filter(Boolean))]
 }
 
+/** Raw (string) fields for a gear-library add/edit form, before validation. */
+export interface GearDraftFields {
+  name: string
+  brand?: string
+  owner?: string
+  category?: string
+  weightG: number | undefined
+  wornWeightG?: number
+  consumableWeightG?: number
+  shared?: boolean
+}
+
+/** Validate and assemble a library gear item from draft form fields — shared
+ *  by the full Gear-library form and the quick-add form in the gear picker,
+ *  so both enforce the same rules. Returns an error message on failure. */
+export function buildGearItem(id: string, draft: GearDraftFields): GearItem | string {
+  const name = draft.name.trim()
+  if (!name) return 'Name is required.'
+  if (draft.weightG == null || draft.weightG <= 0) return 'Enter a total weight in grams.'
+  const worn = draft.wornWeightG ?? 0
+  const consumable = draft.consumableWeightG ?? 0
+  if (worn + consumable > draft.weightG) {
+    return 'Worn + consumable can’t exceed the total weight.'
+  }
+  const owners = parseOwners(draft.owner ?? '')
+  return {
+    id,
+    name,
+    brand: draft.brand?.trim() || undefined,
+    owners: owners.length ? owners : undefined,
+    category: draft.category?.trim() || 'misc',
+    weightG: draft.weightG,
+    wornWeightG: worn || undefined,
+    consumableWeightG: consumable || undefined,
+    shared: draft.shared || undefined,
+  }
+}
+
 /** Trip person ids whose names match a gear item's owner(s), case-insensitive.
  *  Empty when the item is shared (no owners) or no names match. Used to
  *  auto-assign personal gear to its owner(s) when added to a trip. */

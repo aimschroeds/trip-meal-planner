@@ -10,6 +10,7 @@ import {
 } from '../store/repos'
 import {
   GEAR_CATEGORIES,
+  buildGearItem,
   categoryLabel,
   gearWeightSplit,
   isBigThree,
@@ -133,25 +134,17 @@ export function GearPage() {
   }
 
   async function save() {
-    const name = draft.name.trim()
-    if (!name) return setError('Name is required.')
-    if (weightG == null || weightG <= 0) return setError('Enter a total weight in grams.')
-    const worn = num(draft.wornWeightG) ?? 0
-    const consumable = num(draft.consumableWeightG) ?? 0
-    if (worn + consumable > weightG) {
-      return setError('Worn + consumable can’t exceed the total weight.')
-    }
-    const item: GearItem = {
-      id: editingId ?? crypto.randomUUID(),
-      name,
-      brand: draft.brand.trim() || undefined,
-      owners: parseOwners(draft.owner).length ? parseOwners(draft.owner) : undefined,
-      category: draft.category.trim() || 'misc',
+    const item = buildGearItem(editingId ?? crypto.randomUUID(), {
+      name: draft.name,
+      brand: draft.brand,
+      owner: draft.owner,
+      category: draft.category,
       weightG,
-      wornWeightG: worn || undefined,
-      consumableWeightG: consumable || undefined,
-      shared: draft.shared || undefined,
-    }
+      wornWeightG: num(draft.wornWeightG),
+      consumableWeightG: num(draft.consumableWeightG),
+      shared: draft.shared,
+    })
+    if (typeof item === 'string') return setError(item)
     await db.gear.put(item)
     reset()
   }
