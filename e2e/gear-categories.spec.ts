@@ -9,7 +9,10 @@ import { expect, test, type Page } from '@playwright/test'
 const openGear = (page: Page) => page.getByRole('button', { name: 'Gear', exact: true }).click()
 
 async function addGear(page: Page, name: string, category: string) {
-  await page.getByLabel('Name', { exact: true }).fill(name)
+  // Every tab stays mounted (just hidden), so the Food/Meals "Name" inputs are
+  // also in the DOM — use getByRole, which ignores hidden elements, to target
+  // the visible Gear form.
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
   await page.getByLabel('Category').fill(category)
   await page.getByLabel('Total g').fill('100')
   await page.getByRole('button', { name: 'Add to gear' }).click()

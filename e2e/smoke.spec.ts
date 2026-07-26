@@ -25,13 +25,17 @@ Trail mix bag,snack,Trail mix,60
 Choc bar,snack,Chocolate,50`
 
 async function importCsv(page: Page, name: string, content: string) {
-  await page.getByText('Import / export CSV').click()
-  await page.locator('input[type="file"]').setInputFiles({
+  // Every tab stays mounted (just hidden), so both the Food and Meals import
+  // panels are in the DOM. Scope to the visible one (:visible skips the hidden
+  // tabs) so the file input and Import button aren't ambiguous.
+  const panel = page.locator('details:visible').filter({ hasText: 'Import / export CSV' })
+  await panel.locator('summary').click()
+  await panel.locator('input[type="file"]').setInputFiles({
     name,
     mimeType: 'text/csv',
     buffer: Buffer.from(content),
   })
-  await page.getByRole('button', { name: 'Import', exact: true }).click()
+  await panel.getByRole('button', { name: 'Import', exact: true }).click()
 }
 
 test('plan a day end to end', async ({ page }) => {
