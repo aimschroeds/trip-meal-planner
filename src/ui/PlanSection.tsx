@@ -1123,7 +1123,7 @@ function SlotCell({
       : null
 
   return (
-    <div className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+    <div className="min-w-0 rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-gray-600">{fmtSlot(keyed.slot)}</span>
         {detail && (
