@@ -323,6 +323,7 @@ function TripDetail({
           onApply={(days) => void update({ days })}
           onDescribe={describeDays}
         />
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
@@ -463,6 +464,7 @@ function TripDetail({
             ))}
           </tbody>
         </table>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           Uncheck slots on partial first/last days (e.g. off trail by lunch → brekkie + snacks
           only).
