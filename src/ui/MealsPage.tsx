@@ -385,6 +385,7 @@ export function MealsPage() {
             : 'No meals match.'}
         </p>
       ) : (
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
@@ -447,6 +448,7 @@ export function MealsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

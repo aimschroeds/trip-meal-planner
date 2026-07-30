@@ -493,6 +493,7 @@ export function ItemsPage() {
           )}
         </p>
       ) : (
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left text-gray-600">
@@ -543,6 +544,7 @@ export function ItemsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )
